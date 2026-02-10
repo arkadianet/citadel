@@ -1,0 +1,523 @@
+/* ============================================================================
+   SigmaFi Bonds Tab
+   ============================================================================ */
+
+.sigmafi-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-md) var(--space-lg);
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  animation: sigmafiFadeIn 0.4s ease-out;
+  gap: var(--space-sm);
+}
+
+@keyframes sigmafiFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================================
+   Header
+   ============================================================================ */
+
+.sigmafi-header {
+  flex-shrink: 0;
+}
+
+.sigmafi-header-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.sigmafi-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--emerald-500), #059669);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: white;
+}
+
+.sigmafi-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.sigmafi-header h2 {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: rgb(var(--text));
+  margin: 0;
+  line-height: 1.2;
+}
+
+.sigmafi-description {
+  color: var(--slate-400);
+  font-size: var(--text-xs);
+  margin: 0;
+}
+
+/* ============================================================================
+   Info Bar
+   ============================================================================ */
+
+.sigmafi-info-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  font-size: var(--text-xs);
+  flex-shrink: 0;
+}
+
+.sigmafi-info-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.sigmafi-info-label {
+  color: var(--slate-500);
+}
+
+.sigmafi-info-value {
+  color: rgb(var(--text));
+  font-weight: 500;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.sigmafi-info-divider {
+  width: 1px;
+  height: var(--space-md);
+  background: var(--slate-700);
+}
+
+/* ============================================================================
+   Tab Bar
+   ============================================================================ */
+
+.sigmafi-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.sigmafi-tab-btn {
+  padding: var(--space-xs) var(--space-md);
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--slate-400);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sigmafi-tab-btn.active {
+  background: var(--emerald-500);
+  color: white;
+}
+
+.sigmafi-tab-btn:hover:not(.active) {
+  color: var(--slate-200);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sigmafi-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-left: auto;
+}
+
+.sigmafi-filter-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  cursor: pointer;
+  user-select: none;
+}
+
+.sigmafi-filter-check input[type="checkbox"] {
+  accent-color: var(--emerald-500);
+}
+
+.sigmafi-refresh-btn {
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--slate-700);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--slate-400);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sigmafi-refresh-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--slate-200);
+  border-color: var(--slate-600);
+}
+
+.sigmafi-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Sort Bar
+   ============================================================================ */
+
+.sigmafi-sort-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+.sigmafi-sort-label {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+  margin-right: var(--space-xs);
+}
+
+.sigmafi-sort-btn {
+  padding: 2px var(--space-sm);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--slate-500);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sigmafi-sort-btn:hover {
+  color: var(--slate-300);
+  border-color: var(--slate-700);
+}
+
+.sigmafi-sort-btn.active {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: var(--emerald-400);
+}
+
+/* ============================================================================
+   Card Grid
+   ============================================================================ */
+
+.sigmafi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(280px, 30vw, 360px), 1fr));
+  gap: var(--space-md);
+}
+
+@media (max-width: 640px) {
+  .sigmafi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================================
+   Order Card
+   ============================================================================ */
+
+.sigmafi-card {
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border) / 0.5);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.sigmafi-card:hover {
+  border-color: rgb(var(--border));
+  transform: translateY(-2px);
+}
+
+.sigmafi-card.own {
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.sigmafi-card.past-due {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* Card Header */
+.sigmafi-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(16, 185, 129, 0.06);
+  border-bottom: 1px solid rgb(var(--border) / 0.3);
+}
+
+.sigmafi-card.past-due .sigmafi-card-header {
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.sigmafi-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.sigmafi-token-badge {
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--emerald-400);
+}
+
+.sigmafi-own-badge {
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--emerald-400);
+}
+
+.sigmafi-status-badge {
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sigmafi-status-badge.active {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--emerald-400);
+}
+
+.sigmafi-status-badge.danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--red-400);
+}
+
+/* Card Body */
+.sigmafi-card-body {
+  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+}
+
+.sigmafi-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-xs) 0;
+}
+
+.sigmafi-row-label {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+}
+
+.sigmafi-row-value {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: rgb(var(--text));
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.sigmafi-row-value.highlight {
+  color: var(--emerald-400);
+}
+
+.sigmafi-row-value.danger {
+  color: var(--red-400);
+}
+
+.sigmafi-row-value.mono {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+}
+
+/* Card Actions */
+.sigmafi-card-actions {
+  display: flex;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid rgb(var(--border) / 0.3);
+}
+
+.sigmafi-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+}
+
+.sigmafi-action-btn.primary {
+  background: var(--emerald-500);
+  color: white;
+}
+
+.sigmafi-action-btn.primary:hover:not(:disabled) {
+  background: var(--emerald-600);
+}
+
+.sigmafi-action-btn.danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--red-400);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.sigmafi-action-btn.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.sigmafi-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Empty / Loading / Error States
+   ============================================================================ */
+
+.sigmafi-tab .empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-xl);
+  text-align: center;
+  color: var(--slate-500);
+  font-size: var(--text-sm);
+}
+
+.sigmafi-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  justify-content: center;
+  color: var(--slate-400);
+}
+
+.sigmafi-error {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--red-400);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+.sigmafi-notice {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-xl);
+  text-align: center;
+  color: var(--slate-400);
+  font-size: var(--text-sm);
+}
+
+.spinner-small {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  border: 2px solid rgba(16, 185, 129, 0.2);
+  border-top-color: var(--emerald-500);
+  border-radius: 50%;
+  animation: sigmaSpin 1s linear infinite;
+}
+
+@keyframes sigmaSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   Create Button
+   ============================================================================ */
+
+.sigmafi-create-btn {
+  margin-left: auto;
+  padding: var(--space-xs) var(--space-md);
+  background: var(--emerald-500);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.sigmafi-create-btn:hover {
+  background: var(--emerald-600);
+  transform: translateY(-1px);
+}
+
+/* ============================================================================
+   Collateral Ratio Badge
+   ============================================================================ */
+
+.sigmafi-ratio-badge {
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.sigmafi-ratio-badge.good {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--emerald-400);
+}
+
+.sigmafi-ratio-badge.fair {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--amber-400);
+}
+
+.sigmafi-ratio-badge.poor {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--red-400);
+}

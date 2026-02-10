@@ -1,0 +1,81 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/citadel-core",
+    "crates/ergo-node-client",
+    "crates/citadel-api",
+    "crates/ergo-tx",
+    "crates/ergopay-core",
+    "crates/ergopay-server",
+    "crates/protocols/sigmausd",
+    "crates/protocols/dexy",
+    "crates/protocols/lending",
+    "crates/protocols/amm",
+    "crates/protocols/hodlcoin",
+    "crates/protocols/rosen",
+    "crates/protocols/sigmafi",
+    "crates/protocols/mewlock",
+    "app",
+]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+authors = ["arkadianet"]
+license = "MIT"
+repository = "https://github.com/arkadianet/citadel"
+
+[workspace.dependencies]
+# Core Ergo (REQUIRED)
+ergo-node-interface = { git = "https://github.com/arkadianet/ergo-node-interface-rust" }
+ergo-lib = { git = "https://github.com/ergoplatform/sigma-rust", branch = "develop" }
+
+# Async runtime
+tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "sync"] }
+
+# HTTP server
+axum = "0.7"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Crypto utilities
+hex = "0.4"
+
+# Internal crates
+citadel-core = { path = "crates/citadel-core" }
+ergo-node-client = { path = "crates/ergo-node-client" }
+citadel-api = { path = "crates/citadel-api" }
+ergo-tx = { path = "crates/ergo-tx" }
+ergopay-core = { path = "crates/ergopay-core" }
+ergopay-server = { path = "crates/ergopay-server" }
+sigmausd = { path = "crates/protocols/sigmausd" }
+dexy = { path = "crates/protocols/dexy" }
+lending = { path = "crates/protocols/lending" }
+amm = { path = "crates/protocols/amm" }
+hodlcoin = { path = "crates/protocols/hodlcoin" }
+rosen = { path = "crates/protocols/rosen" }
+sigmafi = { path = "crates/protocols/sigmafi" }
+mewlock = { path = "crates/protocols/mewlock" }
+
+# Patch ergo crates to use develop branch for Tauri v2 compatibility (url >= 2.4.1)
+[patch.crates-io]
+ergo-lib = { git = "https://github.com/ergoplatform/sigma-rust", branch = "develop" }
+ergo-chain-types = { git = "https://github.com/ergoplatform/sigma-rust", branch = "develop" }
+ergotree-ir = { git = "https://github.com/ergoplatform/sigma-rust", branch = "develop" }
+ergotree-interpreter = { git = "https://github.com/ergoplatform/sigma-rust", branch = "develop" }
+sigma-ser = { git = "https://github.com/ergoplatform/sigma-rust", branch = "develop" }
+ergo-nipopow = { git = "https://github.com/ergoplatform/sigma-rust", branch = "develop" }
+ergo-merkle-tree = { git = "https://github.com/ergoplatform/sigma-rust", branch = "develop" }
+ergo-rest = { git = "https://github.com/ergoplatform/sigma-rust", branch = "develop" }

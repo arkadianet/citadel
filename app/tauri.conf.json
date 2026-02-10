@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Citadel",
+  "version": "0.2.0",
+  "identifier": "io.arkadia.citadel",
+  "build": {
+    "beforeDevCommand": "cd ../frontend && npm run dev",
+    "beforeBuildCommand": "cd ../frontend && npm run build",
+    "devUrl": "http://localhost:5184",
+    "frontendDist": "../frontend/dist"
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Citadel",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 900,
+        "minHeight": 650,
+        "resizable": true,
+        "fullscreen": false,
+        "devtools": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

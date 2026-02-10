@@ -1,0 +1,264 @@
+/* ============================================================================
+   Path Selection - Kadia-inspired styling
+   ============================================================================ */
+
+.path-selection {
+  margin-bottom: 20px;
+}
+
+.path-selection h4 {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--slate-400);
+  margin-bottom: 12px;
+}
+
+.path-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .path-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================================
+   Path Card
+   ============================================================================ */
+
+.dexy-path-card {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.dexy-path-card:hover:not(.disabled) {
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.dexy-path-card.selected {
+  border-color: var(--emerald-500);
+  background: rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 0 1px var(--emerald-500);
+}
+
+.dexy-path-card.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+/* ============================================================================
+   Path Header
+   ============================================================================ */
+
+.path-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.path-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: rgb(var(--text));
+}
+
+.best-rate-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--emerald-400);
+  white-space: nowrap;
+}
+
+/* ============================================================================
+   Path Content
+   ============================================================================ */
+
+.path-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.path-rate {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rate-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  color: rgb(var(--text));
+}
+
+.rate-label {
+  font-size: 0.75rem;
+  color: var(--slate-500);
+}
+
+.path-effective-rate {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--slate-400);
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.effective-label {
+  color: var(--slate-500);
+}
+
+.effective-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.path-limit {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+}
+
+.limit-label {
+  color: var(--slate-500);
+}
+
+.limit-value {
+  font-weight: 500;
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.path-fee {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+}
+
+.fee-label {
+  color: var(--slate-500);
+}
+
+.fee-value {
+  font-weight: 500;
+  color: var(--amber-400);
+}
+
+/* ============================================================================
+   Unavailable State
+   ============================================================================ */
+
+.path-unavailable {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+.unavailable-reason {
+  font-size: 0.75rem;
+  color: var(--slate-500);
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* ============================================================================
+   Path Action
+   ============================================================================ */
+
+.path-action {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  text-align: center;
+}
+
+.selected-indicator {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--emerald-400);
+}
+
+.select-prompt {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--slate-500);
+  transition: color 0.15s ease;
+}
+
+.dexy-path-card:hover:not(.disabled) .select-prompt {
+  color: var(--blue-400);
+}
+
+.disabled-indicator {
+  font-size: 0.8rem;
+  color: var(--slate-600);
+}
+
+/* ============================================================================
+   Loading State
+   ============================================================================ */
+
+.path-cards-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--slate-700);
+  border-radius: 12px;
+  color: var(--slate-400);
+  font-size: 0.875rem;
+}
+
+.path-cards-loading .spinner-small {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--slate-700);
+  border-top-color: var(--emerald-500);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   Error State
+   ============================================================================ */
+
+.path-cards-error {
+  padding: 16px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 12px;
+  color: var(--red-400);
+  font-size: 0.875rem;
+  text-align: center;
+}

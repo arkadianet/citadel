@@ -1,0 +1,40 @@
+# Rust
+/target/
+Cargo.lock
+
+# Node
+node_modules/
+dist/
+app/dist/
+app/node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tauri
+app/src-tauri/target/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Worktrees
+.worktrees/
+
+# Internal planning docs
+/docs/
+MVP_PLAN.md
+ergo-defi-design.md

@@ -1,0 +1,309 @@
+/* ============================================================================
+   SigmaFi Confirm Modal
+   ============================================================================ */
+
+.sigmafi-confirm-modal {
+  max-width: 480px;
+}
+
+/* ============================================================================
+   Confirm Step
+   ============================================================================ */
+
+.sf-confirm-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.sf-details-card {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.sf-details-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--slate-700);
+  margin-bottom: var(--space-xs);
+}
+
+.sf-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-sm);
+  padding: 2px 0;
+}
+
+.sf-detail-row span:first-child {
+  color: var(--slate-400);
+}
+
+.sf-detail-row span:last-child {
+  font-weight: 500;
+  font-family: 'JetBrains Mono', monospace;
+  color: rgb(var(--text));
+}
+
+.sf-detail-row .highlight {
+  color: var(--emerald-400);
+}
+
+.sf-detail-row .danger {
+  color: var(--red-400);
+}
+
+.sf-detail-row .mono {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+}
+
+.sf-detail-row.muted {
+  font-size: var(--text-xs);
+}
+
+.sf-detail-row.muted span {
+  color: var(--slate-500);
+}
+
+.sf-fee-breakdown {
+  margin-top: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--slate-700);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sf-notice {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: var(--slate-400);
+}
+
+.sf-notice.success {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: var(--emerald-400);
+}
+
+.sf-notice.warning {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.2);
+  color: var(--amber-400);
+}
+
+/* ============================================================================
+   Actions
+   ============================================================================ */
+
+.sf-modal-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.sf-modal-actions .btn {
+  flex: 1;
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+
+.sf-modal-actions .btn-primary {
+  background: var(--emerald-500);
+  color: white;
+}
+
+.sf-modal-actions .btn-primary:hover:not(:disabled) {
+  background: var(--emerald-600);
+}
+
+.sf-modal-actions .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sf-modal-actions .btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--red-400);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.sf-modal-actions .btn-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.sf-modal-actions .btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sf-modal-actions .btn-secondary {
+  background: var(--slate-700);
+  color: rgb(var(--text));
+}
+
+.sf-modal-actions .btn-secondary:hover {
+  background: var(--slate-600);
+}
+
+/* ============================================================================
+   Signing Step
+   ============================================================================ */
+
+.sf-signing-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-md) 0;
+}
+
+.sigmafi-confirm-modal .sign-method-choice {
+  width: 100%;
+  text-align: center;
+}
+
+.sigmafi-confirm-modal .sign-method-choice p {
+  color: var(--slate-400);
+  margin-bottom: var(--space-md);
+}
+
+.sigmafi-confirm-modal .sign-methods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+.sigmafi-confirm-modal .sign-method-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-lg) var(--space-md);
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sigmafi-confirm-modal .sign-method-btn:hover {
+  border-color: var(--emerald-500);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.sigmafi-confirm-modal .sign-method-btn svg {
+  color: var(--slate-400);
+}
+
+.sigmafi-confirm-modal .sign-method-btn span {
+  font-weight: 500;
+  color: rgb(var(--text));
+}
+
+.sigmafi-confirm-modal .sign-method-btn small {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+}
+
+.sigmafi-confirm-modal .nautilus-waiting,
+.sigmafi-confirm-modal .qr-signing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+}
+
+.sigmafi-confirm-modal .waiting-icon {
+  animation: sfPulse 2s infinite;
+}
+
+.sigmafi-confirm-modal .waiting-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--slate-700);
+  border-top-color: var(--emerald-500);
+  border-radius: 50%;
+  animation: sfSpin 1s linear infinite;
+}
+
+.sigmafi-confirm-modal .qr-container {
+  padding: var(--space-md);
+  background: white;
+  border-radius: var(--radius-lg);
+}
+
+/* ============================================================================
+   Success / Error Steps
+   ============================================================================ */
+
+.sf-success-step,
+.sf-error-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-xl) var(--space-md);
+  text-align: center;
+}
+
+.sf-success-step h3,
+.sf-error-step h3 {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: rgb(var(--text));
+  margin: 0;
+}
+
+.sf-success-step p,
+.sf-error-step p {
+  color: var(--slate-400);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.sf-error-step .error-message {
+  color: var(--red-400);
+  font-size: var(--text-sm);
+  max-width: 100%;
+  word-break: break-word;
+}
+
+/* ============================================================================
+   Animations
+   ============================================================================ */
+
+@keyframes sfPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes sfSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 480px) {
+  .sigmafi-confirm-modal .sign-methods {
+    grid-template-columns: 1fr;
+    gap: var(--space-sm);
+  }
+}

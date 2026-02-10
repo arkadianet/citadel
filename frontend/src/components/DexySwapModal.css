@@ -1,0 +1,146 @@
+/* ============================================================================
+   Dexy Swap Modal
+   Reuses most styles from DexyMintModal.css (modal, signing, QR, success/error).
+   Only new styles for direction toggle, slippage selector, and swap-specific UI.
+   ============================================================================ */
+
+.dexy-swap-modal {
+  max-width: 540px;
+}
+
+/* ============================================================================
+   Input Step
+   ============================================================================ */
+
+.swap-input-step {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ============================================================================
+   Direction Toggle
+   ============================================================================ */
+
+.direction-toggle {
+  display: flex;
+  gap: 0;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.direction-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: transparent;
+  color: var(--slate-400);
+}
+
+.direction-btn.active {
+  background: rgba(59, 130, 246, 0.2);
+  color: rgb(var(--text));
+  font-weight: 600;
+}
+
+.direction-btn:hover:not(.active) {
+  color: var(--slate-300);
+  background: rgba(30, 41, 59, 0.5);
+}
+
+/* ============================================================================
+   Slippage Selector
+   ============================================================================ */
+
+.slippage-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.slippage-label {
+  font-size: 0.8rem;
+  color: var(--slate-400);
+}
+
+.slippage-options {
+  display: flex;
+  gap: 8px;
+}
+
+.slippage-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--slate-700);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.8);
+  color: var(--slate-400);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.slippage-btn.active {
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(59, 130, 246, 0.15);
+  color: rgb(var(--text));
+}
+
+.slippage-btn:hover:not(.active) {
+  border-color: var(--slate-600);
+  color: var(--slate-300);
+}
+
+.slippage-custom-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.slippage-custom-input input {
+  width: 80px;
+  padding: 6px 10px;
+  border: 1px solid var(--slate-700);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.8);
+  color: rgb(var(--text));
+  font-size: 0.85rem;
+  font-family: 'JetBrains Mono', monospace;
+  outline: none;
+}
+
+.slippage-custom-input input:focus {
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.slippage-custom-input span {
+  color: var(--slate-400);
+  font-size: 0.85rem;
+}
+
+/* Hide number input spinners for slippage input */
+.slippage-custom-input input[type="number"]::-webkit-inner-spin-button,
+.slippage-custom-input input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.slippage-custom-input input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* ============================================================================
+   High Impact Warning
+   ============================================================================ */
+
+.high-impact {
+  color: var(--red-400) !important;
+  font-weight: 600;
+}

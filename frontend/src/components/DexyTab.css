@@ -1,0 +1,657 @@
+/* ============================================================================
+   Dexy Tab - Compact layout with holdings + activity feed
+   ============================================================================ */
+
+.dexy-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-md) var(--space-lg);
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  animation: fadeIn 0.4s ease-out;
+  gap: var(--space-sm);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================================
+   Protocol Header
+   ============================================================================ */
+
+.dexy-header {
+  flex-shrink: 0;
+}
+
+.dexy-header-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.dexy-icon-stack {
+  position: relative;
+  width: var(--icon-lg);
+  height: clamp(28px, 2.8vw, 36px);
+  flex-shrink: 0;
+}
+
+.dexy-icon-stack .icon-gold {
+  position: absolute;
+  width: clamp(24px, 2.5vw, 32px);
+  height: clamp(24px, 2.5vw, 32px);
+  top: 2px;
+  left: 0;
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+}
+
+.dexy-icon-stack .icon-gold img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dexy-icon-stack .icon-usd {
+  position: absolute;
+  width: clamp(24px, 2.5vw, 32px);
+  height: clamp(24px, 2.5vw, 32px);
+  top: 2px;
+  left: clamp(10px, 1vw, 14px);
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+}
+
+.dexy-icon-stack .icon-usd img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dexy-header h2 {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: rgb(var(--text));
+  margin: 0;
+  line-height: 1.2;
+}
+
+.dexy-description {
+  color: var(--slate-400);
+  font-size: var(--text-xs);
+  margin: 0;
+}
+
+/* ============================================================================
+   Protocol Info Bar
+   ============================================================================ */
+
+.dexy-info-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  font-size: var(--text-xs);
+  flex-shrink: 0;
+}
+
+.dexy-info-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.dexy-info-label {
+  color: var(--slate-500);
+}
+
+.dexy-info-value {
+  color: rgb(var(--text));
+  font-weight: 500;
+}
+
+.dexy-info-divider {
+  width: 1px;
+  height: var(--space-md);
+  background: var(--slate-700);
+}
+
+/* ============================================================================
+   Asset Cards — amber variant (extends token-card from SigmaUsdTab.css)
+   ============================================================================ */
+
+.token-card.amber {
+  border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.token-card.amber .token-card-header {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+.token-card.amber .token-ticker {
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--amber-400);
+}
+
+.token-card.amber .wallet-balance-box {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.token-card.amber .wallet-balance-amount {
+  color: var(--amber-400);
+}
+
+.action-btn.primary.amber {
+  background: var(--amber-500);
+  color: #000;
+}
+
+.action-btn.primary.amber:hover:not(:disabled) {
+  background: #d97706;
+}
+
+/* Token icon wrappers with gradient backgrounds */
+.dexy-token-icon-wrap {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.dexy-token-icon-wrap.gold {
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+}
+
+.dexy-token-icon-wrap.usd {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+}
+
+.dexy-token-icon-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Rate diff coloring for token-stat-value */
+.token-stat-value.positive {
+  color: var(--emerald-400);
+}
+
+.token-stat-value.negative {
+  color: var(--red-400);
+}
+
+/* Best path badge */
+.status-badge.best-path {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-badge.best-path svg {
+  flex-shrink: 0;
+}
+
+.status-badge.mint-best {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--emerald-400);
+}
+
+.status-badge.swap-best {
+  background: rgba(59, 130, 246, 0.1);
+  color: #60a5fa;
+}
+
+.saving-pct {
+  font-size: 0.65rem;
+  opacity: 0.8;
+}
+
+/* ============================================================================
+   Your Holdings
+   ============================================================================ */
+
+.dexy-holdings-section {
+  flex-shrink: 0;
+}
+
+.dexy-holdings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-xs);
+}
+
+.dexy-holdings-header h3 {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: rgb(var(--text));
+  margin: 0;
+}
+
+.dexy-holdings-total {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--slate-300);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.dexy-holdings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-xs);
+}
+
+@media (max-width: 640px) {
+  .dexy-holdings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dexy-holding-card {
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border) / 0.5);
+}
+
+.dexy-holding-card.orange {
+  border-color: rgba(249, 115, 22, 0.2);
+}
+
+.dexy-holding-card.amber {
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+.dexy-holding-card.emerald {
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.dexy-holding-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-xs);
+}
+
+.dexy-holding-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dexy-holding-icon-wrap {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.dexy-holding-icon-wrap.gold {
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+}
+
+.dexy-holding-icon-wrap.usd {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+}
+
+.dexy-holding-icon-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dexy-holding-name {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: rgb(var(--text));
+}
+
+.dexy-holding-amount {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: rgb(var(--text));
+  font-variant-numeric: tabular-nums;
+}
+
+.dexy-holding-usd {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ============================================================================
+   Wallet Section (no wallet connected)
+   ============================================================================ */
+
+.dexy-wallet-section {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--slate-800);
+  background: rgba(15, 23, 42, 0.5);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.wallet-notice {
+  padding: var(--space-md);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.wallet-notice-icon {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  border-radius: 50%;
+  background: rgba(30, 41, 59, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wallet-notice-icon svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  color: var(--slate-500);
+}
+
+.wallet-notice h3 {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: rgb(var(--text));
+  margin: 0;
+}
+
+.wallet-notice p {
+  color: var(--slate-400);
+  font-size: var(--text-xs);
+  margin: 0;
+}
+
+/* ============================================================================
+   Activity Feed — two-column grid
+   ============================================================================ */
+
+.dexy-activity-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm);
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 800px) {
+  .dexy-activity-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dexy-activity-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.dexy-section-header {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: rgb(var(--text));
+  margin: 0 0 var(--space-xs);
+}
+
+.dexy-activity-card {
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border) / 0.5);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+.dexy-activity-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  color: var(--slate-500);
+  font-size: var(--text-sm);
+}
+
+.dexy-activity-empty {
+  padding: var(--space-md);
+  color: var(--slate-500);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.dexy-activity-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dexy-activity-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid rgb(var(--border) / 0.3);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.dexy-activity-row:last-child {
+  border-bottom: none;
+}
+
+.dexy-activity-row:hover {
+  background: rgb(var(--card-hover));
+}
+
+/* Reuse Dashboard activity sub-elements */
+.dexy-activity-row .activity-op-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dexy-activity-row .activity-op-icon.mint {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--emerald-400);
+}
+
+.dexy-activity-row .activity-op-icon.redeem {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--amber-400);
+}
+
+.dexy-activity-row .activity-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.dexy-activity-row .activity-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.activity-token-icon-wrap {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.activity-token-icon-wrap.gold {
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+}
+
+.activity-token-icon-wrap.usd {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+}
+
+.activity-token-icon-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dexy-activity-row .activity-op {
+  font-weight: 600;
+  font-size: var(--text-xs);
+  color: rgb(var(--text));
+}
+
+.dexy-activity-row .activity-token {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+}
+
+.dexy-activity-row .activity-protocol {
+  font-size: var(--text-xs);
+  color: var(--slate-600);
+}
+
+.dexy-activity-row .activity-amounts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.dexy-activity-row .activity-token-amt {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.dexy-activity-row .activity-token-amt.positive {
+  color: var(--emerald-400);
+}
+
+.dexy-activity-row .activity-token-amt.negative {
+  color: var(--amber-400);
+}
+
+.dexy-activity-row .activity-erg-amt {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+  font-variant-numeric: tabular-nums;
+}
+
+.dexy-activity-row .activity-time,
+.activity-time {
+  font-size: var(--text-xs);
+  color: var(--slate-600);
+  flex-shrink: 0;
+  min-width: 50px;
+  text-align: right;
+}
+
+/* ============================================================================
+   Loading States
+   ============================================================================ */
+
+.spinner-small {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  border-radius: 50%;
+  border: 2px solid rgba(51, 65, 85, 0.5);
+  border-top-color: var(--emerald-500);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   Empty State
+   ============================================================================ */
+
+.dexy-tab .empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  color: var(--slate-400);
+}
+
+.dexy-tab .spinner {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  border-radius: 50%;
+  border: 3px solid rgba(16, 185, 129, 0.2);
+  border-top-color: var(--emerald-500);
+  animation: spin 1s linear infinite;
+}
+
+/* ============================================================================
+   Message Styles
+   ============================================================================ */
+
+.dexy-tab .message {
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.dexy-tab .message.error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--red-400);
+}

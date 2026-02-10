@@ -1,0 +1,165 @@
+.notification-bell {
+  position: relative;
+}
+
+.bell-btn {
+  background: none;
+  border: none;
+  color: rgb(var(--text-secondary));
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+
+.bell-btn:hover {
+  color: rgb(var(--text));
+  background: rgba(var(--text), 0.06);
+}
+
+.bell-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--emerald-500);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.bell-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 340px;
+  max-height: 400px;
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.bell-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid rgb(var(--border));
+}
+
+.bell-dropdown-header h4 {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: rgb(var(--text));
+}
+
+.bell-pending {
+  font-size: var(--text-xs);
+  color: var(--amber-400);
+}
+
+.bell-mark-read {
+  background: none;
+  border: none;
+  color: var(--emerald-400);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.bell-mark-read:hover {
+  background: rgba(var(--text), 0.06);
+}
+
+.bell-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.bell-empty {
+  padding: var(--space-lg);
+  text-align: center;
+  color: rgb(var(--muted));
+  font-size: var(--text-sm);
+}
+
+.bell-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid rgba(var(--border), 0.5);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.bell-item:last-child {
+  border-bottom: none;
+}
+
+.bell-item:hover {
+  background: rgb(var(--card-hover));
+}
+
+.bell-item-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+}
+
+.bell-item-dot.confirmed,
+.bell-item-dot.filled {
+  background: var(--emerald-400);
+}
+
+.bell-item-dot.dropped {
+  background: var(--red-400);
+}
+
+.bell-item-dot.timeout {
+  background: var(--amber-400);
+}
+
+.bell-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.bell-item-title {
+  font-size: var(--text-sm);
+  color: rgb(var(--text));
+  font-weight: 500;
+}
+
+.bell-item-desc {
+  font-size: var(--text-xs);
+  color: rgb(var(--text-secondary));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bell-item-time {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  color: rgb(var(--muted));
+  margin-top: 2px;
+}

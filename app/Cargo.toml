@@ -1,0 +1,42 @@
+[package]
+name = "citadel"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Tauri desktop application for Citadel"
+
+[lib]
+name = "citadel_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+citadel-core = { workspace = true }
+citadel-api = { workspace = true }
+ergo-lib = { workspace = true }
+ergo-node-client = { workspace = true }
+ergo-tx = { workspace = true }
+ergopay-core = { workspace = true }
+ergopay-server = { workspace = true }
+sigmausd = { workspace = true }
+dexy = { workspace = true }
+lending = { workspace = true }
+amm = { workspace = true }
+hodlcoin = { workspace = true }
+rosen = { workspace = true }
+sigmafi = { workspace = true }
+mewlock = { workspace = true }
+tokio = { workspace = true }
+hex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-notification = "2"
+uuid = { version = "1", features = ["v4"] }
+futures = "0.3.31"

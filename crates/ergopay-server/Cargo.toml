@@ -1,0 +1,19 @@
+[package]
+name = "ergopay-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "ErgoPay server for wallet integration"
+
+[dependencies]
+axum = { workspace = true }
+ergopay-core = { workspace = true }
+tokio = { workspace = true }
+tower-http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+base64 = "0.22"
+rand = "0.8"

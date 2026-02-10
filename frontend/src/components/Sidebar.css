@@ -1,0 +1,216 @@
+/* ============================================================================
+   Sidebar Navigation
+   ============================================================================ */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  background: rgb(var(--card));
+  border-right: 1px solid rgb(var(--border) / 0.5);
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: width 200ms ease;
+}
+
+.sidebar.expanded {
+  width: 180px;
+}
+
+.sidebar.collapsed {
+  width: 56px;
+}
+
+/* ============================================================================
+   Sidebar Items
+   ============================================================================ */
+
+.sidebar-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-xs);
+}
+
+.sidebar-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-sm);
+  border-radius: var(--radius-md);
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+  color: rgb(var(--text));
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  border-left: 3px solid transparent;
+}
+
+.sidebar-item:hover:not(.disabled) {
+  background: rgb(var(--card-hover));
+}
+
+.sidebar-item.active {
+  border-left-color: var(--emerald-400);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.sidebar-item.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Sidebar Icon Stack (scaled-down protocol icons)
+   ============================================================================ */
+
+/* Protocol icons now use .sidebar-dashboard-icon (same as tools) */
+
+/* ============================================================================
+   Sidebar Item Text (hidden when collapsed)
+   ============================================================================ */
+
+.sidebar-item-text {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: opacity 200ms ease, width 200ms ease;
+}
+
+.sidebar.expanded .sidebar-item-text {
+  opacity: 1;
+  width: auto;
+}
+
+.sidebar.collapsed .sidebar-item-text {
+  opacity: 0;
+  width: 0;
+}
+
+.sidebar-item-name {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: rgb(var(--text));
+  line-height: 1.2;
+}
+
+.sidebar-item-desc {
+  font-size: clamp(0.55rem, 0.65vw, 0.7rem);
+  color: var(--slate-500);
+  line-height: 1.2;
+}
+
+/* ============================================================================
+   Soon Badge (sidebar)
+   ============================================================================ */
+
+.sidebar-soon-badge {
+  font-size: 0.55rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--amber-400);
+  flex-shrink: 0;
+  transition: opacity 200ms ease;
+}
+
+.sidebar.collapsed .sidebar-soon-badge {
+  opacity: 0;
+  width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ============================================================================
+   Dashboard Nav Icon
+   ============================================================================ */
+
+.sidebar-dashboard-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--slate-400);
+  transition: width 200ms ease, height 200ms ease;
+}
+
+.sidebar.expanded .sidebar-dashboard-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.sidebar.collapsed .sidebar-dashboard-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.sidebar-item.active .sidebar-dashboard-icon {
+  color: var(--emerald-400);
+}
+
+/* ============================================================================
+   Tooltip (collapsed hover)
+   ============================================================================ */
+
+.sidebar-tooltip {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 8px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--slate-800);
+  border: 1px solid var(--slate-700);
+  color: rgb(var(--text));
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  z-index: 100;
+}
+
+.sidebar.collapsed .sidebar-item:hover .sidebar-tooltip {
+  opacity: 1;
+}
+
+/* Separator line */
+.sidebar-separator {
+  height: 1px;
+  background: rgb(var(--border) / 0.5);
+  margin: var(--space-xs) var(--space-sm);
+}
+
+/* ============================================================================
+   Section Labels (visible only when expanded)
+   ============================================================================ */
+
+.sidebar-section-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--slate-500);
+  padding: var(--space-xs) var(--space-sm) 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: opacity 200ms ease, height 200ms ease, padding 200ms ease;
+}
+
+.sidebar.expanded .sidebar-section-label {
+  opacity: 1;
+  height: auto;
+}
+
+.sidebar.collapsed .sidebar-section-label {
+  opacity: 0;
+  height: 0;
+  padding: 0 var(--space-sm);
+}

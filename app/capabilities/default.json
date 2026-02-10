@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2/capability",
+  "identifier": "default",
+  "description": "Default capabilities for Citadel",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-maximize",
+    "core:window:allow-set-size",
+    "core:window:allow-set-title",
+    "opener:default",
+    "notification:default"
+  ]
+}

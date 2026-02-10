@@ -1,0 +1,239 @@
+/* ============================================================================
+   HodlCoin Tab
+   ============================================================================ */
+
+.hodl-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-md) var(--space-lg);
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  animation: hodlFadeIn 0.4s ease-out;
+  gap: var(--space-sm);
+}
+
+@keyframes hodlFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================================
+   Header
+   ============================================================================ */
+
+.hodl-header {
+  flex-shrink: 0;
+}
+
+.hodl-header-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.hodl-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: white;
+}
+
+.hodl-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.hodl-header h2 {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: rgb(var(--text));
+  margin: 0;
+  line-height: 1.2;
+}
+
+.hodl-description {
+  color: var(--slate-400);
+  font-size: var(--text-xs);
+  margin: 0;
+}
+
+/* ============================================================================
+   Loading
+   ============================================================================ */
+
+.hodl-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  justify-content: center;
+  color: var(--slate-400);
+}
+
+/* ============================================================================
+   Bank Cards Grid
+   ============================================================================ */
+
+.hodl-banks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: var(--space-md);
+}
+
+@media (max-width: 640px) {
+  .hodl-banks-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hodl-bank-card {
+  background: rgb(var(--card));
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.hodl-bank-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(139, 92, 246, 0.08);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+.hodl-bank-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.hodl-bank-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  color: white;
+  font-weight: 700;
+  font-size: var(--text-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hodl-bank-avatar-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.hodl-bank-name h3 {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: rgb(var(--text));
+  margin: 0;
+}
+
+.hodl-bank-id {
+  font-size: 10px;
+  color: var(--slate-500);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.hodl-bank-fee {
+  font-size: var(--text-xs);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(139, 92, 246, 0.1);
+  color: #a78bfa;
+  font-weight: 500;
+}
+
+/* ============================================================================
+   Bank Stats
+   ============================================================================ */
+
+.hodl-bank-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  padding: var(--space-sm) var(--space-md);
+}
+
+.hodl-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-xs) 0;
+}
+
+.hodl-stat-label {
+  font-size: 10px;
+  color: var(--slate-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hodl-stat-value {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: rgb(var(--text));
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ============================================================================
+   User Balance
+   ============================================================================ */
+
+.hodl-balance-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 var(--space-md);
+  padding: var(--space-xs) var(--space-sm);
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  border-radius: var(--radius-md);
+}
+
+.hodl-balance-label {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+}
+
+.hodl-balance-value {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: #a78bfa;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ============================================================================
+   Actions
+   ============================================================================ */
+
+.hodl-bank-actions {
+  padding: var(--space-sm) var(--space-md);
+}
+
+.action-btn.hodl-primary {
+  background: #7c3aed;
+  color: white;
+  width: 100%;
+}
+
+.action-btn.hodl-primary:hover:not(:disabled) {
+  background: #6d28d9;
+}

@@ -1,0 +1,19 @@
+[package]
+name = "dexy"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Dexy stablecoin protocol implementation for Citadel"
+
+[dependencies]
+citadel-core = { workspace = true }
+ergo-node-client = { workspace = true }
+ergo-tx = { workspace = true, features = ["ergo-lib"] }
+ergo-lib = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+base16 = "0.2"

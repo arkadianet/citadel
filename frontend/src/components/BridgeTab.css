@@ -1,0 +1,355 @@
+/* =============================================================================
+   Bridge Tab Styles
+   ============================================================================= */
+
+.bridge-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  animation: fadeIn 0.4s ease-out;
+  gap: var(--space-sm);
+}
+
+.bridge-dev-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-xs);
+  color: var(--amber-400);
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+
+.bridge-dev-warning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.bridge-dev-warning strong {
+  color: var(--amber-300);
+}
+
+.bridge-header {
+  flex-shrink: 0;
+}
+
+.bridge-header-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.bridge-header h2 {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: rgb(var(--text));
+  margin: 0;
+}
+
+.bridge-description {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  margin: 0;
+}
+
+/* =============================================================================
+   Bridge Form
+   ============================================================================= */
+
+.bridge-form-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  overflow-y: auto;
+  padding: var(--space-md) 0;
+}
+
+.bridge-form {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.bridge-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.bridge-form-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--slate-300);
+}
+
+.bridge-select {
+  padding: var(--space-sm) var(--space-md);
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border) / 0.5);
+  border-radius: var(--radius-md);
+  color: rgb(var(--text));
+  font-size: var(--text-base);
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-sm) center;
+  padding-right: calc(var(--space-md) + 16px);
+}
+
+.bridge-select:focus {
+  outline: none;
+  border-color: var(--emerald-400);
+}
+
+.bridge-select option {
+  background: rgb(var(--card));
+  color: rgb(var(--text));
+}
+
+.bridge-balance-hint {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+}
+
+.bridge-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border) / 0.5);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.bridge-input-wrapper:focus-within {
+  border-color: var(--emerald-400);
+}
+
+.bridge-input {
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  background: transparent;
+  border: none;
+  color: rgb(var(--text));
+  font-size: var(--text-base);
+  font-family: inherit;
+}
+
+.bridge-input:focus {
+  outline: none;
+}
+
+.bridge-address-input {
+  padding: var(--space-sm) var(--space-md);
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border) / 0.5);
+  border-radius: var(--radius-md);
+  font-family: monospace;
+  font-size: var(--text-xs);
+}
+
+.bridge-address-input:focus {
+  outline: none;
+  border-color: var(--emerald-400);
+}
+
+.bridge-max-btn {
+  padding: var(--space-xs) var(--space-sm);
+  margin-right: var(--space-xs);
+  background: rgb(var(--border) / 0.3);
+  border: 1px solid rgb(var(--border) / 0.5);
+  border-radius: var(--radius-sm);
+  color: var(--emerald-400);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.bridge-max-btn:hover {
+  background: rgb(var(--border) / 0.5);
+}
+
+/* =============================================================================
+   Fee Display
+   ============================================================================= */
+
+.bridge-fees-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  padding: var(--space-sm) 0;
+}
+
+.bridge-fee-error {
+  font-size: var(--text-xs);
+  color: var(--red-400);
+  padding: var(--space-xs) 0;
+}
+
+.bridge-fees {
+  background: rgb(var(--card) / 0.5);
+  border: 1px solid rgb(var(--border) / 0.3);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.bridge-fee-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+}
+
+.bridge-fee-row.highlight {
+  color: rgb(var(--text));
+  font-weight: 600;
+  padding-top: var(--space-xs);
+  border-top: 1px solid rgb(var(--border) / 0.3);
+}
+
+.bridge-fee-warning {
+  font-size: var(--text-xs);
+  color: var(--amber-400);
+  text-align: center;
+  padding-top: var(--space-xs);
+}
+
+/* =============================================================================
+   Submit Button
+   ============================================================================= */
+
+.bridge-submit-btn {
+  padding: var(--space-sm) var(--space-lg);
+  background: linear-gradient(135deg, #f97316, #8b5cf6);
+  border: none;
+  border-radius: var(--radius-md);
+  color: white;
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.bridge-submit-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.bridge-submit-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* =============================================================================
+   Loading & Error States
+   ============================================================================= */
+
+.bridge-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xl);
+  color: var(--slate-400);
+}
+
+.bridge-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xl);
+  color: var(--red-400);
+  text-align: center;
+}
+
+/* =============================================================================
+   Bridge Modal
+   ============================================================================= */
+
+.bridge-modal {
+  max-width: 500px;
+}
+
+.bridge-confirm-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.bridge-preview-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.bridge-preview-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-sm);
+  color: var(--slate-300);
+  padding: var(--space-xs) 0;
+}
+
+.bridge-preview-row.address {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+}
+
+.bridge-address-display {
+  font-family: monospace;
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  word-break: break-all;
+}
+
+.bridge-preview-row.fee {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+}
+
+.bridge-preview-row.highlight {
+  color: rgb(var(--text));
+  font-weight: 600;
+  font-size: var(--text-base);
+}
+
+.bridge-preview-divider {
+  height: 1px;
+  background: rgb(var(--border) / 0.3);
+  margin: var(--space-xs) 0;
+}
+
+.bridge-centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  color: var(--slate-400);
+}
+
+.bridge-note {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  text-align: center;
+  font-style: italic;
+}

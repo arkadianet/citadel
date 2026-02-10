@@ -1,0 +1,793 @@
+/* ============================================================================
+   Lend Modal - Kadia-inspired styling
+   Follows the pattern from DexyMintModal.css
+   Uses CSS variables from App.css for consistency
+   ============================================================================ */
+
+.lend-modal {
+  max-width: 480px;
+}
+
+/* ============================================================================
+   Pool Info Card
+   ============================================================================ */
+
+.pool-info-card {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
+.pool-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-sm);
+}
+
+.pool-info-label {
+  color: var(--slate-400);
+}
+
+.pool-info-value {
+  font-weight: 500;
+  font-family: 'JetBrains Mono', monospace;
+  color: rgb(var(--text));
+}
+
+.pool-info-value.positive {
+  color: var(--emerald-400);
+}
+
+/* ============================================================================
+   Input Step
+   ============================================================================ */
+
+.lend-input-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* Balance hint below input */
+.balance-hint {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  margin: var(--space-xs) 0 0;
+}
+
+/* ============================================================================
+   Form Group (shared with DexyMintModal)
+   ============================================================================ */
+
+.lend-modal .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.lend-modal .form-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--slate-400);
+}
+
+/* ============================================================================
+   Input with Max Button (shared with DexyMintModal)
+   ============================================================================ */
+
+.lend-modal .input-with-max {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.lend-modal .input-with-max .input {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  padding-right: 120px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: var(--radius-md);
+  color: rgb(var(--text));
+  font-size: var(--text-base);
+  font-family: 'JetBrains Mono', monospace;
+  transition: all 0.15s;
+}
+
+.lend-modal .input-with-max .input:focus {
+  outline: none;
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.lend-modal .input-with-max .input::placeholder {
+  color: var(--slate-500);
+}
+
+.lend-modal .input-suffix {
+  position: absolute;
+  right: var(--space-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.lend-modal .input-currency {
+  color: var(--slate-400);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.lend-modal .max-btn {
+  padding: var(--space-xs) var(--space-sm);
+  background: rgba(59, 130, 246, 0.15);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--blue-400);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.lend-modal .max-btn:hover {
+  background: rgba(59, 130, 246, 0.25);
+}
+
+/* ============================================================================
+   Slippage Control
+   ============================================================================ */
+
+.lend-modal .slippage-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.lend-modal .slippage-control .slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--slate-700);
+  border-radius: 2px;
+  outline: none;
+}
+
+.lend-modal .slippage-control .slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--blue-500);
+  cursor: pointer;
+  border: 2px solid var(--slate-900);
+}
+
+.lend-modal .slippage-control .slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--blue-500);
+  cursor: pointer;
+  border: 2px solid var(--slate-900);
+}
+
+.lend-modal .slippage-value {
+  font-size: var(--text-sm);
+  font-family: 'JetBrains Mono', monospace;
+  color: rgb(var(--text));
+  min-width: 3em;
+  text-align: right;
+}
+
+/* ============================================================================
+   Calculated Output (shared styling)
+   ============================================================================ */
+
+.lend-modal .calculated-output {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.lend-modal .output-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+}
+
+.lend-modal .output-row .output-label {
+  color: var(--slate-400);
+}
+
+.lend-modal .output-row .output-value {
+  font-weight: 500;
+  font-family: 'JetBrains Mono', monospace;
+  color: rgb(var(--text));
+}
+
+.lend-modal .output-row.muted {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+}
+
+.lend-modal .output-row.muted span {
+  color: var(--slate-500);
+}
+
+.lend-modal .output-row.total {
+  padding-top: var(--space-xs);
+  margin-top: var(--space-xs);
+  border-top: 1px solid var(--slate-700);
+  font-weight: 600;
+}
+
+/* ============================================================================
+   Preview Step
+   ============================================================================ */
+
+.lend-preview-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.lend-modal .preview-summary {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  padding: var(--space-lg);
+  border-radius: var(--radius-lg);
+}
+
+.lend-modal .preview-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--slate-700);
+  margin-bottom: var(--space-md);
+}
+
+.lend-modal .preview-label {
+  font-size: var(--text-sm);
+  color: var(--slate-400);
+}
+
+.lend-modal .preview-value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: var(--space-xs);
+  color: var(--blue-400);
+}
+
+.lend-modal .preview-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.lend-modal .detail-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+}
+
+.lend-modal .detail-row span:first-child {
+  color: var(--slate-400);
+}
+
+.lend-modal .detail-row span:last-child {
+  font-family: 'JetBrains Mono', monospace;
+  color: rgb(var(--text));
+}
+
+.lend-modal .preview-note {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+  text-align: center;
+  margin-top: var(--space-md);
+  margin-bottom: 0;
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   Signing Step
+   ============================================================================ */
+
+.lend-signing-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-md) 0;
+}
+
+.lend-modal .sign-method-choice {
+  width: 100%;
+  text-align: center;
+}
+
+.lend-modal .sign-method-choice p {
+  color: var(--slate-400);
+  margin-bottom: var(--space-md);
+}
+
+.lend-modal .sign-methods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+.lend-modal .sign-method-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-lg) var(--space-md);
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.lend-modal .sign-method-btn:hover {
+  border-color: var(--blue-500);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.lend-modal .sign-method-btn svg {
+  color: var(--slate-400);
+}
+
+.lend-modal .sign-method-btn span {
+  font-weight: 500;
+  color: rgb(var(--text));
+}
+
+.lend-modal .sign-method-btn small {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+}
+
+.lend-modal .nautilus-waiting,
+.lend-modal .qr-signing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+}
+
+.lend-modal .waiting-icon {
+  animation: pulse 2s infinite;
+}
+
+.lend-modal .waiting-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--slate-700);
+  border-top-color: var(--blue-500);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.lend-modal .qr-container {
+  padding: var(--space-md);
+  background: white;
+  border-radius: var(--radius-lg);
+}
+
+/* ============================================================================
+   Success Step
+   ============================================================================ */
+
+.lend-success-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-xl) var(--space-md);
+  text-align: center;
+}
+
+.lend-modal .success-icon {
+  margin-bottom: var(--space-xs);
+}
+
+.lend-success-step h3 {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: rgb(var(--text));
+  margin: 0;
+}
+
+.lend-success-step p {
+  color: var(--slate-400);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.lend-success-step .success-note {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+  max-width: 280px;
+}
+
+.lend-modal .tx-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-sm);
+}
+
+/* ============================================================================
+   Error Step
+   ============================================================================ */
+
+.lend-error-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-xl) var(--space-md);
+  text-align: center;
+}
+
+.lend-modal .error-icon {
+  margin-bottom: var(--space-xs);
+}
+
+.lend-error-step h3 {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: rgb(var(--text));
+  margin: 0;
+}
+
+.lend-error-step .error-message {
+  color: var(--red-400);
+  font-size: var(--text-sm);
+  max-width: 100%;
+  word-break: break-word;
+}
+
+/* ============================================================================
+   Modal Actions
+   ============================================================================ */
+
+.lend-modal .modal-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.lend-modal .modal-actions .btn {
+  flex: 1;
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+
+.lend-modal .modal-actions .btn-primary {
+  background: var(--blue-500);
+  color: white;
+}
+
+.lend-modal .modal-actions .btn-primary:hover:not(:disabled) {
+  background: var(--blue-600);
+}
+
+.lend-modal .modal-actions .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lend-modal .modal-actions .btn-secondary {
+  background: var(--slate-700);
+  color: rgb(var(--text));
+}
+
+.lend-modal .modal-actions .btn-secondary:hover {
+  background: var(--slate-600);
+}
+
+/* ============================================================================
+   Warning Message
+   ============================================================================ */
+
+.lend-modal .message.warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: var(--amber-400);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.lend-modal .message.error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--red-400);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+/* ============================================================================
+   Animations
+   ============================================================================ */
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   Borrow Modal - Informational Notice Styles
+   ============================================================================ */
+
+.borrow-modal .borrow-info-notice {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  text-align: center;
+  margin-bottom: var(--space-md);
+}
+
+.borrow-modal .notice-icon {
+  color: var(--amber-400);
+  margin-bottom: var(--space-sm);
+}
+
+.borrow-modal .notice-icon svg {
+  width: 48px;
+  height: 48px;
+}
+
+.borrow-modal .borrow-info-notice h3 {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--amber-400);
+}
+
+.borrow-modal .borrow-info-notice p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--slate-400);
+  line-height: 1.6;
+}
+
+/* Supported Features List */
+.borrow-modal .supported-features {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.borrow-modal .supported-features h4 {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--slate-400);
+}
+
+.borrow-modal .supported-features ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.borrow-modal .supported-features li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-sm);
+  color: rgb(var(--text));
+}
+
+.borrow-modal .supported-features li svg {
+  flex-shrink: 0;
+}
+
+/* Duckpools Redirect Section */
+.borrow-modal .duckpools-redirect {
+  text-align: center;
+  padding: var(--space-md);
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
+}
+
+.borrow-modal .duckpools-redirect p {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--text-sm);
+  color: var(--slate-400);
+}
+
+.borrow-modal .duckpools-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--blue-500);
+  color: white;
+  text-decoration: none;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.borrow-modal .duckpools-link:hover {
+  background: var(--blue-600);
+  transform: translateY(-1px);
+}
+
+.borrow-modal .duckpools-link svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+/* ============================================================================
+   Refund Modal - Recovery Styles
+   ============================================================================ */
+
+.refund-modal .refund-explanation {
+  text-align: center;
+  padding: var(--space-lg);
+}
+
+.refund-modal .refund-icon {
+  margin-bottom: var(--space-sm);
+}
+
+.refund-modal .refund-explanation h3 {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: rgb(var(--text));
+}
+
+.refund-modal .refund-explanation p {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  line-height: 1.5;
+}
+
+.refund-modal .refund-explanation p:last-child {
+  margin-bottom: 0;
+}
+
+/* Full-width text input for box ID */
+.refund-modal .input-with-max .input {
+  padding-right: var(--space-md);
+  font-size: var(--text-xs);
+}
+
+/* Detail row total styling */
+.refund-modal .detail-row.total {
+  padding-top: var(--space-xs);
+  margin-top: var(--space-xs);
+  border-top: 1px solid var(--slate-700);
+  font-weight: 600;
+}
+
+/* ============================================================================
+   Health Factor Colors (used in RepayModal and MarketCard)
+   ============================================================================ */
+
+.health-green {
+  color: var(--emerald-400);
+}
+
+.health-amber {
+  color: var(--amber-400);
+}
+
+.health-red {
+  color: var(--red-400);
+}
+
+/* Borrow position card with health status border */
+.pool-info-card.borrow-position {
+  border-left: 3px solid var(--slate-600);
+}
+
+.pool-info-card.borrow-position.green {
+  border-left-color: var(--emerald-500);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.pool-info-card.borrow-position.amber {
+  border-left-color: var(--amber-500);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.pool-info-card.borrow-position.red {
+  border-left-color: var(--red-500);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* Health warning indicator */
+.health-warning {
+  color: var(--red-400);
+  font-weight: 700;
+  margin-left: var(--space-xs);
+}
+
+/* ============================================================================
+   Highlight Row for Important Info
+   ============================================================================ */
+
+.output-row.highlight,
+.detail-row.highlight {
+  background: rgba(59, 130, 246, 0.1);
+  padding: var(--space-xs) var(--space-sm);
+  margin: var(--space-xs) calc(-1 * var(--space-sm));
+  border-radius: var(--radius-sm);
+}
+
+.output-row.highlight .output-label,
+.detail-row.highlight span:first-child {
+  font-weight: 500;
+}
+
+.output-value.positive,
+.detail-row .positive {
+  color: var(--emerald-400);
+}
+
+/* ============================================================================
+   Responsive Adjustments
+   ============================================================================ */
+
+@media (max-width: 480px) {
+  .lend-modal .sign-methods {
+    grid-template-columns: 1fr;
+    gap: var(--space-sm);
+  }
+
+  .lend-modal .sign-method-btn {
+    padding: var(--space-md);
+  }
+
+  .lend-modal .preview-value {
+    font-size: var(--text-xl);
+  }
+}

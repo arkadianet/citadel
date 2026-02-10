@@ -1,0 +1,553 @@
+/* ============================================================================
+   Dexy Mint Modal - Kadia-inspired styling
+   ============================================================================ */
+
+.dexy-mint-modal {
+  max-width: 420px;
+}
+
+/* ============================================================================
+   Path Toggle
+   ============================================================================ */
+
+.path-toggle {
+  display: flex;
+  gap: 2px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.path-toggle-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--slate-400);
+}
+
+.path-toggle-btn:hover:not(.disabled):not(.active) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--slate-300);
+}
+
+.path-toggle-btn.active {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--emerald-400);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.3);
+}
+
+.path-toggle-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.path-toggle-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.path-toggle-rate {
+  font-size: 0.8rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.path-toggle-unavail {
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.path-toggle-best {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(16, 185, 129, 0.25);
+  color: var(--emerald-400);
+}
+
+.path-toggle-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  color: var(--slate-400);
+  font-size: 0.85rem;
+}
+
+.path-toggle-loading .spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--slate-700);
+  border-top-color: var(--emerald-500);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* ============================================================================
+   Input Step
+   ============================================================================ */
+
+.mint-input-step {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ============================================================================
+   Swap Inputs (dual-input layout)
+   ============================================================================ */
+
+.swap-inputs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.swap-field {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.swap-field-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.swap-field-label {
+  font-size: 0.875rem;
+  color: var(--slate-400);
+}
+
+.swap-field-balance {
+  font-size: 0.8rem;
+  color: var(--slate-500);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.swap-field-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swap-field-input input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: rgb(var(--text));
+  font-size: 1.5rem;
+  font-family: 'JetBrains Mono', monospace;
+  outline: none;
+  min-width: 0;
+}
+
+.swap-field-input input::placeholder {
+  color: var(--slate-500);
+}
+
+.swap-field-input input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Hide number input spinners */
+.swap-field-input input[type="number"]::-webkit-inner-spin-button,
+.swap-field-input input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.swap-field-input input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.swap-field-token {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: rgb(var(--text));
+  white-space: nowrap;
+}
+
+.swap-arrow {
+  z-index: 1;
+  margin: -12px 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--slate-800);
+  border: 2px solid var(--slate-700);
+  border-radius: 50%;
+  color: var(--slate-400);
+  font-size: 1rem;
+}
+
+.max-btn {
+  padding: 6px 10px;
+  background: rgba(16, 185, 129, 0.15);
+  border: none;
+  border-radius: 4px;
+  color: var(--emerald-400);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.max-btn:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.25);
+}
+
+.max-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Warning Message
+   ============================================================================ */
+
+.message.warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: var(--amber-400);
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+/* ============================================================================
+   Mint Info
+   ============================================================================ */
+
+.mint-info {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  padding: 16px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+}
+
+.info-row span:first-child {
+  color: var(--slate-400);
+}
+
+.info-row span:last-child {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.info-row .positive {
+  color: var(--emerald-400) !important;
+}
+
+.info-row .negative {
+  color: var(--amber-400) !important;
+}
+
+/* ============================================================================
+   Preview Step
+   ============================================================================ */
+
+.mint-preview-step {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.preview-summary {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  padding: 20px;
+  border-radius: 12px;
+}
+
+.preview-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--slate-700);
+  margin-bottom: 16px;
+}
+
+.preview-label {
+  font-size: 0.875rem;
+  color: var(--slate-400);
+}
+
+.preview-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 4px;
+  color: var(--emerald-400);
+}
+
+.preview-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+.detail-row span:first-child {
+  color: var(--slate-400);
+}
+
+.detail-row span:last-child {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.detail-row.total {
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 1px solid var(--slate-700);
+  font-weight: 600;
+}
+
+.preview-note {
+  font-size: 0.8rem;
+  color: var(--slate-500);
+  text-align: center;
+  margin-top: 16px;
+  margin-bottom: 0;
+}
+
+/* ============================================================================
+   Signing Step
+   ============================================================================ */
+
+.mint-signing-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 0;
+}
+
+.sign-method-choice {
+  width: 100%;
+  text-align: center;
+}
+
+.sign-method-choice p {
+  color: var(--slate-400);
+  margin-bottom: 16px;
+}
+
+.sign-methods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.sign-method-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 16px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sign-method-btn:hover {
+  border-color: var(--emerald-500);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.sign-method-btn svg {
+  color: var(--slate-400);
+}
+
+.sign-method-btn span {
+  font-weight: 500;
+  color: rgb(var(--text));
+}
+
+.sign-method-btn small {
+  font-size: 0.75rem;
+  color: var(--slate-500);
+}
+
+.nautilus-waiting,
+.qr-signing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+}
+
+.waiting-icon {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.waiting-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--slate-700);
+  border-top-color: var(--emerald-500);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.qr-container {
+  padding: 16px;
+  background: white;
+  border-radius: 12px;
+}
+
+/* ============================================================================
+   Success Step
+   ============================================================================ */
+
+.mint-success-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.success-icon {
+  margin-bottom: 8px;
+}
+
+.mint-success-step h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: rgb(var(--text));
+  margin: 0;
+}
+
+.tx-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--slate-400);
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  padding: 8px 16px;
+  border-radius: 6px;
+}
+
+/* ============================================================================
+   Error Step
+   ============================================================================ */
+
+.mint-error-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.error-icon {
+  margin-bottom: 8px;
+}
+
+.mint-error-step h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: rgb(var(--text));
+  margin: 0;
+}
+
+.error-message {
+  color: var(--red-400);
+  font-size: 0.9rem;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+/* ============================================================================
+   Modal Actions
+   ============================================================================ */
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.modal-actions .btn {
+  flex: 1;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+
+.modal-actions .btn-primary {
+  background: var(--emerald-500);
+  color: white;
+}
+
+.modal-actions .btn-primary:hover:not(:disabled) {
+  background: var(--emerald-600);
+}
+
+.modal-actions .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-actions .btn-secondary {
+  background: var(--slate-700);
+  color: rgb(var(--text));
+}
+
+.modal-actions .btn-secondary:hover {
+  background: var(--slate-600);
+}

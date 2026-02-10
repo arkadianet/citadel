@@ -1,0 +1,515 @@
+/* ============================================================================
+   MewLock Timelocks Tab
+   ============================================================================ */
+
+.timelock-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-md) var(--space-lg);
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  animation: timelockFadeIn 0.4s ease-out;
+  gap: var(--space-sm);
+}
+
+@keyframes timelockFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================================
+   Header
+   ============================================================================ */
+
+.timelock-header {
+  flex-shrink: 0;
+}
+
+.timelock-header-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.timelock-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: white;
+}
+
+.timelock-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.timelock-header h2 {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: rgb(var(--text));
+  margin: 0;
+  line-height: 1.2;
+}
+
+.timelock-description {
+  color: var(--slate-400);
+  font-size: var(--text-xs);
+  margin: 0;
+}
+
+.timelock-create-btn {
+  margin-left: auto;
+  padding: var(--space-xs) var(--space-md);
+  border: none;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.timelock-create-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.timelock-create-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Info Bar
+   ============================================================================ */
+
+.timelock-info-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  font-size: var(--text-xs);
+  flex-shrink: 0;
+}
+
+.timelock-info-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.timelock-info-label {
+  color: var(--slate-500);
+}
+
+.timelock-info-value {
+  color: rgb(var(--text));
+  font-weight: 500;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.timelock-info-divider {
+  width: 1px;
+  height: var(--space-md);
+  background: var(--slate-700);
+}
+
+/* ============================================================================
+   Filter / Tab Bar
+   ============================================================================ */
+
+.timelock-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.timelock-tab-btn {
+  padding: var(--space-xs) var(--space-md);
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--slate-400);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.timelock-tab-btn.active {
+  background: #6366f1;
+  color: white;
+}
+
+.timelock-tab-btn:hover:not(.active) {
+  color: var(--slate-200);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.timelock-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-left: auto;
+}
+
+.timelock-refresh-btn {
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--slate-700);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--slate-400);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.timelock-refresh-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--slate-200);
+  border-color: var(--slate-600);
+}
+
+.timelock-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Sort Bar
+   ============================================================================ */
+
+.timelock-sort-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+.timelock-sort-label {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+  margin-right: var(--space-xs);
+}
+
+.timelock-sort-btn {
+  padding: 2px var(--space-sm);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--slate-500);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.timelock-sort-btn:hover {
+  color: var(--slate-300);
+  border-color: var(--slate-700);
+}
+
+.timelock-sort-btn.active {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #818cf8;
+}
+
+/* ============================================================================
+   Card Grid
+   ============================================================================ */
+
+.timelock-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(280px, 30vw, 360px), 1fr));
+  gap: var(--space-md);
+}
+
+@media (max-width: 640px) {
+  .timelock-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================================
+   Lock Card
+   ============================================================================ */
+
+.timelock-card {
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border) / 0.5);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.timelock-card:hover {
+  border-color: rgb(var(--border));
+  transform: translateY(-2px);
+}
+
+.timelock-card.own {
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.timelock-card.unlockable {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+/* Card Header */
+.timelock-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(99, 102, 241, 0.06);
+  border-bottom: 1px solid rgb(var(--border) / 0.3);
+}
+
+.timelock-card.unlockable .timelock-card-header {
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.timelock-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.timelock-lock-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: rgb(var(--text));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timelock-own-badge {
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+  flex-shrink: 0;
+}
+
+.timelock-status-badge {
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.timelock-status-badge.locked {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+}
+
+.timelock-status-badge.unlockable {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--emerald-400);
+}
+
+/* Card Body */
+.timelock-card-body {
+  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+}
+
+.timelock-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-xs) 0;
+}
+
+.timelock-row-label {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+}
+
+.timelock-row-value {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: rgb(var(--text));
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.timelock-row-value.highlight {
+  color: #818cf8;
+}
+
+.timelock-row-value.success {
+  color: var(--emerald-400);
+}
+
+.timelock-row-value.mono {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+}
+
+/* Card Actions */
+.timelock-card-actions {
+  display: flex;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid rgb(var(--border) / 0.3);
+}
+
+.timelock-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+}
+
+.timelock-action-btn.primary {
+  background: var(--emerald-500);
+  color: white;
+}
+
+.timelock-action-btn.primary:hover:not(:disabled) {
+  background: var(--emerald-600);
+}
+
+.timelock-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Create Lock Modal
+   ============================================================================ */
+
+.timelock-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.timelock-duration-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-xs);
+}
+
+.timelock-duration-btn {
+  padding: var(--space-sm);
+  border: 1px solid var(--slate-700);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--slate-400);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.timelock-duration-btn:hover {
+  border-color: var(--slate-500);
+  color: var(--slate-200);
+}
+
+.timelock-duration-btn.active {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+  color: #818cf8;
+}
+
+.timelock-fee-preview {
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+}
+
+.timelock-fee-preview span {
+  color: rgb(var(--text));
+  font-weight: 500;
+}
+
+/* ============================================================================
+   Empty / Loading / Error States
+   ============================================================================ */
+
+.timelock-tab .empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-xl);
+  text-align: center;
+  color: var(--slate-500);
+  font-size: var(--text-sm);
+}
+
+.timelock-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  justify-content: center;
+  color: var(--slate-400);
+}
+
+.timelock-error {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--red-400);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+.timelock-notice {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-xl);
+  text-align: center;
+  color: var(--slate-400);
+  font-size: var(--text-sm);
+}

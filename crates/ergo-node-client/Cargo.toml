@@ -1,0 +1,18 @@
+[package]
+name = "ergo-node-client"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Ergo node client wrapper with capability detection"
+
+[dependencies]
+citadel-core = { workspace = true }
+ergo-node-interface = { workspace = true }
+ergo-lib = { workspace = true }
+ergo-tx = { workspace = true, features = ["ergo-lib"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

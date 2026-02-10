@@ -1,0 +1,325 @@
+/* ============================================================================
+   Create Order Modal
+   ============================================================================ */
+
+.create-order-modal {
+  max-width: 480px;
+}
+
+/* ============================================================================
+   Input Step
+   ============================================================================ */
+
+.co-input-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.co-input-step .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.co-input-step .form-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--slate-400);
+}
+
+.co-input-step .input {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: var(--radius-md);
+  color: rgb(var(--text));
+  font-size: var(--text-base);
+  font-family: 'JetBrains Mono', monospace;
+  transition: all 0.15s;
+}
+
+.co-input-step .input:focus {
+  outline: none;
+  border-color: var(--emerald-500);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+.co-input-step .input::placeholder {
+  color: var(--slate-500);
+}
+
+.co-select {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: var(--radius-md);
+  color: rgb(var(--text));
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.co-select:focus {
+  outline: none;
+  border-color: var(--emerald-500);
+}
+
+.co-select option {
+  background: var(--slate-800);
+  color: rgb(var(--text));
+}
+
+.co-hint {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+  margin: 0;
+}
+
+/* ============================================================================
+   Summary Preview
+   ============================================================================ */
+
+.co-summary {
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.co-summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+}
+
+.co-summary-row span:first-child {
+  color: var(--slate-400);
+}
+
+.co-summary-row span:last-child {
+  font-weight: 500;
+  font-family: 'JetBrains Mono', monospace;
+  color: rgb(var(--text));
+}
+
+/* ============================================================================
+   Actions
+   ============================================================================ */
+
+.co-modal-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.co-modal-actions .btn {
+  flex: 1;
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+
+.co-modal-actions .btn-primary {
+  background: var(--emerald-500);
+  color: white;
+}
+
+.co-modal-actions .btn-primary:hover:not(:disabled) {
+  background: var(--emerald-600);
+}
+
+.co-modal-actions .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.co-modal-actions .btn-secondary {
+  background: var(--slate-700);
+  color: rgb(var(--text));
+}
+
+.co-modal-actions .btn-secondary:hover {
+  background: var(--slate-600);
+}
+
+/* ============================================================================
+   Warning / Error Messages
+   ============================================================================ */
+
+.co-input-step .message.warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: var(--amber-400);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.co-input-step .message.error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--red-400);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+/* ============================================================================
+   Signing Step
+   ============================================================================ */
+
+.co-signing-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-md) 0;
+}
+
+.create-order-modal .sign-method-choice {
+  width: 100%;
+  text-align: center;
+}
+
+.create-order-modal .sign-method-choice p {
+  color: var(--slate-400);
+  margin-bottom: var(--space-md);
+}
+
+.create-order-modal .sign-methods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+.create-order-modal .sign-method-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-lg) var(--space-md);
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--slate-700);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.create-order-modal .sign-method-btn:hover {
+  border-color: var(--emerald-500);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.create-order-modal .sign-method-btn svg {
+  color: var(--slate-400);
+}
+
+.create-order-modal .sign-method-btn span {
+  font-weight: 500;
+  color: rgb(var(--text));
+}
+
+.create-order-modal .sign-method-btn small {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+}
+
+.create-order-modal .nautilus-waiting,
+.create-order-modal .qr-signing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+}
+
+.create-order-modal .waiting-icon {
+  animation: coPulse 2s infinite;
+}
+
+.create-order-modal .waiting-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--slate-700);
+  border-top-color: var(--emerald-500);
+  border-radius: 50%;
+  animation: coSpin 1s linear infinite;
+}
+
+.create-order-modal .qr-container {
+  padding: var(--space-md);
+  background: white;
+  border-radius: var(--radius-lg);
+}
+
+/* ============================================================================
+   Success / Error Steps
+   ============================================================================ */
+
+.co-success-step,
+.co-error-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-xl) var(--space-md);
+  text-align: center;
+}
+
+.co-success-step h3,
+.co-error-step h3 {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: rgb(var(--text));
+  margin: 0;
+}
+
+.co-success-step p,
+.co-error-step p {
+  color: var(--slate-400);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.co-error-step .error-message {
+  color: var(--red-400);
+  font-size: var(--text-sm);
+  max-width: 100%;
+  word-break: break-word;
+}
+
+/* ============================================================================
+   Animations
+   ============================================================================ */
+
+@keyframes coPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes coSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 480px) {
+  .create-order-modal .sign-methods {
+    grid-template-columns: 1fr;
+    gap: var(--space-sm);
+  }
+}

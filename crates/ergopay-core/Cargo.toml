@@ -1,0 +1,18 @@
+[package]
+name = "ergopay-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "ErgoPay transaction reduction and core types"
+
+[dependencies]
+ergo-lib = { workspace = true }
+ergo-chain-types = { git = "https://github.com/ergoplatform/sigma-rust", branch = "develop" }
+ergo-node-client = { workspace = true }
+ergo-tx = { workspace = true, features = ["ergo-lib"] }
+hex = { workspace = true }
+indexmap = "2"
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

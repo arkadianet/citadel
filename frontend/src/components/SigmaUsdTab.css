@@ -1,0 +1,994 @@
+/* ============================================================================
+   SigmaUSD View
+   ============================================================================ */
+
+.sigmausd-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-md) var(--space-lg);
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  animation: fadeIn 0.4s ease-out;
+  gap: var(--space-sm);
+}
+
+.sigmausd-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================================
+   Protocol Header
+   ============================================================================ */
+
+.sigmausd-header-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.sigmausd-icon-stack {
+  position: relative;
+  width: var(--icon-lg);
+  height: clamp(28px, 2.8vw, 36px);
+  flex-shrink: 0;
+}
+
+.sigmausd-icon-stack .icon-sigusd {
+  position: absolute;
+  width: clamp(24px, 2.5vw, 32px);
+  height: clamp(24px, 2.5vw, 32px);
+  top: 2px;
+  left: 0;
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+}
+
+.sigmausd-icon-stack .icon-sigusd img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sigmausd-icon-stack .icon-sigrsv {
+  position: absolute;
+  width: clamp(24px, 2.5vw, 32px);
+  height: clamp(24px, 2.5vw, 32px);
+  top: 2px;
+  left: clamp(10px, 1vw, 14px);
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+}
+
+.sigmausd-icon-stack .icon-sigrsv img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sigmausd-header h2 {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: rgb(var(--text));
+  margin: 0;
+  line-height: 1.2;
+}
+
+.sigmausd-description {
+  color: var(--slate-400);
+  font-size: var(--text-xs);
+  margin: 0;
+}
+
+/* ============================================================================
+   Protocol Info Bar
+   ============================================================================ */
+
+.protocol-info-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  font-size: var(--text-xs);
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.info-label {
+  color: var(--slate-500);
+}
+
+.info-value {
+  color: rgb(var(--text));
+  font-weight: 500;
+}
+
+.info-value.mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--text-xs);
+  color: var(--cyan-400);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.info-value.mono:hover {
+  color: var(--cyan-400);
+  filter: brightness(1.2);
+}
+
+.info-divider {
+  width: 1px;
+  height: var(--space-md);
+  background: var(--slate-700);
+}
+
+.info-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.info-status .dot {
+  width: clamp(6px, 0.6vw, 8px);
+  height: clamp(6px, 0.6vw, 8px);
+  border-radius: 50%;
+  background: var(--emerald-500);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ============================================================================
+   Reserve Ratio Section
+   ============================================================================ */
+
+.reserve-section {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--slate-800);
+  background: linear-gradient(to bottom, var(--slate-900), rgba(15, 23, 42, 0.5));
+  overflow: hidden;
+  padding: var(--space-sm);
+}
+
+.reserve-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+@media (max-width: 900px) {
+  .reserve-layout {
+    flex-direction: column;
+  }
+}
+
+/* Reserve Gauge */
+.reserve-gauge-container {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gauge-wrapper {
+  position: relative;
+  width: clamp(80px, 9vw, 108px);
+  height: clamp(80px, 9vw, 108px);
+}
+
+.gauge-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.gauge-bg {
+  fill: none;
+  stroke: var(--slate-800);
+  stroke-width: 10;
+}
+
+.gauge-progress {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s ease-out, stroke 0.3s;
+}
+
+.gauge-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.gauge-value {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.gauge-value.healthy { color: var(--emerald-400); }
+.gauge-value.danger { color: var(--amber-400); }
+.gauge-value.critical { color: var(--red-400); }
+.gauge-value.excess { color: var(--blue-400); }
+
+.gauge-label {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+}
+
+.gauge-status {
+  margin-top: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: 9999px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.gauge-status.healthy {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--emerald-400);
+}
+
+.gauge-status.danger {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--amber-400);
+}
+
+.gauge-status.critical {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--red-400);
+}
+
+.gauge-status.excess {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--blue-400);
+}
+
+.gauge-range {
+  display: flex;
+  gap: var(--space-md);
+  margin-top: var(--space-xs);
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+}
+
+/* Stats Grid */
+.stats-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-xs);
+}
+
+.stat-card {
+  padding: var(--space-xs);
+  border-radius: var(--radius-md);
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(51, 65, 85, 0.3);
+}
+
+.stat-card.highlight {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.stat-card .stat-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-xs);
+}
+
+.stat-card .stat-icon {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--slate-400);
+}
+
+.stat-card .stat-label {
+  font-size: clamp(0.55rem, 0.7vw, 0.7rem);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--slate-500);
+}
+
+.stat-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+}
+
+.stat-card .stat-value {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: rgb(var(--text));
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-card.highlight .stat-value {
+  color: var(--emerald-400);
+}
+
+.stat-unit {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+}
+
+.stat-subtext {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+  margin-top: 2px;
+}
+
+/* ============================================================================
+   Token Cards Grid
+   ============================================================================ */
+
+.token-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-md);
+}
+
+/* Token Card */
+.token-card {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.8);
+  display: flex;
+  flex-direction: column;
+}
+
+.token-card.emerald {
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.token-card.blue {
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.token-card-header {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid;
+}
+
+.token-card.emerald .token-card-header {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.token-card.blue .token-card-header {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.token-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.token-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.token-icon {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  border-radius: 50%;
+}
+
+.token-info h3 {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: rgb(var(--text));
+  margin: 0;
+  line-height: 1.2;
+}
+
+.token-info p {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  margin: 0;
+}
+
+.token-ticker {
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.token-card.emerald .token-ticker {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--emerald-400);
+}
+
+.token-card.blue .token-ticker {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--blue-400);
+}
+
+/* Token Card Body */
+.token-card-body {
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.token-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: var(--space-sm);
+}
+
+.token-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.token-stat-label {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+  margin-bottom: 2px;
+}
+
+.token-stat-value {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: rgb(var(--text));
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Wallet Balance Box */
+.wallet-balance-box {
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+}
+
+.token-card.emerald .wallet-balance-box {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.token-card.blue .wallet-balance-box {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.wallet-balance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wallet-balance-label {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+}
+
+.wallet-balance-value {
+  text-align: right;
+}
+
+.wallet-balance-amount {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
+.token-card.emerald .wallet-balance-amount {
+  color: var(--emerald-400);
+}
+
+.token-card.blue .wallet-balance-amount {
+  color: var(--blue-400);
+}
+
+.wallet-balance-ticker {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+  margin-left: var(--space-xs);
+}
+
+/* Token Actions */
+.token-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: auto;
+}
+
+.action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.action-btn.primary.emerald {
+  background: var(--emerald-500);
+  color: white;
+}
+
+.action-btn.primary.emerald:hover:not(:disabled) {
+  background: var(--emerald-600);
+}
+
+.action-btn.primary.blue {
+  background: var(--blue-500);
+  color: white;
+}
+
+.action-btn.primary.blue:hover:not(:disabled) {
+  background: var(--blue-600);
+}
+
+.action-btn.secondary {
+  background: var(--slate-700);
+  color: rgb(var(--text));
+}
+
+.action-btn.secondary:hover:not(:disabled) {
+  background: var(--slate-600);
+}
+
+.action-btn:disabled {
+  background: rgba(51, 65, 85, 0.5);
+  color: var(--slate-500);
+  cursor: not-allowed;
+}
+
+.action-btn svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+/* Status Badges */
+.status-badges {
+  display: flex;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-xs);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+
+.status-badge .dot {
+  width: clamp(4px, 0.5vw, 6px);
+  height: clamp(4px, 0.5vw, 6px);
+  border-radius: 50%;
+}
+
+.status-badge.available {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--emerald-400);
+}
+
+.status-badge.available .dot {
+  background: var(--emerald-400);
+}
+
+.status-badge.unavailable {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--red-400);
+}
+
+.status-badge.unavailable .dot {
+  background: var(--red-400);
+}
+
+/* ============================================================================
+   Wallet Section
+   ============================================================================ */
+
+.wallet-section {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--slate-800);
+  background: rgba(15, 23, 42, 0.5);
+  overflow: hidden;
+}
+
+.wallet-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--slate-800);
+}
+
+.wallet-tab {
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--slate-400);
+}
+
+.wallet-tab:hover {
+  color: rgb(var(--text));
+  background: rgba(30, 41, 59, 0.2);
+}
+
+.wallet-tab.active {
+  color: rgb(var(--text));
+  border-bottom: 2px solid var(--emerald-500);
+  background: rgba(30, 41, 59, 0.3);
+}
+
+.wallet-tab-content {
+  padding: var(--space-md);
+}
+
+/* Portfolio Total */
+.portfolio-total {
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  background: linear-gradient(to right, rgba(16, 185, 129, 0.1), rgba(59, 130, 246, 0.1));
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  margin-bottom: var(--space-sm);
+}
+
+.portfolio-total-label {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  margin-bottom: 2px;
+}
+
+.portfolio-total-value {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: rgb(var(--text));
+  font-variant-numeric: tabular-nums;
+}
+
+/* Holdings Grid */
+.holdings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-sm);
+}
+
+.holding-card {
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid;
+}
+
+.holding-card.orange {
+  background: rgba(249, 115, 22, 0.1);
+  border-color: rgba(249, 115, 22, 0.2);
+}
+
+.holding-card.emerald {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.holding-card.blue {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.holding-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.holding-icon {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  border-radius: 50%;
+}
+
+.holding-name {
+  font-weight: 500;
+  font-size: var(--text-sm);
+  color: rgb(var(--text));
+}
+
+.holding-amount {
+  font-size: var(--text-base);
+  font-family: 'JetBrains Mono', monospace;
+  color: rgb(var(--text));
+  font-variant-numeric: tabular-nums;
+}
+
+.holding-usd {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+}
+
+/* Wallet Connect Notice */
+.wallet-notice {
+  padding: var(--space-lg);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.wallet-notice-icon {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  border-radius: 50%;
+  background: rgba(30, 41, 59, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wallet-notice-icon svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  color: var(--slate-500);
+}
+
+.wallet-notice h3 {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: rgb(var(--text));
+  margin: 0;
+}
+
+.wallet-notice p {
+  color: var(--slate-400);
+  font-size: var(--text-xs);
+  margin: 0;
+}
+
+.wallet-notice .connect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  background: var(--emerald-500);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.wallet-notice .connect-btn:hover {
+  background: var(--emerald-600);
+}
+
+/* ============================================================================
+   Activity Feed — two-column grid
+   ============================================================================ */
+
+.sigmausd-activity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-sm);
+}
+
+.sigmausd-activity-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sigmausd-section-header {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: rgb(var(--text));
+  margin: 0 0 var(--space-xs);
+}
+
+.sigmausd-activity-card {
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border) / 0.5);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  flex: 1;
+}
+
+.sigmausd-activity-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  color: var(--slate-500);
+  font-size: var(--text-sm);
+}
+
+.sigmausd-activity-empty {
+  padding: var(--space-md);
+  color: var(--slate-500);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.sigmausd-activity-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.sigmausd-activity-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid rgb(var(--border) / 0.3);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.sigmausd-activity-row:last-child {
+  border-bottom: none;
+}
+
+.sigmausd-activity-row:hover {
+  background: rgb(var(--card-hover));
+}
+
+.sigmausd-activity-row .activity-op-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sigmausd-activity-row .activity-op-icon.mint {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--emerald-400);
+}
+
+.sigmausd-activity-row .activity-op-icon.redeem {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--amber-400);
+}
+
+.sigmausd-activity-row .activity-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sigmausd-activity-row .activity-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sigmausd-activity-row .activity-op {
+  font-weight: 600;
+  font-size: var(--text-xs);
+  color: rgb(var(--text));
+}
+
+.sigmausd-activity-row .activity-token {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+}
+
+.sigmausd-activity-row .activity-protocol {
+  font-size: var(--text-xs);
+  color: var(--slate-600);
+}
+
+.sigmausd-activity-row .activity-amounts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.sigmausd-activity-row .activity-token-amt {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.sigmausd-activity-row .activity-token-amt.positive {
+  color: var(--emerald-400);
+}
+
+.sigmausd-activity-row .activity-token-amt.negative {
+  color: var(--amber-400);
+}
+
+.sigmausd-activity-row .activity-erg-amt {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+  font-variant-numeric: tabular-nums;
+}
+
+.sigmausd-activity-row .activity-time {
+  font-size: var(--text-xs);
+  color: var(--slate-600);
+  flex-shrink: 0;
+  min-width: 50px;
+  text-align: right;
+}
+
+.sigmausd-token-icon-wrap {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.sigmausd-token-icon-wrap.sigusd {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.sigmausd-token-icon-wrap.sigrsv {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+.sigmausd-token-icon-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

@@ -1,0 +1,20 @@
+[package]
+name = "amm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Spectrum AMM protocol implementation for Citadel"
+
+[dependencies]
+citadel-core = { workspace = true }
+ergo-node-client = { workspace = true }
+ergo-tx = { workspace = true, features = ["ergo-lib"] }
+ergo-lib = { workspace = true }
+hex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+num-bigint = "0.4"
