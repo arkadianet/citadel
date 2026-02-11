@@ -80,13 +80,17 @@ pub async fn mewlock_build_lock(
 /// Build an unlock transaction
 #[tauri::command]
 pub async fn mewlock_build_unlock(
-    lock_box_json: String,
+    state: State<'_, AppState>,
+    box_id: String,
     user_ergo_tree: String,
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<serde_json::Value, String> {
-    let lock_box: ergo_tx::Eip12InputBox =
-        serde_json::from_str(&lock_box_json).map_err(|e| format!("Invalid lock box: {}", e))?;
+    let client = state.node_client().await.ok_or("Node not connected")?;
+    let lock_box = client
+        .get_eip12_box_by_id(&box_id)
+        .await
+        .map_err(|e| format!("Failed to fetch lock box: {}", e))?;
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
 
     let req = mewlock::tx_builder::UnlockRequest {

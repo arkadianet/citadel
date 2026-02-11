@@ -654,11 +654,8 @@ function UnlockModal({
       const userUtxos = await invoke<object[]>('get_user_utxos')
       const ergoTree = await invoke<string>('validate_ergo_address', { address: walletAddress })
 
-      // Fetch the lock box as EIP-12 input
-      const lockBox = await invoke<object>('get_box_by_id', { boxId: lock.boxId })
-
       const tx = await buildUnlockTx(
-        JSON.stringify(lockBox),
+        lock.boxId,
         ergoTree,
         userUtxos,
         currentHeight,
