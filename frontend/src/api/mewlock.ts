@@ -86,13 +86,13 @@ export async function buildLockTx(
 }
 
 export async function buildUnlockTx(
-  lockBoxJson: string,
+  boxId: string,
   userErgoTree: string,
   userUtxos: object[],
   currentHeight: number,
 ): Promise<object> {
   return await invoke<object>('mewlock_build_unlock', {
-    lockBoxJson,
+    boxId,
     userErgoTree,
     userUtxos,
     currentHeight,

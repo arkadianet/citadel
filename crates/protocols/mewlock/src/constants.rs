@@ -1,7 +1,11 @@
 //! MewLock contract constants and fee parameters
 
-/// MewLock contract ErgoTree hex (constant-segregated)
-pub const MEWLOCK_ERGO_TREE: &str = "19a3030e05a01f05a01f05c09a0c040008cd02593abf7a55bd30ecb0d9cc89284f577db9c673bd6dba3642d5ec2eba1b131a02040202010400040204000400020204000100d80ed601e4e30002d602e4c6a70406d603e4c6a70605d60495917203730072037301d6057302d6069d9c72027e9ae4c6a709057204067e720506d607e4c6a70508d608e4c6a7070ed60993b172087303d60a9d9c72027e7204067e720506d60b7304d60cc2a7d60d93b1b5a4d9010d6393c2720d720c7305d60eafa5d9010e6394c2720e720c959372017306d802d60fb2a5730700d610b2a5730800d19683040195720996830201927ec1720f06997202720693c2720fd07207d801d611b2db6308720f73090096830301938c7211017208927e8c72110206997202720693c2720fd0720795720996830201927ec1721006720a93c27210d0720bd801d611b2db63087210730a009683030193c27210d0720b938c7211017208927e8c72110206720a720d720e95937201730bd801d60fb2a5730c00ea02d1968303019683030193c1720fc1a793c2720fd0720793db6308720fdb6308a7720d720e7207d1730d";
+/// MewLock Timelock contract ErgoTree hex (constant-segregated).
+///
+/// IMPORTANT: The reference implementation's `const.ts` has a DIFFERENT ErgoTree
+/// (`19a303...`) which is the Mew Finance Marketplace contract, NOT the timelock.
+/// The correct timelock ErgoTree is from the boxes at MEWLOCK_ADDRESS (`5adWKCN...`).
+pub const MEWLOCK_ERGO_TREE: &str = "19f1042105c09a0c05f02e05c09a0c050005140500050005000544051405feffffffffffffffff0105f02e05c09a0c0500050005c80105000500050004000400050005000402040008cd02593abf7a55bd30ecb0d9cc89284f577db9c673bd6dba3642d5ec2eba1b131a020101040001010101010104000101d808d601c2a7d602c1a7d603959172027300d801d6039d9c72027301730295ed91720373039072039d72027304720373057306d6049172037307d605db6308a7d606b5ad7205d901064d0ed801d6088c72060286028c720601959172087308d801d6099d7208730995907208730ad801d60a9d9c7208730b730c95ed91720a730d90720a7209720a730ed801d60a9d7208730f95ed91720a731090720a7209720a72097311d901064d0e918c7206027312d607cde4c6a70407d608b5ad7205d901084d0ed802d60a8c720801d60bb57206d9010b4d0e938c720b01720a8602720a998c7208029591b1720b73138cb2720b731400027315d901084d0e918c7208027316ea02d19683040192a3e4c6a7050493b1b5a4d901096393c2720972017317afa5d901096394c272097201eded95ec720491b172067318aea5d9010963eded93c27209d0731995720492c172097203731a9591b17206731baf7206d9010b4d0eaedb63087209d9010d4d0eed938c720d018c720b01928c720d028c720b02731c731ded9572049272027203731eaf7206d901094d0eae7205d9010b4d0eed938c720b018c720901928c720b028c720902aea5d9010963eded93c27209d0720792c1720999720272039591b17208731faf7208d9010b4d0eaedb63087209d9010d4d0eed938c720d018c720b01928c720d028c720b0273207207";
 
 /// Dev treasury address
 pub const DEV_ADDRESS: &str = "9fCMmB72WcFLseNx6QANheTCrDjKeb9FzdFNTdBREt2FzHTmusY";
@@ -52,8 +56,9 @@ pub fn calculate_token_fee(amount: u64) -> u64 {
     fee.min(max_fee)
 }
 
-/// Expected MewLock contract P2S address (mainnet).
-/// This is the address form of MEWLOCK_ERGO_TREE.
+/// MewLock Timelock contract P2S address (mainnet).
+/// Verified: boxes at this address have ErgoTree matching MEWLOCK_ERGO_TREE
+/// with registers R4=GroupElement, R5=Int, R6=Int (matching our layout).
 pub const MEWLOCK_ADDRESS: &str = "5adWKCNFaCzfHxRxzoFvAS7khVsqXqvKV6cejDimUXDUWJNJFhRaTmT65PRUPv2fGeXJQ2Yp9GqpiQayHqMRkySDMnWW7X3tBsjgwgT11pa1NuJ3cxf4Xvxo81Vt4HmY3KCxkg1aptVZdCSDA7ASiYE6hRgN5XnyPsaAY2Xc7FUoWN1ndQRA7Km7rjcxr3NHFPirZvTbZfB298EYwDfEvrZmSZhU2FGpMUbmVpdQSbooh8dGMjCf4mXrP2N4FSkDaNVZZPcEPyDr4WM1WHrVtNAEAoWJUTXQKeLEj6srAsPw7PpXgKa74n3Xc7qiXEr2Tut7jJkFLeNqLouQN13kRwyyADQ5aXTCBuhqsucQvyqEEEk7ekPRnqk4LzRyVqCVsRZ7Y5Kk1r1jZjPeXSUCTQGnL1pdFfuJ1SfaYkbgebjnJT2KJWVRamQjztvrhwarcVHDXbUKNawznfJtPVm7abUv81mro23AKhhkPXkAweZ4jXdKwQxjiAqCCBNBMNDXk66AhdKCbK5jFqnZWPwKm6eZ1BXjr9Au8sjhi4HKhrxZWbvr4yi9bBFFKbzhhQm9dVcMpCB3S5Yj2m6XaHaivHN1DFCPBo6nQRV9sBMYZrP3tbCtgKgiTLZWLNNPLFPWhmoR1DABBGnVe5GYNwTxJZY2Mc2u8KZQC4pLqkHJmdq2hHSfaxzK77QXtzyyk59z4EBjyMWeVCtrcDg2jZBepPhoT6i5xUAkzBzhGK3SFor2v44yahHZiHNPj5W3LEU9mFCdiPwNCVd9S2a5MNZJHBukWKVjVF4s5bhXkCzW2MbXjAH1cue4APHYvobkPpn2zd9vnwLow8abjAdLBmTz2idAWchsavdU";
 
 #[cfg(test)]
@@ -103,25 +108,34 @@ mod tests {
         assert_eq!(fee, 1); // (35 * 3000) / 100000 = 1.05 → 1
     }
 
-    /// Verify that Address::recreate_from_ergo_tree does NOT produce the
-    /// correct P2S address for constant-segregated ErgoTrees. This is why we
-    /// hardcode MEWLOCK_ADDRESS instead of deriving it from MEWLOCK_ERGO_TREE.
+    /// Verify that the ErgoTree is a valid constant-segregated tree that
+    /// sigma-rust can parse, and that bytes roundtrip correctly.
     #[test]
-    fn test_constant_segregated_tree_does_not_roundtrip() {
-        use ergo_lib::ergotree_ir::chain::address::{Address, AddressEncoder, NetworkPrefix};
+    fn test_ergo_tree_parses_and_roundtrips() {
         use ergo_lib::ergotree_ir::ergo_tree::ErgoTree;
         use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
 
-        let tree_bytes = hex::decode(MEWLOCK_ERGO_TREE).unwrap();
-        let tree = ErgoTree::sigma_parse_bytes(&tree_bytes).unwrap();
-        let address = Address::recreate_from_ergo_tree(&tree).unwrap();
-        let encoder = AddressEncoder::new(NetworkPrefix::Mainnet);
-        let addr_str = encoder.address_to_str(&address);
+        let original_bytes = hex::decode(MEWLOCK_ERGO_TREE).unwrap();
+        assert_eq!(
+            original_bytes[0] & 0x01,
+            1,
+            "ErgoTree should have constant segregation flag set"
+        );
 
-        // The derived address differs because sigma-rust strips constants
-        // from the segregated tree. This confirms we must use the hardcoded
-        // MEWLOCK_ADDRESS for box queries.
-        assert_ne!(addr_str, MEWLOCK_ADDRESS);
-        assert!(MEWLOCK_ADDRESS.starts_with("5ad"));
+        let tree = ErgoTree::sigma_parse_bytes(&original_bytes).unwrap();
+        let serialized_bytes = tree.sigma_serialize_bytes().unwrap();
+        assert_eq!(
+            original_bytes, serialized_bytes,
+            "ErgoTree bytes must roundtrip exactly through sigma-rust"
+        );
+    }
+
+    /// Verify MEWLOCK_ADDRESS starts with expected prefix.
+    /// NOTE: Address::recreate_from_ergo_tree() does NOT produce the correct
+    /// P2S address for constant-segregated ErgoTrees — it strips constants.
+    /// We hardcode MEWLOCK_ADDRESS instead of deriving it.
+    #[test]
+    fn test_mewlock_address_prefix() {
+        assert!(MEWLOCK_ADDRESS.starts_with("5adWKCN"));
     }
 }

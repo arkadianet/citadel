@@ -206,7 +206,9 @@ pub struct UnlockRequest {
 
 /// Build an unlock transaction that spends a MewLock box.
 ///
-/// Calculates 3% fees on ERG and tokens, sends fee to dev treasury.
+/// The contract enforces: user output value >= lock_erg - erg_fee.
+/// Therefore the miner fee must come from a separate user UTXO, not
+/// from the lock box value.
 pub fn build_unlock_tx(req: &UnlockRequest) -> Result<Eip12UnsignedTx, MewLockTxError> {
     let lock_erg: u64 = req
         .lock_box
@@ -220,7 +222,7 @@ pub fn build_unlock_tx(req: &UnlockRequest) -> Result<Eip12UnsignedTx, MewLockTx
             MewLockTxError::InvalidAddress(format!("Invalid dev address: {}", e))
         })?;
 
-    // Calculate ERG fee
+    // Calculate ERG fee (3%)
     let erg_fee = constants::calculate_erg_fee(lock_erg);
 
     // Calculate token fees
@@ -243,55 +245,30 @@ pub fn build_unlock_tx(req: &UnlockRequest) -> Result<Eip12UnsignedTx, MewLockTx
         }
     }
 
-    let user_erg = lock_erg - erg_fee;
+    let has_dev_fees = erg_fee > 0 || !dev_tokens.is_empty();
 
-    // Determine if we need extra UTXOs for miner fee
-    // The lock box might have enough ERG to cover the fee + miner fee
-    let needs_extra_inputs = (user_erg as i64) < MINER_FEE + MIN_BOX_VALUE;
+    // Contract requires: user_output.value >= lock_erg - erg_fee
+    // So user gets exactly lock_erg - erg_fee from the lock box.
+    // Dev gets exactly erg_fee from the lock box.
+    // Miner fee + change come from a separate user UTXO.
+    let user_erg = lock_erg as i64 - erg_fee as i64;
+    let dev_erg = erg_fee as i64;
+
+    // Always need user UTXOs for miner fee (+ change)
+    let fee_required = (MINER_FEE + MIN_CHANGE_VALUE) as u64;
+    let selected = select_erg_boxes(&req.user_inputs, fee_required)
+        .map_err(|e| MewLockTxError::BoxSelection(e.to_string()))?;
 
     let mut inputs = vec![req.lock_box.clone()];
-    let mut extra_erg: i64 = 0;
+    let selected_boxes = selected.boxes;
+    inputs.extend(selected_boxes.clone());
 
-    if needs_extra_inputs && !req.user_inputs.is_empty() {
-        let fee_required = (MINER_FEE + MIN_CHANGE_VALUE) as u64;
-        let selected = select_erg_boxes(&req.user_inputs, fee_required)
-            .map_err(|e| MewLockTxError::BoxSelection(e.to_string()))?;
-        extra_erg = selected.total_erg as i64;
-        inputs.extend(selected.boxes);
-    }
+    // Change: user UTXO ERG minus miner fee
+    let change_erg = selected.total_erg as i64 - MINER_FEE;
 
-    // Output 0: User receives (erg - erg_fee) + (tokens - token_fees)
-    // When extra inputs are used, user gets all remaining ERG minus fees
-    let total_available_erg = user_erg as i64 + extra_erg;
-    let user_output_erg = total_available_erg - MINER_FEE;
-
-    // If we have dev fees, the dev box needs MIN_BOX_VALUE too
-    let has_dev_fees = erg_fee > 0 || !dev_tokens.is_empty();
-    let dev_box_erg = if has_dev_fees {
-        if erg_fee as i64 >= MIN_BOX_VALUE {
-            erg_fee as i64
-        } else {
-            // Need to take some from user output to ensure dev box meets minimum
-            MIN_BOX_VALUE
-        }
-    } else {
-        0
-    };
-
-    let final_user_erg = if has_dev_fees {
-        user_output_erg - dev_box_erg
-    } else {
-        user_output_erg
-    };
-
-    if final_user_erg < MIN_BOX_VALUE {
-        return Err(MewLockTxError::InsufficientFunds(
-            "Lock box value too low to cover fees".to_string(),
-        ));
-    }
-
+    // User output: lock_erg - erg_fee (contract-enforced minimum)
     let user_output = Eip12Output {
-        value: final_user_erg.to_string(),
+        value: user_erg.to_string(),
         ergo_tree: req.user_ergo_tree.clone(),
         assets: user_tokens,
         creation_height: req.current_height,
@@ -300,10 +277,10 @@ pub fn build_unlock_tx(req: &UnlockRequest) -> Result<Eip12UnsignedTx, MewLockTx
 
     let mut outputs = vec![user_output];
 
-    // Output 1: Dev fee box (only if there are fees)
+    // Dev fee output (only if there are fees)
     if has_dev_fees {
         let dev_output = Eip12Output {
-            value: dev_box_erg.to_string(),
+            value: dev_erg.to_string(),
             ergo_tree: dev_ergo_tree,
             assets: dev_tokens,
             creation_height: req.current_height,
@@ -312,7 +289,19 @@ pub fn build_unlock_tx(req: &UnlockRequest) -> Result<Eip12UnsignedTx, MewLockTx
         outputs.push(dev_output);
     }
 
-    // Output 2: Miner fee
+    // Change output
+    if change_erg > 0 {
+        let change_tokens = collect_change_tokens(&selected_boxes, None);
+        let change_output = Eip12Output::change(
+            change_erg,
+            &req.user_ergo_tree,
+            change_tokens,
+            req.current_height,
+        );
+        outputs.push(change_output);
+    }
+
+    // Miner fee
     outputs.push(Eip12Output::fee(MINER_FEE, req.current_height));
 
     Ok(Eip12UnsignedTx {
@@ -475,21 +464,23 @@ mod tests {
         let req = UnlockRequest {
             lock_box,
             user_ergo_tree: TEST_ERGO_TREE.to_string(),
-            user_inputs: vec![],
+            user_inputs: vec![mock_utxo(5_000_000_000, vec![])],
             current_height: 1100,
         };
 
         let tx = build_unlock_tx(&req).unwrap();
-        // Outputs: user + dev + fee
-        assert_eq!(tx.outputs.len(), 3);
+        // Inputs: lock box + user UTXO
+        assert_eq!(tx.inputs.len(), 2);
+        // Outputs: user + dev + change + fee
+        assert_eq!(tx.outputs.len(), 4);
 
-        // User gets (10 ERG - 3% fee - miner fee)
+        // User gets lock_erg - 3% fee = 10 ERG - 0.3 ERG = 9.7 ERG
         let user_erg: i64 = tx.outputs[0].value.parse().unwrap();
-        assert!(user_erg > 0);
+        assert_eq!(user_erg, 9_700_000_000);
 
-        // Dev gets fee
+        // Dev gets exactly the 3% ERG fee
         let dev_erg: i64 = tx.outputs[1].value.parse().unwrap();
-        assert!(dev_erg > 0);
+        assert_eq!(dev_erg, 300_000_000); // 3% of 10 ERG
 
         // Token fees: 3% of 1000 = 30
         let user_token_amt: i64 = tx.outputs[0].assets[0].amount.parse().unwrap();
@@ -497,6 +488,15 @@ mod tests {
 
         let dev_token_amt: i64 = tx.outputs[1].assets[0].amount.parse().unwrap();
         assert_eq!(dev_token_amt, 30);
+
+        // Change: user UTXO minus miner fee
+        let change_erg: i64 = tx.outputs[2].value.parse().unwrap();
+        assert_eq!(change_erg, 5_000_000_000 - MINER_FEE);
+
+        // Verify total balance
+        let total_in = 10_000_000_000i64 + 5_000_000_000;
+        let total_out: i64 = tx.outputs.iter().map(|o| o.value.parse::<i64>().unwrap()).sum();
+        assert_eq!(total_in, total_out);
     }
 
     #[test]
@@ -516,7 +516,7 @@ mod tests {
         let req = UnlockRequest {
             lock_box,
             user_ergo_tree: TEST_ERGO_TREE.to_string(),
-            user_inputs: vec![],
+            user_inputs: vec![mock_utxo(3_000_000_000, vec![])],
             current_height: 1100,
         };
 
@@ -524,5 +524,43 @@ mod tests {
         // User should get all 20 tokens (no fee below threshold)
         let user_token_amt: i64 = tx.outputs[0].assets[0].amount.parse().unwrap();
         assert_eq!(user_token_amt, 20);
+    }
+
+    #[test]
+    fn test_build_unlock_tx_small_lock() {
+        // 0.01 ERG lock — matches user's real-world test case
+        let lock_box = Eip12InputBox {
+            box_id: "cccc".repeat(16),
+            transaction_id: "dddd".repeat(16),
+            index: 0,
+            value: "10000000".to_string(), // 0.01 ERG
+            ergo_tree: MEWLOCK_ERGO_TREE.to_string(),
+            assets: vec![],
+            creation_height: 800,
+            additional_registers: HashMap::new(),
+            extension: HashMap::new(),
+        };
+
+        let req = UnlockRequest {
+            lock_box,
+            user_ergo_tree: TEST_ERGO_TREE.to_string(),
+            user_inputs: vec![mock_utxo(3_000_000_000, vec![])],
+            current_height: 1100,
+        };
+
+        let tx = build_unlock_tx(&req).unwrap();
+
+        // User gets 0.01 ERG - 3% fee = 10,000,000 - 300,000 = 9,700,000
+        let user_erg: i64 = tx.outputs[0].value.parse().unwrap();
+        assert_eq!(user_erg, 9_700_000);
+
+        // Dev gets exactly 300,000 (the 3% fee)
+        let dev_erg: i64 = tx.outputs[1].value.parse().unwrap();
+        assert_eq!(dev_erg, 300_000);
+
+        // Verify total balance
+        let total_in = 10_000_000i64 + 3_000_000_000;
+        let total_out: i64 = tx.outputs.iter().map(|o| o.value.parse::<i64>().unwrap()).sum();
+        assert_eq!(total_in, total_out);
     }
 }
