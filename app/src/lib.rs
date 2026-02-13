@@ -71,6 +71,9 @@ pub fn run() {
             commands::build_borrow_tx,
             commands::build_repay_tx,
             commands::build_refund_tx,
+            commands::check_proxy_box,
+            commands::discover_stuck_proxies,
+            commands::get_dex_price,
             // AMM Protocol
             commands::get_amm_pools,
             commands::get_amm_quote,

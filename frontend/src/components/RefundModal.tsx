@@ -12,6 +12,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import {
   buildRefundTx,
   type LendingBuildResponse,
+  type StuckProxyBox,
 } from '../api/lending'
 import { TX_FEE_NANO } from '../constants'
 import { formatErg } from '../utils/format'
@@ -29,6 +30,8 @@ interface RefundModalProps {
   explorerUrl: string
   /** Callback when transaction succeeds */
   onSuccess: () => void
+  /** Auto-discovered stuck proxy boxes (optional) */
+  stuckBoxes?: StuckProxyBox[]
 }
 
 type TxStep = 'input' | 'checking' | 'preview' | 'signing' | 'success' | 'error'
@@ -49,10 +52,10 @@ export function RefundModal({
   userAddress,
   explorerUrl,
   onSuccess,
+  stuckBoxes,
 }: RefundModalProps) {
   // Step state
   const [step, setStep] = useState<TxStep>('input')
-  const [proxyBoxId, setProxyBoxId] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -73,7 +76,6 @@ export function RefundModal({
   useEffect(() => {
     if (isOpen) {
       setStep('input')
-      setProxyBoxId('')
       setLoading(false)
       setError(null)
       setProxyBoxInfo(null)
@@ -118,22 +120,10 @@ export function RefundModal({
     return () => clearInterval(interval)
   }, [step, requestId])
 
-  // Check if the proxy box is eligible for refund
-  const handleCheckEligibility = useCallback(async () => {
-    if (!proxyBoxId.trim()) {
-      setError('Please enter a proxy box ID')
-      return
-    }
-
+  // Check proxy box eligibility and proceed to build refund tx
+  const handleCheckEligibility = useCallback(async (boxId: string) => {
     if (!userAddress) {
       setError('Please connect your wallet first')
-      return
-    }
-
-    // Validate box ID format (64 hex characters)
-    const boxIdRegex = /^[a-fA-F0-9]{64}$/
-    if (!boxIdRegex.test(proxyBoxId.trim())) {
-      setError('Invalid box ID format. Box IDs are 64 hexadecimal characters.')
       return
     }
 
@@ -152,7 +142,7 @@ export function RefundModal({
         value_nano: number
         refund_height: number
         is_proxy_box: boolean
-      }>('check_proxy_box', { boxId: proxyBoxId.trim() })
+      }>('check_proxy_box', { boxId })
 
       if (!boxInfo.is_proxy_box) {
         setError('This box is not a valid Duckpools proxy box')
@@ -161,25 +151,17 @@ export function RefundModal({
         return
       }
 
-      const canRefund = currentHeight >= boxInfo.refund_height
-      const blocksUntilRefund = canRefund ? 0 : boxInfo.refund_height - currentHeight
-
       setProxyBoxInfo({
-        box_id: proxyBoxId.trim(),
+        box_id: boxId,
         value_nano: boxInfo.value_nano,
         refund_height: boxInfo.refund_height,
         current_height: currentHeight,
-        can_refund: canRefund,
-        blocks_until_refund: blocksUntilRefund,
+        can_refund: true,
+        blocks_until_refund: 0,
       })
 
-      if (canRefund) {
-        // Automatically proceed to build the transaction
-        await handleBuildRefund(proxyBoxId.trim(), currentHeight)
-      } else {
-        setStep('input')
-        setError(`This box cannot be refunded yet. ${blocksUntilRefund} blocks remaining (~${Math.ceil(blocksUntilRefund * 2 / 60)} hours).`)
-      }
+      // proveDlog(userPk) spending path — no height check needed
+      await handleBuildRefund(boxId, currentHeight)
     } catch (e) {
       const errorMsg = String(e)
       if (errorMsg.includes('not found') || errorMsg.includes('Box not found')) {
@@ -191,7 +173,7 @@ export function RefundModal({
     } finally {
       setLoading(false)
     }
-  }, [proxyBoxId, userAddress])
+  }, [userAddress])
 
   // Build the refund transaction
   const handleBuildRefund = useCallback(async (boxId: string, currentHeight: number) => {
@@ -204,14 +186,13 @@ export function RefundModal({
     setError(null)
 
     try {
-      // Get user UTXOs - the proxy box should be included
-      const utxos = await invoke<unknown[]>('get_user_utxos')
-
-      // Build the refund transaction
+      // Build the refund transaction.
+      // The backend fetches the proxy box from the node by ID —
+      // no need to pass user UTXOs (the proxy box is at a contract address).
       const response = await buildRefundTx({
         proxy_box_id: boxId,
         user_address: userAddress,
-        user_utxos: utxos,
+        user_utxos: [],
         current_height: currentHeight,
       })
 
@@ -289,27 +270,6 @@ export function RefundModal({
         <div className="modal-content">
           {step === 'input' && (
             <div className="lend-input-step">
-              {/* Explanation */}
-              <div className="pool-info-card refund-explanation">
-                <div className="refund-icon">
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--warning, #f59e0b)" strokeWidth="1.5">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 8v4" />
-                    <path d="M12 16h.01" />
-                  </svg>
-                </div>
-                <h3>What is a refund?</h3>
-                <p>
-                  If your lend, withdraw, or repay transaction was not processed by the Duckpools
-                  bot (for example, due to network congestion or insufficient liquidity), your
-                  funds are held in a &quot;proxy box&quot; on the blockchain.
-                </p>
-                <p>
-                  After approximately 24 hours (~720 blocks), you can reclaim these funds by
-                  building a refund transaction with the proxy box ID.
-                </p>
-              </div>
-
               {/* Wallet Connection Warning */}
               {!userAddress && (
                 <div className="message warning">
@@ -317,43 +277,53 @@ export function RefundModal({
                 </div>
               )}
 
-              {/* Proxy Box ID Input */}
-              <div className="form-group">
-                <label className="form-label">Proxy Box ID</label>
-                <div className="input-with-max">
-                  <input
-                    type="text"
-                    className="input"
-                    value={proxyBoxId}
-                    onChange={(e) => setProxyBoxId(e.target.value)}
-                    placeholder="Enter the 64-character box ID"
-                    disabled={!userAddress}
-                  />
+              {/* Auto-discovered stuck boxes */}
+              {stuckBoxes && stuckBoxes.length > 0 && (
+                <div className="discovered-boxes">
+                  <p className="discovered-boxes-hint">
+                    Click a box to recover your funds immediately.
+                  </p>
+                  <div className="discovered-boxes-list">
+                    {stuckBoxes.map((box) => (
+                      <button
+                        key={box.box_id}
+                        className="discovered-box-item refundable"
+                        onClick={() => handleCheckEligibility(box.box_id)}
+                        disabled={loading}
+                      >
+                        <div className="discovered-box-header">
+                          <span className="discovered-box-op">{box.operation}</span>
+                          <span className="discovered-box-status ready">
+                            Ready to refund
+                          </span>
+                        </div>
+                        <div className="discovered-box-value">
+                          {formatErg(box.value_nano)} ERG
+                          {box.tokens.length > 0 && ` + ${box.tokens.length} token${box.tokens.length !== 1 ? 's' : ''}`}
+                        </div>
+                        <div className="discovered-box-id">
+                          {box.box_id.slice(0, 8)}...{box.box_id.slice(-8)}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <p className="balance-hint">
-                  You can find the proxy box ID in your transaction history or on the Ergo explorer.
-                </p>
-              </div>
+              )}
 
-              {/* Eligibility Info */}
-              {proxyBoxInfo && !proxyBoxInfo.can_refund && (
-                <div className="pool-info-card">
-                  <div className="pool-info-row">
-                    <span className="pool-info-label">Box Value</span>
-                    <span className="pool-info-value">{formatErg(proxyBoxInfo.value_nano)} ERG</span>
+              {/* No stuck boxes found */}
+              {(!stuckBoxes || stuckBoxes.length === 0) && userAddress && (
+                <div className="pool-info-card refund-explanation">
+                  <div className="refund-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-400, #34d399)" strokeWidth="1.5">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                      <polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
                   </div>
-                  <div className="pool-info-row">
-                    <span className="pool-info-label">Current Block</span>
-                    <span className="pool-info-value">{proxyBoxInfo.current_height.toLocaleString()}</span>
-                  </div>
-                  <div className="pool-info-row">
-                    <span className="pool-info-label">Refund Available At</span>
-                    <span className="pool-info-value">{proxyBoxInfo.refund_height.toLocaleString()}</span>
-                  </div>
-                  <div className="pool-info-row">
-                    <span className="pool-info-label">Blocks Remaining</span>
-                    <span className="pool-info-value">{proxyBoxInfo.blocks_until_refund.toLocaleString()}</span>
-                  </div>
+                  <h3>No stuck transactions found</h3>
+                  <p>
+                    All your Duckpools proxy transactions have been processed successfully.
+                    If you believe a transaction is stuck, it may still be waiting for the bot to process it.
+                  </p>
                 </div>
               )}
 
@@ -361,14 +331,7 @@ export function RefundModal({
 
               <div className="modal-actions">
                 <button className="btn btn-secondary" onClick={onClose}>
-                  Cancel
-                </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleCheckEligibility}
-                  disabled={loading || !userAddress || !proxyBoxId.trim()}
-                >
-                  {loading ? 'Checking...' : 'Check Eligibility'}
+                  Close
                 </button>
               </div>
             </div>

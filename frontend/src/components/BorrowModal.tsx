@@ -2,8 +2,9 @@
  * BorrowModal Component
  *
  * Modal for borrowing assets from Duckpools lending pools.
- * User provides collateral (tokens for ERG pool, ERG for token pools)
- * and specifies the amount to borrow.
+ * Matches the Duckpools UX: user enters borrow amount, selects a collateral
+ * loan ratio (150%/170%/200%/Custom), and collateral is auto-calculated
+ * from the DEX price oracle.
  *
  * Follows the same step-based pattern as LendModal:
  * input -> preview -> signing -> success/error
@@ -14,9 +15,12 @@ import { invoke } from '@tauri-apps/api/core'
 import { QRCodeSVG } from 'qrcode.react'
 import {
   buildBorrowTx,
+  getDexPrice,
   formatAmount,
   formatApy,
   type PoolInfo,
+  type CollateralOption,
+  type DexPriceInfo,
   type LendingBuildResponse,
 } from '../api/lending'
 import { LENDING_PROXY_FEE_NANO, MIN_BOX_VALUE_NANO } from '../constants'
@@ -54,7 +58,12 @@ export function BorrowModal({
 }: BorrowModalProps) {
   const [step, setStep] = useState<TxStep>('input')
   const [borrowInputValue, setBorrowInputValue] = useState('')
-  const [collateralInputValue, setCollateralInputValue] = useState('')
+  const [selectedCollateralIdx, setSelectedCollateralIdx] = useState(0)
+  const [collateralRatio, setCollateralRatio] = useState(170)
+  const [customRatio, setCustomRatio] = useState('')
+  const [isCustomRatio, setIsCustomRatio] = useState(false)
+  const [dexPrice, setDexPrice] = useState<DexPriceInfo | null>(null)
+  const [priceLoading, setPriceLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [buildResponse, setBuildResponse] = useState<LendingBuildResponse | null>(null)
@@ -67,102 +76,155 @@ export function BorrowModal({
     watchParams: { protocol: 'Lending', operation: 'borrow', description: `Borrow from ${pool.name} pool` },
   })
 
-  // For token pools, collateral is ERG; for ERG pool, collateral is a token
-  // Currently only token pools (borrow tokens, post ERG collateral) are common
-  const collateralIsErg = !pool.is_erg_pool
-  const collateralSymbol = collateralIsErg ? 'ERG' : 'Collateral Token'
-  const collateralDecimals = collateralIsErg ? 9 : pool.decimals
+  // Collateral options from on-chain parameter box
+  const hasCollateralOption = pool.collateral_options.length > 0
+  const collateralOption: CollateralOption | null = pool.collateral_options[selectedCollateralIdx] ?? null
 
-  // Get collateral info from pool
-  const collateralOption = pool.collateral_options[0] ?? null
-  const hasCollateralOption = collateralOption !== null
+  // For token pools, collateral is ERG ("native"); for ERG pool, it's a specific token
+  const collateralIsErg = collateralOption?.token_id === 'native'
+  const collateralSymbol = collateralOption?.token_name ?? (collateralIsErg ? 'ERG' : 'Token')
 
-  // Available collateral balance
-  const availableCollateral = useMemo(() => {
-    if (!walletBalance) return 0
-    if (collateralIsErg) {
-      // Reserve for tx fee
-      return Math.max(0, walletBalance.erg_nano - LENDING_PROXY_FEE_NANO - MIN_BOX_VALUE_NANO)
+  // Derive collateral decimals
+  const collateralDecimals = useMemo(() => {
+    if (collateralIsErg) return 9
+    if (!collateralOption || !walletBalance) return 0
+    const walletToken = walletBalance.tokens.find(t => t.token_id === collateralOption.token_id)
+    return walletToken?.decimals ?? 0
+  }, [collateralIsErg, collateralOption, walletBalance])
+
+  // Liquidation threshold as percentage (e.g. 1400 -> 140)
+  const liquidationPct = collateralOption ? collateralOption.liquidation_threshold / 10 : 0
+  const liquidationPenaltyPct = collateralOption ? collateralOption.liquidation_penalty / 10 : 0
+
+  // Minimum ratio = liquidation threshold + 10% buffer
+  const minRatio = Math.ceil(liquidationPct) + 10
+
+  // Ratio presets derived from min
+  const ratioPresets = useMemo(() => [
+    minRatio,
+    minRatio + 20,
+    minRatio + 50,
+  ], [minRatio])
+
+  // Active ratio (from presets or custom)
+  const activeRatio = isCustomRatio ? (parseInt(customRatio) || minRatio) : collateralRatio
+
+  // Fetch DEX price when modal opens or collateral selection changes
+  useEffect(() => {
+    if (!isOpen || !collateralOption?.dex_nft) {
+      setDexPrice(null)
+      return
     }
-    // Token collateral (ERG pool borrowing) - find the token
-    // For now, we'd need to know which token. This path is less common.
-    return 0
-  }, [walletBalance, collateralIsErg])
+    setPriceLoading(true)
+    getDexPrice(collateralOption.dex_nft)
+      .then(setDexPrice)
+      .catch((e) => console.error('Failed to fetch DEX price:', e))
+      .finally(() => setPriceLoading(false))
+  }, [isOpen, collateralOption?.dex_nft])
 
-  // Available to borrow (pool liquidity)
-  const availableLiquidity = useMemo(() => {
-    return BigInt(pool.available_liquidity)
-  }, [pool.available_liquidity])
-
-  // Calculate amounts
+  // Auto-calculate collateral from borrow amount, ratio, and DEX price
   const calculated = useMemo(() => {
     const empty = {
       borrowAmount: 0,
       borrowAmountRaw: 0,
       collateralAmount: 0,
       collateralAmountRaw: 0,
+      collateralDisplay: '',
       txFee: LENDING_PROXY_FEE_NANO,
       isValid: false,
       hasEnoughCollateral: true,
       hasEnoughErgForFee: true,
       borrowExceedsLiquidity: false,
+      ratioTooLow: false,
     }
-    if (!borrowInputValue || !collateralInputValue) return empty
+
+    if (!borrowInputValue || !dexPrice || !collateralOption) return empty
 
     const borrowVal = parseFloat(borrowInputValue)
-    const collateralVal = parseFloat(collateralInputValue)
-    if (isNaN(borrowVal) || borrowVal <= 0 || isNaN(collateralVal) || collateralVal <= 0) return empty
+    if (isNaN(borrowVal) || borrowVal <= 0) return empty
 
     const borrowMultiplier = Math.pow(10, pool.decimals)
     const borrowAmountRaw = Math.round(borrowVal * borrowMultiplier)
 
-    const collateralMultiplier = Math.pow(10, collateralDecimals)
-    const collateralAmountRaw = Math.round(collateralVal * collateralMultiplier)
+    // Validate ratio
+    const ratioTooLow = activeRatio < minRatio
 
-    const txFee = LENDING_PROXY_FEE_NANO
+    // Calculate collateral using DEX price (raw unit ratios from backend)
+    // Backend returns: erg_per_token = nanoERG / raw_token_unit
+    //                  token_per_erg = raw_token_units / nanoERG
+    // So we use borrowAmountRaw (raw units) to get collateral in raw units directly.
+    let collateralAmountRaw: number
+    let collateralDisplay: string
+
+    if (collateralIsErg) {
+      // Token pool: borrow tokens, collateral is ERG (nanoERG)
+      // borrowAmountRaw is in raw token units, erg_per_token is nanoERG per raw token unit
+      collateralAmountRaw = Math.ceil(borrowAmountRaw * dexPrice.erg_per_token * activeRatio / 100)
+      collateralDisplay = `${(collateralAmountRaw / 1e9).toFixed(4)} ERG`
+    } else {
+      // ERG pool: borrow ERG, collateral is token (raw token units)
+      // borrowAmountRaw is in nanoERG, token_per_erg is raw token units per nanoERG
+      collateralAmountRaw = Math.ceil(borrowAmountRaw * dexPrice.token_per_erg * activeRatio / 100)
+      const collateralMultiplier = Math.pow(10, collateralDecimals)
+      collateralDisplay = `${(collateralAmountRaw / collateralMultiplier).toFixed(Math.min(collateralDecimals, 4))} ${collateralSymbol}`
+    }
+
+    const collateralAmount = collateralIsErg
+      ? collateralAmountRaw / 1e9
+      : collateralAmountRaw / Math.pow(10, collateralDecimals)
 
     // Validation
-    const borrowExceedsLiquidity = BigInt(borrowAmountRaw) > availableLiquidity
+    const borrowExceedsLiquidity = BigInt(borrowAmountRaw) > BigInt(pool.available_liquidity)
 
     let hasEnoughCollateral = true
     let hasEnoughErgForFee = true
 
     if (collateralIsErg) {
-      // Collateral is ERG: need collateral + processing overhead + tx fee + change min
-      const totalErgNeeded = collateralAmountRaw + MIN_BOX_VALUE_NANO + txFee + txFee + MIN_BOX_VALUE_NANO
+      const totalErgNeeded = collateralAmountRaw + MIN_BOX_VALUE_NANO + LENDING_PROXY_FEE_NANO * 2 + MIN_BOX_VALUE_NANO
       hasEnoughCollateral = totalErgNeeded <= (walletBalance?.erg_nano || 0)
-      hasEnoughErgForFee = hasEnoughCollateral // Same check for ERG collateral
+      hasEnoughErgForFee = hasEnoughCollateral
     } else {
-      // Collateral is token: need tokens + ERG for processing
-      const totalErgNeeded = MIN_BOX_VALUE_NANO + txFee + txFee + MIN_BOX_VALUE_NANO
+      const totalErgNeeded = MIN_BOX_VALUE_NANO + LENDING_PROXY_FEE_NANO * 2 + MIN_BOX_VALUE_NANO
       hasEnoughErgForFee = totalErgNeeded <= (walletBalance?.erg_nano || 0)
-      // Token balance check would go here
+      const walletToken = walletBalance?.tokens.find(t => t.token_id === collateralOption.token_id)
+      hasEnoughCollateral = collateralAmountRaw <= (walletToken?.amount || 0)
     }
 
     return {
       borrowAmount: borrowVal,
       borrowAmountRaw,
-      collateralAmount: collateralVal,
+      collateralAmount,
       collateralAmountRaw,
-      txFee,
-      isValid: borrowVal > 0 && collateralVal > 0 && hasEnoughCollateral && hasEnoughErgForFee && !borrowExceedsLiquidity,
+      collateralDisplay,
+      txFee: LENDING_PROXY_FEE_NANO,
+      isValid: borrowVal > 0 && collateralAmountRaw > 0 && hasEnoughCollateral && hasEnoughErgForFee && !borrowExceedsLiquidity && !ratioTooLow,
       hasEnoughCollateral,
       hasEnoughErgForFee,
       borrowExceedsLiquidity,
+      ratioTooLow,
     }
-  }, [borrowInputValue, collateralInputValue, pool, collateralDecimals, collateralIsErg, walletBalance, availableLiquidity])
+  }, [borrowInputValue, dexPrice, pool, collateralOption, collateralIsErg, collateralDecimals, collateralSymbol, activeRatio, minRatio, walletBalance])
 
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
       setStep('input')
       setBorrowInputValue('')
-      setCollateralInputValue('')
+      setSelectedCollateralIdx(0)
+      setIsCustomRatio(false)
+      setCustomRatio('')
       setLoading(false)
       setError(null)
       setBuildResponse(null)
     }
   }, [isOpen])
+
+  // Set default ratio based on presets when they change
+  useEffect(() => {
+    if (ratioPresets.length >= 2) {
+      setCollateralRatio(ratioPresets[1]) // Default to middle preset (e.g. 170%)
+    }
+  }, [ratioPresets])
 
   // Build transaction
   const handleBuild = useCallback(async () => {
@@ -178,9 +240,7 @@ export function BorrowModal({
       const utxos = await invoke<unknown[]>('get_user_utxos')
       const nodeStatus = await invoke<{ chain_height: number }>('get_node_status')
 
-      const collateralToken = collateralIsErg
-        ? 'native'
-        : (collateralOption?.token_id || '')
+      const collateralToken = collateralOption?.token_id || 'native'
 
       const response = await buildBorrowTx({
         pool_id: pool.pool_id,
@@ -199,7 +259,7 @@ export function BorrowModal({
     } finally {
       setLoading(false)
     }
-  }, [calculated, pool.pool_id, userAddress, collateralIsErg, collateralOption])
+  }, [calculated, pool.pool_id, userAddress, collateralOption])
 
   // Start signing flow
   const handleSign = useCallback(async () => {
@@ -229,28 +289,6 @@ export function BorrowModal({
       setLoading(false)
     }
   }, [buildResponse, calculated.borrowAmount, pool, flow])
-
-  // Handle max collateral button
-  const handleMaxCollateral = useCallback(() => {
-    if (!walletBalance) return
-
-    if (collateralIsErg) {
-      const buffer = 10_000_000 // 0.01 ERG buffer
-      const maxCollateral = Math.max(0, walletBalance.erg_nano - LENDING_PROXY_FEE_NANO - MIN_BOX_VALUE_NANO * 2 - LENDING_PROXY_FEE_NANO - buffer)
-      const displayAmount = maxCollateral / Math.pow(10, 9)
-      setCollateralInputValue(displayAmount.toFixed(9))
-    }
-  }, [walletBalance, collateralIsErg])
-
-  const formatDisplayAmount = (value: number, decimals: number) => {
-    if (decimals === 0) {
-      return value.toLocaleString(undefined, { maximumFractionDigits: 0 })
-    }
-    return value.toLocaleString(undefined, {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: decimals,
-    })
-  }
 
   if (!isOpen) return null
 
@@ -285,6 +323,7 @@ export function BorrowModal({
       <div className="modal lend-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Borrow {pool.symbol}</h2>
+          <span className="modal-header-detail">{formatApy(pool.borrow_apy)} Interest Rate</span>
           <button className="close-btn" onClick={onClose}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" />
@@ -295,60 +334,7 @@ export function BorrowModal({
         <div className="modal-content">
           {step === 'input' && (
             <div className="lend-input-step">
-              {/* Pool Info */}
-              <div className="pool-info-card">
-                <div className="pool-info-row">
-                  <span className="pool-info-label">Pool</span>
-                  <span className="pool-info-value">{pool.name}</span>
-                </div>
-                <div className="pool-info-row">
-                  <span className="pool-info-label">Borrow APY</span>
-                  <span className="pool-info-value">{formatApy(pool.borrow_apy)}</span>
-                </div>
-                <div className="pool-info-row">
-                  <span className="pool-info-label">Available Liquidity</span>
-                  <span className="pool-info-value">
-                    {formatAmount(pool.available_liquidity, pool.decimals)} {pool.symbol}
-                  </span>
-                </div>
-                <div className="pool-info-row">
-                  <span className="pool-info-label">Liquidation Threshold</span>
-                  <span className="pool-info-value">
-                    {(collateralOption.liquidation_threshold / 10).toFixed(0)}%
-                  </span>
-                </div>
-              </div>
-
-              {/* Collateral Input */}
-              <div className="form-group">
-                <label className="form-label">Collateral ({collateralSymbol})</label>
-                <div className="input-with-max">
-                  <input
-                    type="number"
-                    className="input"
-                    value={collateralInputValue}
-                    onChange={(e) => setCollateralInputValue(e.target.value)}
-                    placeholder="0"
-                    min="0"
-                    step={Math.pow(10, -collateralDecimals)}
-                  />
-                  <div className="input-suffix">
-                    <span className="input-currency">{collateralSymbol}</span>
-                    {collateralIsErg && (
-                      <button className="max-btn" onClick={handleMaxCollateral} type="button">
-                        MAX
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {collateralIsErg && (
-                  <p className="balance-hint">
-                    Available: {formatDisplayAmount(availableCollateral / 1e9, 4)} ERG
-                  </p>
-                )}
-              </div>
-
-              {/* Borrow Amount Input */}
+              {/* Borrow Amount Input (primary) */}
               <div className="form-group">
                 <label className="form-label">Amount to Borrow</label>
                 <div className="input-with-max">
@@ -370,46 +356,125 @@ export function BorrowModal({
                 </p>
               </div>
 
-              {/* Fee Breakdown */}
-              {borrowInputValue && collateralInputValue && calculated.borrowAmount > 0 && (
-                <div className="calculated-output">
-                  <div className="output-row">
-                    <span className="output-label">You Borrow</span>
-                    <span className="output-value">
-                      {formatDisplayAmount(calculated.borrowAmount, pool.decimals)} {pool.symbol}
-                    </span>
+              {/* Collateral Type Selector (ERG pool with multiple options) */}
+              {pool.collateral_options.length > 1 && (
+                <div className="form-group">
+                  <label className="form-label">Collateral Token</label>
+                  <select
+                    className="input"
+                    value={selectedCollateralIdx}
+                    onChange={(e) => {
+                      setSelectedCollateralIdx(Number(e.target.value))
+                    }}
+                  >
+                    {pool.collateral_options.map((opt, idx) => (
+                      <option key={opt.token_id} value={idx}>
+                        {opt.token_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Collateral Loan Ratio */}
+              <div className="form-group">
+                <label className="form-label">Collateral Loan Ratio</label>
+                <div className="ratio-selector">
+                  {ratioPresets.map((preset) => (
+                    <button
+                      key={preset}
+                      className={`ratio-btn ${!isCustomRatio && collateralRatio === preset ? 'active' : ''}`}
+                      onClick={() => {
+                        setCollateralRatio(preset)
+                        setIsCustomRatio(false)
+                      }}
+                    >
+                      {preset}%
+                    </button>
+                  ))}
+                  <button
+                    className={`ratio-btn ${isCustomRatio ? 'active' : ''}`}
+                    onClick={() => setIsCustomRatio(true)}
+                  >
+                    Custom
+                  </button>
+                </div>
+                {isCustomRatio && (
+                  <div className="input-with-max" style={{ marginTop: '0.5rem' }}>
+                    <input
+                      type="number"
+                      className="input"
+                      value={customRatio}
+                      onChange={(e) => setCustomRatio(e.target.value)}
+                      placeholder={`Min ${minRatio}%`}
+                      min={minRatio}
+                    />
+                    <div className="input-suffix">
+                      <span className="input-currency">%</span>
+                    </div>
                   </div>
-                  <div className="output-row muted">
-                    <span>Collateral Locked</span>
-                    <span>
-                      {formatDisplayAmount(calculated.collateralAmount, collateralDecimals)} {collateralSymbol}
-                    </span>
+                )}
+              </div>
+
+              {/* Collateral to Pledge (auto-calculated, read-only) */}
+              <div className="form-group">
+                <label className="form-label">Collateral to Pledge</label>
+                <div className="calculated-collateral">
+                  {priceLoading ? (
+                    <span className="muted">Loading price...</span>
+                  ) : !dexPrice ? (
+                    <span className="muted">Price unavailable</span>
+                  ) : borrowInputValue && calculated.collateralAmountRaw > 0 ? (
+                    <span className="collateral-value">{calculated.collateralDisplay}</span>
+                  ) : (
+                    <span className="muted">Enter borrow amount</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Loan Terms Info */}
+              {collateralOption && (
+                <div className="pool-info-card">
+                  <div className="pool-info-row">
+                    <span className="pool-info-label">Liquidation Threshold</span>
+                    <span className="pool-info-value">{liquidationPct.toFixed(0)}%</span>
                   </div>
-                  <div className="output-row muted">
-                    <span>Transaction Fee</span>
-                    <span>{formatErg(LENDING_PROXY_FEE_NANO)} ERG</span>
+                  {liquidationPenaltyPct > 0 && (
+                    <div className="pool-info-row">
+                      <span className="pool-info-label">Liquidation Penalty</span>
+                      <span className="pool-info-value">{liquidationPenaltyPct.toFixed(0)}%</span>
+                    </div>
+                  )}
+                  <div className="pool-info-row">
+                    <span className="pool-info-label">Transaction Fee</span>
+                    <span className="pool-info-value">{formatErg(LENDING_PROXY_FEE_NANO)} ERG</span>
                   </div>
-                  <div className="output-row muted">
-                    <span>Refund Available</span>
-                    <span>~24 hours (720 blocks)</span>
+                  <div className="pool-info-row">
+                    <span className="pool-info-label">Refund Available</span>
+                    <span className="pool-info-value">~24h (720 blocks)</span>
                   </div>
                 </div>
               )}
 
               {/* Validation Warnings */}
-              {borrowInputValue && collateralInputValue && calculated.borrowAmount > 0 && (
+              {borrowInputValue && calculated.borrowAmount > 0 && (
                 <>
                   {calculated.borrowExceedsLiquidity && (
                     <div className="message warning">
                       Borrow amount exceeds available pool liquidity
                     </div>
                   )}
-                  {!calculated.hasEnoughCollateral && (
+                  {calculated.ratioTooLow && (
                     <div className="message warning">
-                      Insufficient {collateralSymbol} for collateral
+                      Ratio must be at least {minRatio}% (liquidation at {liquidationPct.toFixed(0)}%)
                     </div>
                   )}
-                  {!calculated.hasEnoughErgForFee && (
+                  {!calculated.hasEnoughCollateral && !calculated.ratioTooLow && (
+                    <div className="message warning">
+                      Insufficient {collateralSymbol} for collateral ({calculated.collateralDisplay} required)
+                    </div>
+                  )}
+                  {!calculated.hasEnoughErgForFee && calculated.hasEnoughCollateral && (
                     <div className="message warning">
                       Insufficient ERG for transaction fee
                     </div>
@@ -426,9 +491,9 @@ export function BorrowModal({
                 <button
                   className="btn btn-primary"
                   onClick={handleBuild}
-                  disabled={loading || !calculated.isValid}
+                  disabled={loading || !calculated.isValid || priceLoading}
                 >
-                  {loading ? 'Building...' : 'Build Transaction'}
+                  {loading ? 'Building...' : `Borrow ${pool.symbol}`}
                 </button>
               </div>
             </div>
@@ -451,7 +516,11 @@ export function BorrowModal({
                   </div>
                   <div className="detail-row">
                     <span>Collateral Locked</span>
-                    <span>{buildResponse.summary.amount_in}</span>
+                    <span>{calculated.collateralDisplay}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span>Collateral Ratio</span>
+                    <span>{activeRatio}%</span>
                   </div>
                   <div className="detail-row">
                     <span>Transaction Fee</span>
@@ -465,8 +534,8 @@ export function BorrowModal({
 
                 <p className="preview-note">
                   The Duckpools bot will process your borrow request and send {pool.symbol} to your wallet.
-                  Your collateral will be locked until you repay. If not processed by block{' '}
-                  {buildResponse.summary.refund_height.toLocaleString()}, you can reclaim your collateral.
+                  Your collateral will be locked until you repay. Liquidation occurs if collateral
+                  value drops below {liquidationPct.toFixed(0)}% of loan value.
                 </p>
               </div>
 

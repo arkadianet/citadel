@@ -143,6 +143,8 @@ pub struct RepayBuildRequest {
     pub pool_id: String,
     pub collateral_box_id: String,
     pub repay_amount: u64,
+    /// Total owed with interest. Determines full vs partial repay proxy.
+    pub total_owed: u64,
     pub user_address: String,
     pub user_utxos: Vec<serde_json::Value>,
     pub current_height: i32,
@@ -826,6 +828,7 @@ async fn build_repay(
         pool_id: request.pool_id.clone(),
         collateral_box_id: request.collateral_box_id,
         repay_amount: request.repay_amount,
+        total_owed: request.total_owed,
         user_address: request.user_address,
         user_utxos,
     };
@@ -1042,6 +1045,10 @@ async fn build_refund(
         creation_height,
         r4_user_tree,
         r6_refund_height,
+        additional_registers: registers
+            .iter()
+            .filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string())))
+            .collect(),
     };
 
     // Build the refund transaction

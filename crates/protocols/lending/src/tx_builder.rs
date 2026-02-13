@@ -21,14 +21,13 @@ use ergo_tx::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
 // Constants
 // =============================================================================
 
-/// Proxy execution fee in nanoERG (0.002 ERG)
-/// Covers bot's parent execution fee (matches Duckpools MAX_CHILD_EXECUTION_FEE).
-/// This is NOT the standard miner fee — it's the fee embedded in the proxy box
-/// for the Duckpools bot to pay when executing the child transaction.
-pub const PROXY_EXECUTION_FEE_NANO: i64 = 2_000_000;
+/// Miner fee for the user's proxy-creating transaction (0.001 ERG).
+/// Matches the Duckpools bot's TX_FEE = 1_000_000.
+pub const TX_FEE_NANO: i64 = 1_000_000;
 
-/// Alias kept for backward compatibility within this module
-pub const TX_FEE_NANO: i64 = PROXY_EXECUTION_FEE_NANO;
+/// Proxy execution fee embedded in the proxy box for the bot (0.002 ERG).
+/// The bot uses this to pay child transaction fees.
+pub const PROXY_EXECUTION_FEE_NANO: i64 = 2_000_000;
 
 /// Minimum box value in nanoERG (0.001 ERG)
 pub const MIN_BOX_VALUE_NANO: i64 = citadel_core::constants::MIN_BOX_VALUE_NANO;
@@ -130,6 +129,8 @@ pub struct RepayRequest {
     pub collateral_box_id: String,
     /// Amount to repay
     pub repay_amount: u64,
+    /// Total owed including interest. Used to choose full vs partial repay proxy.
+    pub total_owed: u64,
     /// User's Ergo address
     pub user_address: String,
     /// User's available UTXOs
@@ -210,10 +211,13 @@ pub struct ProxyBoxData {
     pub assets: Vec<(String, i64)>,
     /// Block height when box was created
     pub creation_height: i32,
-    /// User's ErgoTree from R4 (where refund goes)
+    /// User's ErgoTree hex from R4 or R5 (where refund goes)
     pub r4_user_tree: String,
     /// Block height after which refund is allowed (from R6)
     pub r6_refund_height: i64,
+    /// All additional registers (R4-R9) as sigma-serialized hex.
+    /// Must be included in the input box for correct box ID verification.
+    pub additional_registers: HashMap<String, String>,
 }
 
 /// Response from refund transaction building
@@ -254,11 +258,6 @@ pub enum BuildError {
     ProxyContractMissing(String),
     /// Collateral box not found
     CollateralBoxNotFound(String),
-    /// Refund not yet available (too early)
-    RefundTooEarly {
-        current_height: i32,
-        refund_height: i64,
-    },
 }
 
 impl std::fmt::Display for BuildError {
@@ -293,16 +292,6 @@ impl std::fmt::Display for BuildError {
                 write!(f, "Proxy contract not configured for pool: {}", pool)
             }
             Self::CollateralBoxNotFound(id) => write!(f, "Collateral box not found: {}", id),
-            Self::RefundTooEarly {
-                current_height,
-                refund_height,
-            } => {
-                write!(
-                    f,
-                    "Refund not available yet: current height {}, refundable after {}",
-                    current_height, refund_height
-                )
-            }
         }
     }
 }
@@ -321,7 +310,6 @@ impl BuildError {
             Self::TxBuildError(_) => "tx_build_error",
             Self::ProxyContractMissing(_) => "proxy_contract_missing",
             Self::CollateralBoxNotFound(_) => "collateral_box_not_found",
-            Self::RefundTooEarly { .. } => "refund_too_early",
         }
     }
 
@@ -333,7 +321,6 @@ impl BuildError {
             Self::PoolNotFound(_) | Self::CollateralBoxNotFound(_) => 404,
             Self::ProxyContractMissing(_) => 503,
             Self::TxBuildError(_) => 500,
-            Self::RefundTooEarly { .. } => 425, // Too Early
         }
     }
 }
@@ -836,7 +823,7 @@ pub fn build_lend_tx(
 /// Creates a proxy box containing LP tokens that bots will process to redeem for underlying.
 ///
 /// # Proxy Box Structure
-/// - Value: MIN_BOX_VALUE_NANO + TX_FEE_NANO (for bot to pay execution fee)
+/// - Value: MIN_BOX_VALUE_NANO + PROXY_EXECUTION_FEE_NANO (for bot to pay execution fee)
 /// - Tokens: LP tokens being redeemed
 /// - R4: user's ErgoTree (for refund)
 /// - R5: minimum output (slippage protection)
@@ -869,8 +856,8 @@ pub fn build_withdraw_tx(
     // Get proxy contract address
     let proxy_ergo_tree = address_to_ergo_tree(config.proxy_contracts.withdraw_address)?;
 
-    // Proxy value includes fee for bot to pay execution
-    let proxy_value = MIN_BOX_VALUE_NANO + TX_FEE_NANO;
+    // Proxy value includes execution fee for bot to process the transaction
+    let proxy_value = MIN_BOX_VALUE_NANO + PROXY_EXECUTION_FEE_NANO;
     let total_required = proxy_value + TX_FEE_NANO + MIN_BOX_VALUE_NANO;
 
     // Select inputs containing LP tokens + sufficient ERG
@@ -1064,8 +1051,19 @@ pub fn build_repay_tx(
     let user_ergo_tree_bytes = hex::decode(&user_ergo_tree)
         .map_err(|e| BuildError::TxBuildError(format!("Invalid user ErgoTree: {}", e)))?;
 
-    // Get proxy contract address
-    let proxy_ergo_tree = address_to_ergo_tree(config.proxy_contracts.repay_address)?;
+    // Choose full vs partial repay proxy based on whether repay covers total owed
+    let is_full_repay = req.repay_amount >= req.total_owed || req.total_owed == 0;
+    let proxy_address = if is_full_repay {
+        config.proxy_contracts.repay_address
+    } else {
+        // Partial repay: use partial_repay_address if available, fall back to full repay
+        if config.proxy_contracts.partial_repay_address.is_empty() {
+            config.proxy_contracts.repay_address
+        } else {
+            config.proxy_contracts.partial_repay_address
+        }
+    };
+    let proxy_ergo_tree = address_to_ergo_tree(proxy_address)?;
 
     // Calculate proxy box value
     // For ERG pool: user repays with ERG, so proxy needs repay_amount + overhead
@@ -1117,8 +1115,11 @@ pub fn build_repay_tx(
         encode_sigma_byte_array(&user_ergo_tree_bytes),
     );
 
-    // R6: refundHeight - when user can reclaim funds if bot doesn't process
-    proxy_registers.insert("R6".to_string(), encode_sigma_long(refund_height as i64));
+    // R6: refundHeight (Int) — contract reads SELF.R6[Int].get, must be SInt not SLong
+    proxy_registers.insert(
+        "R6".to_string(),
+        ergo_tx::sigma::encode_sigma_int(refund_height),
+    );
 
     // R7: collateralBoxId - identifies which loan position to repay
     proxy_registers.insert(
@@ -1246,11 +1247,11 @@ pub fn build_repay_tx(
 /// Creates a proxy box that bots will process to execute a borrow.
 ///
 /// **ERG pool** (user posts token collateral, borrows ERG):
-/// - Proxy box value: `MIN_BOX_VALUE + TX_FEE` (processing overhead)
+/// - Proxy box value: `MIN_BOX_VALUE + PROXY_EXECUTION_FEE` (processing overhead)
 /// - Proxy box tokens: `[{collateral_token_id, collateral_amount}]`
 ///
 /// **Token pools** (user posts ERG collateral, borrows tokens):
-/// - Proxy box value: `collateral_erg_amount + MIN_BOX_VALUE + TX_FEE`
+/// - Proxy box value: `collateral_erg_amount + MIN_BOX_VALUE + PROXY_EXECUTION_FEE`
 /// - Proxy box tokens: none
 ///
 /// # Proxy Box Registers (both variants, per proxyBorrow.md)
@@ -1305,7 +1306,7 @@ pub fn build_borrow_tx(
     let (proxy_value, inputs) = if config.is_erg_pool {
         // ERG pool: user posts token collateral, borrows ERG
         // Proxy box only needs processing overhead in ERG, collateral is tokens
-        let proxy_val = MIN_BOX_VALUE_NANO + TX_FEE_NANO;
+        let proxy_val = MIN_BOX_VALUE_NANO + PROXY_EXECUTION_FEE_NANO;
         let total_required = proxy_val + TX_FEE_NANO + MIN_BOX_VALUE_NANO;
 
         let selected = select_token_inputs(
@@ -1318,7 +1319,7 @@ pub fn build_borrow_tx(
     } else {
         // Token pool: user posts ERG as collateral, borrows tokens
         // Proxy box holds the ERG collateral + processing overhead
-        let proxy_val = (req.collateral_amount as i64) + MIN_BOX_VALUE_NANO + TX_FEE_NANO;
+        let proxy_val = (req.collateral_amount as i64) + MIN_BOX_VALUE_NANO + PROXY_EXECUTION_FEE_NANO;
         let total_required = proxy_val + TX_FEE_NANO + MIN_BOX_VALUE_NANO;
 
         let selected = select_erg_inputs(&req.user_utxos, total_required)?;
@@ -1494,42 +1495,44 @@ pub fn build_borrow_tx(
 
 /// Build a refund transaction to reclaim a stuck proxy box
 ///
-/// The proxy contract allows refunds when:
-/// - HEIGHT >= R6 (publicRefund height)
-/// - Output goes to R4 (user's ErgoTree)
-/// - Output has same tokens as proxy box
-/// - Output R4 = proxy box ID (multi-box spend safety)
+/// Proxy contracts have different spending paths depending on type:
 ///
-/// # Arguments
-/// - `proxy_box`: Data about the proxy box to refund
-/// - `current_height`: Current blockchain height
+/// **Lend/Withdraw/Borrow proxies**: `proveDlog(userPk) || botPath`
+///   - User can spend anytime with wallet signature, no output constraints.
 ///
-/// # Returns
-/// - `RefundResponse` with unsigned transaction JSON
+/// **Repay/PartialRepay proxies**: `operationPath || refundPath` (NO proveDlog!)
+///   - `refundPath`: `OUTPUTS.size < 3 && HEIGHT >= SELF.R6[Int].get` — fails if R6 is Long
+///   - `operationPath`: `OUTPUTS.size >= 3` + checks on OUTPUTS(0):
+///     - `propositionBytes == SELF.R5[Coll[Byte]].get` (user ErgoTree)
+///     - `value >= SELF.R4[Long].get` (R4=0 for our proxies, so any value)
+///     - `R4[Coll[Byte]].get == SELF.id` (output R4 = proxy box ID)
+///
+/// To handle both types universally, we always create 3 outputs:
+/// - Output 0: user (tokens + R4=proxy_box_id) — triggers operationPath for repay proxies
+/// - Output 1: user (dummy min box) — ensures OUTPUTS.size >= 3
+/// - Output 2: miner fee
+///
+/// This is compatible with proveDlog proxies (signature validates regardless of output count)
+/// and with repay proxies (triggers the operation path which doesn't check R6 type).
 ///
 /// # Errors
-/// - `RefundTooEarly`: If current_height < r6_refund_height
-/// - `InsufficientBalance`: If proxy box value too low to cover fee + min box value
+/// - `InsufficientBalance`: If proxy box value too low to cover fee + 2 min outputs
 pub fn build_refund_tx(
     proxy_box: ProxyBoxData,
     current_height: i32,
 ) -> Result<RefundResponse, BuildError> {
-    // Validate: refund height must have passed
-    if (current_height as i64) < proxy_box.r6_refund_height {
-        return Err(BuildError::RefundTooEarly {
-            current_height,
-            refund_height: proxy_box.r6_refund_height,
-        });
-    }
-
-    // Validate: proxy box must have enough value for fee + min output
-    let refund_value = proxy_box.value - TX_FEE_NANO;
-    if refund_value < MIN_BOX_VALUE_NANO {
+    // We need 3 outputs: user (tokens), user (dummy), miner fee.
+    // Minimum ERG: MIN_BOX_VALUE_NANO * 2 + TX_FEE_NANO
+    let min_required = MIN_BOX_VALUE_NANO * 2 + TX_FEE_NANO;
+    if proxy_box.value < min_required {
         return Err(BuildError::InsufficientBalance {
-            required: MIN_BOX_VALUE_NANO + TX_FEE_NANO,
+            required: min_required,
             available: proxy_box.value,
         });
     }
+
+    // User receives all ERG minus fee and dummy box
+    let primary_value = proxy_box.value - TX_FEE_NANO - MIN_BOX_VALUE_NANO;
 
     // Build the input (the proxy box being spent)
     let input = Eip12InputBox {
@@ -1547,18 +1550,16 @@ pub fn build_refund_tx(
             })
             .collect(),
         creation_height: proxy_box.creation_height,
-        additional_registers: HashMap::new(), // Not needed for spending
+        additional_registers: proxy_box.additional_registers.clone(),
         extension: HashMap::new(),
     };
 
-    // Build the refund output to user
-    // R4 must contain the proxy box ID for multi-box spend safety
-    // Format: 0e20 prefix (Coll[Byte] type tag + 32 byte length) + 32 byte box ID
+    // Output 0: Primary refund to user — gets all tokens, R4 = proxy box ID
     let mut refund_registers = HashMap::new();
     refund_registers.insert("R4".to_string(), format!("0e20{}", proxy_box.box_id));
 
-    let refund_output = Eip12Output {
-        value: refund_value.to_string(),
+    let primary_output = Eip12Output {
+        value: primary_value.to_string(),
         ergo_tree: proxy_box.r4_user_tree.clone(),
         assets: proxy_box
             .assets
@@ -1572,7 +1573,16 @@ pub fn build_refund_tx(
         additional_registers: refund_registers,
     };
 
-    // Miner fee output
+    // Output 1: Dummy min box to user — ensures OUTPUTS.size >= 3
+    let dummy_output = Eip12Output {
+        value: MIN_BOX_VALUE_NANO.to_string(),
+        ergo_tree: proxy_box.r4_user_tree.clone(),
+        assets: vec![],
+        creation_height: current_height,
+        additional_registers: HashMap::new(),
+    };
+
+    // Output 2: Miner fee
     let fee_output = Eip12Output {
         value: TX_FEE_NANO.to_string(),
         ergo_tree: MINER_FEE_ERGO_TREE.to_string(),
@@ -1581,11 +1591,11 @@ pub fn build_refund_tx(
         additional_registers: HashMap::new(),
     };
 
-    // Build unsigned transaction
+    // Build unsigned transaction (3 outputs)
     let unsigned_tx = Eip12UnsignedTx {
         inputs: vec![input],
         data_inputs: vec![],
-        outputs: vec![refund_output, fee_output],
+        outputs: vec![primary_output, dummy_output, fee_output],
     };
 
     // Serialize to JSON
@@ -1848,7 +1858,8 @@ mod tests {
 
     #[test]
     fn test_constants() {
-        assert_eq!(TX_FEE_NANO, 2_000_000);
+        assert_eq!(TX_FEE_NANO, 1_000_000);
+        assert_eq!(PROXY_EXECUTION_FEE_NANO, 2_000_000);
         assert_eq!(MIN_BOX_VALUE_NANO, 1_000_000);
         assert_eq!(BOT_PROCESSING_OVERHEAD, 3_000_000);
         assert_eq!(REFUND_HEIGHT_OFFSET, 720);
@@ -1923,6 +1934,7 @@ mod tests {
             pool_id: "erg".to_string(),
             collateral_box_id: "a".repeat(64),
             repay_amount: 5_000_000_000,
+            total_owed: 5_000_000_000,
             user_address: TEST_ADDRESS.to_string(),
             user_utxos: vec![],
         };
@@ -2029,7 +2041,7 @@ mod tests {
         let amount: u64 = 10_000_000_000;
 
         // Need: amount + BOT_PROCESSING_OVERHEAD + TX_FEE_NANO + MIN_BOX_VALUE_NANO
-        // = 10_000_000_000 + 3_000_000 + 1_100_000 + 1_000_000 = 10_005_100_000
+        // = 10_000_000_000 + 3_000_000 + 1_000_000 + 1_000_000 = 10_005_000_000
         let utxos = vec![sample_utxo(
             "a".repeat(64).as_str(),
             15_000_000_000, // 15 ERG - enough for lend + fees + change
@@ -2115,8 +2127,8 @@ mod tests {
         let lp_token_id = config.lend_token_id.to_string();
         let lp_amount: u64 = 1000;
 
-        // Need: MIN_BOX_VALUE_NANO + TX_FEE_NANO (proxy) + TX_FEE_NANO + MIN_BOX_VALUE_NANO
-        // = 1_000_000 + 1_100_000 + 1_100_000 + 1_000_000 = 4_200_000
+        // Need: MIN_BOX_VALUE_NANO + PROXY_EXECUTION_FEE_NANO (proxy) + TX_FEE_NANO + MIN_BOX_VALUE_NANO
+        // = 1_000_000 + 2_000_000 + 1_000_000 + 1_000_000 = 5_000_000
         let utxos = vec![sample_utxo(
             "b".repeat(64).as_str(),
             10_000_000_000,                    // 10 ERG
@@ -2220,7 +2232,7 @@ mod tests {
         let collateral_box_id = "a".repeat(64);
 
         // Need: repay_amount + BOT_PROCESSING_OVERHEAD + TX_FEE_NANO + MIN_BOX_VALUE_NANO
-        // = 5_000_000_000 + 3_000_000 + 1_100_000 + 1_000_000 = 5_005_100_000
+        // = 5_000_000_000 + 3_000_000 + 1_000_000 + 1_000_000 = 5_005_000_000
         let utxos = vec![sample_utxo(
             "d".repeat(64).as_str(),
             10_000_000_000, // 10 ERG - enough for repay + fees + change
@@ -2231,6 +2243,7 @@ mod tests {
             pool_id: "erg".to_string(),
             collateral_box_id: collateral_box_id.clone(),
             repay_amount,
+            total_owed: repay_amount,
             user_address: TEST_ADDRESS.to_string(),
             user_utxos: utxos,
         };
@@ -2276,6 +2289,7 @@ mod tests {
             pool_id: "erg".to_string(),
             collateral_box_id: "a".repeat(64),
             repay_amount: 0, // Zero amount
+            total_owed: 1_000_000_000,
             user_address: TEST_ADDRESS.to_string(),
             user_utxos: vec![],
         };
@@ -2302,6 +2316,7 @@ mod tests {
             pool_id: "erg".to_string(),
             collateral_box_id: "abc123".to_string(), // Too short - not 64 chars
             repay_amount: 1_000_000_000,
+            total_owed: 1_000_000_000,
             user_address: TEST_ADDRESS.to_string(),
             user_utxos: vec![sample_utxo("e".repeat(64).as_str(), 10_000_000_000, vec![])],
         };
@@ -2331,6 +2346,7 @@ mod tests {
             pool_id: "erg".to_string(),
             collateral_box_id: invalid_hex,
             repay_amount: 1_000_000_000,
+            total_owed: 1_000_000_000,
             user_address: TEST_ADDRESS.to_string(),
             user_utxos: vec![sample_utxo("f".repeat(64).as_str(), 10_000_000_000, vec![])],
         };
@@ -2358,6 +2374,7 @@ mod tests {
             pool_id: "erg".to_string(),
             collateral_box_id: "a".repeat(64),
             repay_amount: 10_000_000_000, // 10 ERG
+            total_owed: 10_000_000_000,
             user_address: TEST_ADDRESS.to_string(),
             user_utxos: vec![sample_utxo(
                 "g".repeat(64).as_str(),
@@ -2374,7 +2391,7 @@ mod tests {
                 required,
                 available,
             }) => {
-                // Required: 10_000_000_000 + 3_000_000 + 1_100_000 + 1_000_000 = 10_005_100_000
+                // Required: 10_000_000_000 + 3_000_000 + 1_000_000 + 1_000_000 = 10_005_000_000
                 assert!(required > 10_000_000_000);
                 assert_eq!(available, 1_000_000_000);
             }
@@ -2521,6 +2538,7 @@ mod tests {
             creation_height: 1000000,
             r4_user_tree: user_ergo_tree,
             r6_refund_height: refund_height,
+            additional_registers: HashMap::new(), // Test helper — real boxes have registers
         }
     }
 
@@ -2549,26 +2567,32 @@ mod tests {
         assert!(tx["inputs"].is_array());
         assert!(tx["outputs"].is_array());
 
-        // Should have 2 outputs: refund to user, fee
+        // Should have 3 outputs: primary refund, dummy min box, fee
         let outputs = tx["outputs"].as_array().unwrap();
-        assert_eq!(outputs.len(), 2);
+        assert_eq!(outputs.len(), 3);
 
-        // Verify refund output
-        let refund_output = &outputs[0];
-        // Value should be proxy_value - TX_FEE_NANO
-        let expected_refund_value = proxy_box.value - TX_FEE_NANO;
+        // Verify primary refund output (output 0)
+        let primary_output = &outputs[0];
+        let expected_primary_value = proxy_box.value - TX_FEE_NANO - MIN_BOX_VALUE_NANO;
         assert_eq!(
-            refund_output["value"].as_str().unwrap(),
-            expected_refund_value.to_string()
+            primary_output["value"].as_str().unwrap(),
+            expected_primary_value.to_string()
         );
 
         // Verify R4 contains proxy box ID
-        let r4 = refund_output["additionalRegisters"]["R4"].as_str().unwrap();
+        let r4 = primary_output["additionalRegisters"]["R4"].as_str().unwrap();
         assert!(r4.starts_with("0e20")); // Coll[Byte] prefix for 32 bytes
         assert!(r4.contains(&"a".repeat(64))); // Contains box ID
 
-        // Verify fee output
-        let fee_output = &outputs[1];
+        // Verify dummy output (output 1) — min box to user
+        let dummy_output = &outputs[1];
+        assert_eq!(
+            dummy_output["value"].as_str().unwrap(),
+            MIN_BOX_VALUE_NANO.to_string()
+        );
+
+        // Verify fee output (output 2)
+        let fee_output = &outputs[2];
         assert_eq!(
             fee_output["value"].as_str().unwrap(),
             TX_FEE_NANO.to_string()
@@ -2612,25 +2636,16 @@ mod tests {
     }
 
     #[test]
-    fn test_build_refund_tx_too_early() {
+    fn test_build_refund_tx_before_height_still_works() {
+        // proveDlog(userPk) spending path has no height check,
+        // so refund should succeed even before refund height
         let current_height = 1_000_000; // Before refund height
-        let refund_height = 1_000_720; // Refund not yet available
+        let refund_height = 1_000_720;
 
         let proxy_box = sample_proxy_box(&"a".repeat(64), 10_000_000_000, vec![], refund_height);
 
         let result = build_refund_tx(proxy_box, current_height);
-        assert!(result.is_err());
-
-        match result {
-            Err(BuildError::RefundTooEarly {
-                current_height: ch,
-                refund_height: rh,
-            }) => {
-                assert_eq!(ch, current_height);
-                assert_eq!(rh, refund_height);
-            }
-            _ => panic!("Expected RefundTooEarly error"),
-        }
+        assert!(result.is_ok(), "Refund should work before height via proveDlog: {:?}", result.err());
     }
 
     #[test]
@@ -2650,12 +2665,11 @@ mod tests {
         let current_height = 1_001_000;
         let refund_height = 1_000_720;
 
-        // Proxy box with too little ERG (less than MIN_BOX_VALUE + TX_FEE)
-        // MIN_BOX_VALUE_NANO = 1_000_000, TX_FEE_NANO = 1_100_000
-        // Need at least 2_100_000 nanoERG
+        // Proxy box with too little ERG (less than MIN_BOX_VALUE * 2 + TX_FEE)
+        // Need at least 3_000_000 nanoERG for 3 outputs
         let proxy_box = sample_proxy_box(
             &"a".repeat(64),
-            1_500_000, // 0.0015 ERG - not enough
+            2_500_000, // 0.0025 ERG - not enough for 3 outputs
             vec![],
             refund_height,
         );
@@ -2668,8 +2682,8 @@ mod tests {
                 required,
                 available,
             }) => {
-                assert_eq!(required, MIN_BOX_VALUE_NANO + TX_FEE_NANO);
-                assert_eq!(available, 1_500_000);
+                assert_eq!(required, MIN_BOX_VALUE_NANO * 2 + TX_FEE_NANO);
+                assert_eq!(available, 2_500_000);
             }
             _ => panic!("Expected InsufficientBalance error"),
         }
@@ -2680,8 +2694,8 @@ mod tests {
         let current_height = 1_001_000;
         let refund_height = 1_000_720;
 
-        // Proxy box with exactly minimum required value
-        let min_required = MIN_BOX_VALUE_NANO + TX_FEE_NANO; // 2_100_000
+        // Proxy box with exactly minimum required value for 3 outputs
+        let min_required = MIN_BOX_VALUE_NANO * 2 + TX_FEE_NANO; // 3_000_000
         let proxy_box = sample_proxy_box(&"a".repeat(64), min_required, vec![], refund_height);
 
         let result = build_refund_tx(proxy_box, current_height);
@@ -2689,33 +2703,18 @@ mod tests {
 
         let response = result.unwrap();
         let tx: serde_json::Value = serde_json::from_str(&response.unsigned_tx).unwrap();
-        let refund_output = &tx["outputs"][0];
+        let outputs = tx["outputs"].as_array().unwrap();
+        assert_eq!(outputs.len(), 3);
+        // Primary output gets MIN_BOX_VALUE_NANO (3M - 1M fee - 1M dummy)
         assert_eq!(
-            refund_output["value"].as_str().unwrap(),
+            outputs[0]["value"].as_str().unwrap(),
             MIN_BOX_VALUE_NANO.to_string()
         );
-    }
-
-    #[test]
-    fn test_refund_error_display() {
-        let err = BuildError::RefundTooEarly {
-            current_height: 100,
-            refund_height: 200,
-        };
-        let msg = err.to_string();
-        assert!(msg.contains("100"));
-        assert!(msg.contains("200"));
-        assert!(msg.contains("not available yet"));
-    }
-
-    #[test]
-    fn test_refund_error_code_and_status() {
-        let err = BuildError::RefundTooEarly {
-            current_height: 100,
-            refund_height: 200,
-        };
-        assert_eq!(err.code(), "refund_too_early");
-        assert_eq!(err.status_code(), 425); // Too Early
+        // Dummy output gets MIN_BOX_VALUE_NANO
+        assert_eq!(
+            outputs[1]["value"].as_str().unwrap(),
+            MIN_BOX_VALUE_NANO.to_string()
+        );
     }
 
     #[test]
@@ -2730,6 +2729,7 @@ mod tests {
             creation_height: 1000000,
             r4_user_tree: "0008cd...".to_string(),
             r6_refund_height: 1000720,
+            additional_registers: HashMap::new(),
         };
 
         assert_eq!(proxy_box.value, 10_000_000_000);
