@@ -1056,12 +1056,15 @@ pub fn build_repay_tx(
     let proxy_address = if is_full_repay {
         config.proxy_contracts.repay_address
     } else {
-        // Partial repay: use partial_repay_address if available, fall back to full repay
+        // Partial repay requires a dedicated proxy contract
         if config.proxy_contracts.partial_repay_address.is_empty() {
-            config.proxy_contracts.repay_address
-        } else {
-            config.proxy_contracts.partial_repay_address
+            return Err(BuildError::ProxyContractMissing(format!(
+                "Partial repay proxy not configured for pool: {}. \
+                 Please repay the full amount ({}) or wait for partial repay support.",
+                config.id, req.total_owed
+            )));
         }
+        config.proxy_contracts.partial_repay_address
     };
     let proxy_ergo_tree = address_to_ergo_tree(proxy_address)?;
 

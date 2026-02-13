@@ -374,7 +374,13 @@ export function LendingTab({
 
       {/* Stuck Proxy Boxes Banner */}
       {stuckBoxes.length > 0 && (
-        <div className="stuck-boxes-banner" onClick={openRefundModal}>
+        <div
+          className="stuck-boxes-banner"
+          onClick={openRefundModal}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRefundModal() } }}
+          role="button"
+          tabIndex={0}
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--warning, #f59e0b)" strokeWidth="2">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 8v4" />

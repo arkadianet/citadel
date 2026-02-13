@@ -1025,14 +1025,16 @@ async fn build_refund(
         )
     })?;
 
-    // Decode R6: Long containing refund height
-    // Format: 05 (type) + zigzag VLQ encoded value
-    let r6_refund_height = decode_sigma_long(r6_encoded).map_err(|e| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ApiError::bad_request(format!("Invalid R6 encoding: {}", e))),
-        )
-    })?;
+    // Decode R6: Int or Long containing refund height
+    // Old proxies used Long (0x05), new proxies use Int (0x04) after the encoding fix
+    let r6_refund_height = decode_sigma_long(r6_encoded)
+        .or_else(|_| decode_sigma_int(r6_encoded).map(|v| v as i64))
+        .map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::bad_request(format!("Invalid R6 encoding: {}", e))),
+            )
+        })?;
 
     // Build ProxyBoxData
     let proxy_box = ProxyBoxData {
@@ -1100,6 +1102,41 @@ fn decode_sigma_byte_array(hex_str: &str) -> Result<String, String> {
 
     // Extract the data bytes and return as hex
     Ok(hex::encode(&bytes[idx..idx + length]))
+}
+
+/// Decode a Sigma Int from register hex string
+/// Format: 04 (type tag) + zigzag-encoded VLQ value
+fn decode_sigma_int(hex_str: &str) -> Result<i32, String> {
+    let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid hex: {}", e))?;
+
+    if bytes.is_empty() || bytes[0] != 0x04 {
+        return Err("Not an Int type (expected 0x04 prefix)".to_string());
+    }
+
+    let mut idx = 1;
+    let mut zigzag: u32 = 0;
+    let mut shift = 0;
+
+    while idx < bytes.len() {
+        if shift >= 32 {
+            return Err("VLQ value too large for Int".to_string());
+        }
+        let byte = bytes[idx];
+        zigzag |= ((byte & 0x7f) as u32) << shift;
+        idx += 1;
+        if byte & 0x80 == 0 {
+            break;
+        }
+        shift += 7;
+    }
+
+    let value = if zigzag & 1 == 0 {
+        (zigzag >> 1) as i32
+    } else {
+        -((zigzag >> 1) as i32) - 1
+    };
+
+    Ok(value)
 }
 
 /// Decode a Sigma Long from register hex string

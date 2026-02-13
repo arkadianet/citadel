@@ -308,6 +308,9 @@ fn known_token_name(token_id: &str) -> String {
         "003bd19d0187117f130b62e1bcab0939929ff5c7709f843c5c4dd158949285d0" => "SigRSV".to_string(),
         "8b08cdd5449a9592a9e79711d7d79249d7a03c535d17efaee83e216e80a44c4b" => "RSN".to_string(),
         "e023c5f382b6e96fbd878f6811aac73345489032157ad5affb84aefd4956c297" => "rsADA".to_string(),
+        "9a06d9e545a41fd51eeffc5e20d818073bf820c635e2a9d922269913e0de369d" => "SPF".to_string(),
+        "7a51950e5f548549ec1aa63ffdc38279505b11e7e803d01bcf8347e0123c88b0" => "rsBTC".to_string(),
+        "089990451bb430f05a85f4ef3bcb6ebf852b3d6ee68d86d78658b9ccef20074f" => "QUACKS".to_string(),
         _ => "Unknown".to_string(),
     }
 }
@@ -826,12 +829,34 @@ pub async fn fetch_user_borrow_positions(
             message: format!("Failed to serialize ErgoTree: {}", e),
         })?;
 
-    // Fetch DEX price for health factor calculation
+    // Fetch DEX prices for health factor calculation.
+    // Token pools: single DEX price from config.collateral_dex_nft (ERG/token pair).
+    // ERG pool: per-collateral DEX prices from CollateralOption.dex_nft.
     let dex_price = if let Some(dex_nft) = config.collateral_dex_nft {
         fetch_dex_price(client, capabilities, dex_nft).await.ok()
     } else {
         None
     };
+
+    // For ERG pool: pre-fetch DEX prices for each collateral token
+    let collateral_dex_prices: std::collections::HashMap<String, (f64, f64)> =
+        if config.is_erg_pool {
+            let collateral_options =
+                fetch_collateral_from_parameter_box(client, capabilities, config)
+                    .await
+                    .unwrap_or_default();
+            let mut prices = std::collections::HashMap::new();
+            for opt in &collateral_options {
+                if let Some(ref dex_nft) = opt.dex_nft {
+                    if let Ok(price) = fetch_dex_price(client, capabilities, dex_nft).await {
+                        prices.insert(opt.token_id.clone(), price);
+                    }
+                }
+            }
+            prices
+        } else {
+            std::collections::HashMap::new()
+        };
 
     // Pre-fetch interest data (parent + child boxes) once for all positions
     let interest_data = fetch_interest_data(client, capabilities, config).await;
@@ -927,7 +952,14 @@ pub async fn fetch_user_borrow_positions(
         //   health = (collateral_nanoerg) / (total_owed_raw * erg_per_token)
         // For ERG pool: collateral is token, total_owed is in nanoERG
         //   health = (collateral_raw * erg_per_token) / (total_owed_nanoerg)
-        let health_factor = if let Some((erg_per_token, _token_per_erg)) = dex_price {
+        let effective_dex_price = if config.is_erg_pool {
+            // ERG pool: look up per-collateral DEX price
+            collateral_dex_prices.get(&collateral_token).copied()
+        } else {
+            dex_price
+        };
+
+        let health_factor = if let Some((erg_per_token, _token_per_erg)) = effective_dex_price {
             if !config.is_erg_pool && erg_per_token > 0.0 && total_owed > 0 {
                 // Token pool: collateral in nanoERG, owed in token raw units
                 let owed_value_nano = total_owed as f64 * erg_per_token;

@@ -84,12 +84,21 @@ export function BorrowModal({
   const collateralIsErg = collateralOption?.token_id === 'native'
   const collateralSymbol = collateralOption?.token_name ?? (collateralIsErg ? 'ERG' : 'Token')
 
-  // Derive collateral decimals
+  // Derive collateral decimals from known token configs (not wallet balance,
+  // which would return 0 if user doesn't hold the token yet)
   const collateralDecimals = useMemo(() => {
     if (collateralIsErg) return 9
-    if (!collateralOption || !walletBalance) return 0
-    const walletToken = walletBalance.tokens.find(t => t.token_id === collateralOption.token_id)
-    return walletToken?.decimals ?? 0
+    if (!collateralOption) return 0
+    const KNOWN_DECIMALS: Record<string, number> = {
+      '03faf2cb329f2e90d6d23b58d91bbb6c046aa143261cc21f52fbe2824bfcbf04': 2,  // SigUSD
+      '003bd19d0187117f130b62e1bcab0939929ff5c7709f843c5c4dd158949285d0': 0,  // SigRSV
+      '8b08cdd5449a9592a9e79711d7d79249d7a03c535d17efaee83e216e80a44c4b': 4,  // RSN
+      'e023c5f382b6e96fbd878f6811aac73345489032157ad5affb84aefd4956c297': 6,  // rsADA
+      '9a06d9e545a41fd51eeffc5e20d818073bf820c635e2a9d922269913e0de369d': 6,  // SPF
+      '7a51950e5f548549ec1aa63ffdc38279505b11e7e803d01bcf8347e0123c88b0': 8,  // rsBTC
+      '089990451bb430f05a85f4ef3bcb6ebf852b3d6ee68d86d78658b9ccef20074f': 0,  // QUACKS
+    }
+    return KNOWN_DECIMALS[collateralOption.token_id] ?? walletBalance?.tokens.find(t => t.token_id === collateralOption.token_id)?.decimals ?? 0
   }, [collateralIsErg, collateralOption, walletBalance])
 
   // Liquidation threshold as percentage (e.g. 1400 -> 140)
@@ -115,11 +124,13 @@ export function BorrowModal({
       setDexPrice(null)
       return
     }
+    let cancelled = false
     setPriceLoading(true)
     getDexPrice(collateralOption.dex_nft)
-      .then(setDexPrice)
-      .catch((e) => console.error('Failed to fetch DEX price:', e))
-      .finally(() => setPriceLoading(false))
+      .then((price) => { if (!cancelled) setDexPrice(price) })
+      .catch((e) => { if (!cancelled) console.error('Failed to fetch DEX price:', e) })
+      .finally(() => { if (!cancelled) setPriceLoading(false) })
+    return () => { cancelled = true }
   }, [isOpen, collateralOption?.dex_nft])
 
   // Auto-calculate collateral from borrow amount, ratio, and DEX price
