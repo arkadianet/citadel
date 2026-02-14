@@ -47,24 +47,6 @@ pub fn extract_int_pair(constant: &Constant) -> Result<(i32, i32), String> {
     }
 }
 
-/// Extract `(i64, i64)` from a `Constant` holding a `Tup(Long, Long)`.
-pub fn extract_long_pair(constant: &Constant) -> Result<(i64, i64), String> {
-    match &constant.v {
-        Literal::Tup(items) if items.len() == 2 => {
-            let a = match &items.as_slice()[0] {
-                Literal::Long(v) => *v,
-                other => return Err(format!("Expected Long in tuple[0], got {:?}", other)),
-            };
-            let b = match &items.as_slice()[1] {
-                Literal::Long(v) => *v,
-                other => return Err(format!("Expected Long in tuple[1], got {:?}", other)),
-            };
-            Ok((a, b))
-        }
-        other => Err(format!("Expected Tup(Long, Long), got {:?}", other)),
-    }
-}
-
 /// Extract `Vec<i64>` from an ergo-lib `Constant` that holds a `Coll[Long]`.
 pub fn extract_long_coll(constant: &Constant) -> Result<Vec<i64>, String> {
     match &constant.v {

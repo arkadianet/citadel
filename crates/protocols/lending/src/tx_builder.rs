@@ -212,7 +212,7 @@ pub struct ProxyBoxData {
     /// Block height when box was created
     pub creation_height: i32,
     /// User's ErgoTree hex from R4 or R5 (where refund goes)
-    pub r4_user_tree: String,
+    pub user_ergo_tree: String,
     /// Block height after which refund is allowed (from R6)
     pub r6_refund_height: i64,
     /// All additional registers (R4-R9) as sigma-serialized hex.
@@ -1563,7 +1563,7 @@ pub fn build_refund_tx(
 
     let primary_output = Eip12Output {
         value: primary_value.to_string(),
-        ergo_tree: proxy_box.r4_user_tree.clone(),
+        ergo_tree: proxy_box.user_ergo_tree.clone(),
         assets: proxy_box
             .assets
             .iter()
@@ -1579,7 +1579,7 @@ pub fn build_refund_tx(
     // Output 1: Dummy min box to user — ensures OUTPUTS.size >= 3
     let dummy_output = Eip12Output {
         value: MIN_BOX_VALUE_NANO.to_string(),
-        ergo_tree: proxy_box.r4_user_tree.clone(),
+        ergo_tree: proxy_box.user_ergo_tree.clone(),
         assets: vec![],
         creation_height: current_height,
         additional_registers: HashMap::new(),
@@ -2539,7 +2539,7 @@ mod tests {
             ergo_tree: "1005040004000e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a701730073011001020402d19683030193a38cc7b2a57300000193c2b2a57301007473027303830108cdeeac93b1a57304".to_string(), // Dummy proxy contract
             assets,
             creation_height: 1000000,
-            r4_user_tree: user_ergo_tree,
+            user_ergo_tree,
             r6_refund_height: refund_height,
             additional_registers: HashMap::new(), // Test helper — real boxes have registers
         }
@@ -2730,7 +2730,7 @@ mod tests {
             ergo_tree: "0008cd...".to_string(),
             assets: vec![("token1".to_string(), 100)],
             creation_height: 1000000,
-            r4_user_tree: "0008cd...".to_string(),
+            user_ergo_tree: "0008cd...".to_string(),
             r6_refund_height: 1000720,
             additional_registers: HashMap::new(),
         };

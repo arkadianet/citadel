@@ -741,6 +741,9 @@ fn calculate_interest_compound(
         // Base child == head child. Compound head_child.R4[child_idx:]
         let start = child_idx as usize;
         for &rate in interest.head_child_rates.get(start..).unwrap_or(&[]) {
+            if rate <= 0 {
+                continue;
+            }
             compound = compound * rate as u128 / im;
         }
     } else {
@@ -755,6 +758,9 @@ fn calculate_interest_compound(
             // Base child still on-chain — use exact rates
             let start = child_idx as usize;
             for &rate in base_rates.get(start..).unwrap_or(&[]) {
+                if rate <= 0 {
+                    continue;
+                }
                 compound = compound * rate as u128 / im;
             }
         } else {
@@ -767,6 +773,9 @@ fn calculate_interest_compound(
 
         // Compound head child rates (current epoch, all rates)
         for &rate in &interest.head_child_rates {
+            if rate <= 0 {
+                continue;
+            }
             compound = compound * rate as u128 / im;
         }
 
@@ -775,6 +784,9 @@ fn calculate_interest_compound(
             let p_start = (parent_idx + 1) as usize;
             let p_end = live_parent_index as usize;
             for &rate in interest.parent_rates.get(p_start..p_end).unwrap_or(&[]) {
+                if rate <= 0 {
+                    continue;
+                }
                 compound = compound * rate as u128 / im;
             }
         }
@@ -1267,7 +1279,6 @@ mod tests {
     fn make_interest_data(
         parent_rates: Vec<i64>,
         head_child_rates: Vec<i64>,
-        _head_child_r6: i64,
         other_children: Vec<(i64, Vec<i64>)>,
     ) -> InterestData {
         InterestData {
@@ -1288,7 +1299,6 @@ mod tests {
         let interest = make_interest_data(
             vec![im; 3], // parent has 3 entries
             vec![rate; 5],
-            3,
             vec![],
         );
 
@@ -1311,7 +1321,6 @@ mod tests {
         let interest = make_interest_data(
             vec![im; 5],
             vec![rate; 10], // 10 periods of 0.1%
-            5,
             vec![],
         );
 
@@ -1334,7 +1343,6 @@ mod tests {
         let interest = make_interest_data(
             vec![im; 4], // parent has 4 entries → live_parent_index = 4
             head_child_rates,
-            4,
             vec![(3, base_child_rates)], // base child R6=3
         );
 
@@ -1363,7 +1371,6 @@ mod tests {
                 epoch_compound, // epoch 4
             ],
             vec![rate; 3], // head child (epoch 5) has 3 periods
-            5,
             vec![], // no base child on-chain
         );
 
@@ -1380,7 +1387,7 @@ mod tests {
     fn test_interest_compound_no_rates() {
         // Edge case: no rates in head child (fresh epoch)
         let im = 100_000_000i64;
-        let interest = make_interest_data(vec![im; 3], vec![], 3, vec![]);
+        let interest = make_interest_data(vec![im; 3], vec![], vec![]);
 
         let borrowed = 10000u64;
         let total = calculate_interest_compound(&interest, 3, 0, borrowed);
@@ -1392,7 +1399,7 @@ mod tests {
     fn test_interest_compound_zero_borrowed() {
         let im = 100_000_000i64;
         let rate = im + 100_000;
-        let interest = make_interest_data(vec![im; 3], vec![rate; 10], 3, vec![]);
+        let interest = make_interest_data(vec![im; 3], vec![rate; 10], vec![]);
 
         let total = calculate_interest_compound(&interest, 3, 0, 0);
         // 0 borrowed → min repayment = 2 + 0 = 2 (strict > check)

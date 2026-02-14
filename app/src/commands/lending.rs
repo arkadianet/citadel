@@ -530,7 +530,7 @@ pub async fn build_refund_tx(
 
     // Try R4 as Coll[Byte] first (lend/withdraw/borrow proxies).
     // If that fails (repay proxies store a Long in R4), fall back to R5.
-    let r4_user_tree = match decode_sigma_byte_array(r4_encoded) {
+    let user_ergo_tree = match decode_sigma_byte_array(r4_encoded) {
         Ok(tree) => tree,
         Err(_) => {
             // Repay/PartialRepay proxy: user ErgoTree is in R5
@@ -556,7 +556,7 @@ pub async fn build_refund_tx(
         ergo_tree: proxy_eip12.ergo_tree,
         assets,
         creation_height: proxy_eip12.creation_height,
-        r4_user_tree,
+        user_ergo_tree,
         r6_refund_height,
         additional_registers: proxy_eip12.additional_registers,
     };
