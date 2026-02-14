@@ -338,8 +338,7 @@ fn parse_pool_box(ergo_box: &ErgoBox, config: &PoolConfig) -> Result<PoolBoxData
     };
     // Extract borrow token ID from pool box tokens[2] for collateral box discovery
     let borrow_token_id = borrow_token_at_2.map(|tok| {
-        let tid: String = tok.token_id.into();
-        tid
+        hex::encode(tok.token_id.as_ref())
     });
 
     // Get currency amount for token pools
@@ -935,7 +934,7 @@ pub async fn fetch_user_borrow_positions(
             let mut found = None;
             if let Some(tokens) = ergo_box.tokens.as_ref() {
                 for tok in tokens.iter() {
-                    let tid: String = tok.token_id.into();
+                    let tid = hex::encode(tok.token_id.as_ref());
                     if tid != borrow_token_id_str {
                         let name = known_token_name(&tid);
                         found = Some((tid, name, *tok.amount.as_u64()));
@@ -1145,7 +1144,7 @@ pub async fn discover_stuck_proxy_boxes(
                 .map(|toks| {
                     toks.iter()
                         .map(|t| {
-                            let tid: String = t.token_id.into();
+                            let tid = hex::encode(t.token_id.as_ref());
                             crate::state::StuckBoxToken {
                                 token_id: tid,
                                 amount: *t.amount.as_u64(),

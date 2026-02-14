@@ -992,17 +992,8 @@ async fn build_refund(
             )
         })?;
 
-    let r4_encoded = registers
-        .get("R4")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(ApiError::bad_request(
-                    "Proxy box missing R4 (user ErgoTree)",
-                )),
-            )
-        })?;
+    let r4_encoded = registers.get("R4").and_then(|v| v.as_str());
+    let r5_encoded = registers.get("R5").and_then(|v| v.as_str());
 
     let r6_encoded = registers
         .get("R6")
@@ -1016,14 +1007,20 @@ async fn build_refund(
             )
         })?;
 
-    // Decode R4: Coll[Byte] containing user's ErgoTree
-    // Format: 0e (type) + VLQ length + ErgoTree bytes
-    let r4_user_tree = decode_sigma_byte_array(r4_encoded).map_err(|e| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ApiError::bad_request(format!("Invalid R4 encoding: {}", e))),
-        )
-    })?;
+    // Decode user ErgoTree from R4 or R5.
+    // Lend/Withdraw/Borrow proxies store it in R4 (Coll[Byte]).
+    // Repay/PartialRepay proxies store it in R5 (R4 is a Long).
+    let r4_user_tree = r4_encoded
+        .and_then(|r4| decode_sigma_byte_array(r4).ok())
+        .or_else(|| r5_encoded.and_then(|r5| decode_sigma_byte_array(r5).ok()))
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::bad_request(
+                    "Proxy box missing valid user ErgoTree in R4 or R5",
+                )),
+            )
+        })?;
 
     // Decode R6: Int or Long containing refund height
     // Old proxies used Long (0x05), new proxies use Int (0x04) after the encoding fix
