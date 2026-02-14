@@ -146,6 +146,8 @@ export interface RepayBuildRequest {
   collateral_box_id: string
   /** Amount to repay in base units */
   repay_amount: number
+  /** Total owed with interest. Determines full vs partial repay proxy address. */
+  total_owed: number
   user_address: string
   /** User's UTXOs in EIP-12 JSON format */
   user_utxos: unknown[]
@@ -300,6 +302,62 @@ export async function buildRefundTx(request: RefundBuildRequest): Promise<Lendin
 // =============================================================================
 // Helper Types (for component use)
 // =============================================================================
+
+/**
+ * Token held in a stuck proxy box
+ */
+export interface StuckBoxToken {
+  token_id: string
+  amount: number
+}
+
+/**
+ * A stuck proxy box discovered on-chain belonging to the user
+ */
+export interface StuckProxyBox {
+  box_id: string
+  /** Operation type: "Lend", "Withdraw", "Borrow", "Repay", "Partial Repay" */
+  operation: string
+  value_nano: number
+  refund_height: number
+  current_height: number
+  can_refund: boolean
+  blocks_remaining: number
+  tokens: StuckBoxToken[]
+}
+
+/**
+ * Discover stuck proxy boxes belonging to the user across all Duckpools contracts.
+ *
+ * Scans all proxy contract addresses for unspent boxes where R4 matches the
+ * user's ErgoTree. Returns boxes sorted by refund height (soonest first).
+ *
+ * @param userAddress - Ergo address to scan for
+ * @returns Promise<StuckProxyBox[]> Array of stuck proxy boxes
+ */
+export async function discoverStuckProxies(userAddress: string): Promise<StuckProxyBox[]> {
+  return invoke<StuckProxyBox[]>('discover_stuck_proxies', { userAddress })
+}
+
+/**
+ * DEX price info for collateral calculation
+ */
+export interface DexPriceInfo {
+  erg_per_token: number
+  token_per_erg: number
+  erg_reserves: number
+  token_reserves: number
+}
+
+/**
+ * Get DEX pool price for collateral auto-calculation.
+ *
+ * @param dexNft - Spectrum DEX pool NFT ID
+ * @returns Price ratios and reserves
+ */
+export async function getDexPrice(dexNft: string): Promise<DexPriceInfo> {
+  return invoke<DexPriceInfo>('get_dex_price', { dexNft })
+}
 
 /**
  * Health status derived from health_factor.

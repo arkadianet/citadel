@@ -10,11 +10,13 @@ import { RefundModal } from './RefundModal'
 import {
   getLendingMarkets,
   getLendingPositions,
+  discoverStuckProxies,
   type PoolInfo,
   type MarketsResponse,
   type PositionsResponse,
   type LendPositionInfo,
   type BorrowPositionInfo,
+  type StuckProxyBox,
 } from '../api/lending'
 import './LendingTab.css'
 
@@ -51,6 +53,9 @@ export function LendingTab({
   const [positions, setPositions] = useState<PositionsResponse | null>(null)
   const [positionsLoading, setPositionsLoading] = useState(false)
   const [positionsError, setPositionsError] = useState<string | null>(null)
+
+  // Stuck proxy boxes (auto-discovered)
+  const [stuckBoxes, setStuckBoxes] = useState<StuckProxyBox[]>([])
 
   // Modal state
   const [showWalletConnect, setShowWalletConnect] = useState(false)
@@ -116,6 +121,26 @@ export function LendingTab({
     }
   }, [walletAddress, fetchPositions])
 
+  // Scan for stuck proxy boxes when wallet is connected
+  useEffect(() => {
+    if (!walletAddress || !isConnected) {
+      setStuckBoxes([])
+      return
+    }
+    const scan = async () => {
+      try {
+        const boxes = await discoverStuckProxies(walletAddress)
+        setStuckBoxes(boxes)
+      } catch (e) {
+        console.error('Failed to scan for stuck proxy boxes:', e)
+      }
+    }
+    scan()
+    // Re-scan every 60s (less frequent than positions since this scans ~16 addresses)
+    const interval = setInterval(scan, 60000)
+    return () => clearInterval(interval)
+  }, [walletAddress, isConnected])
+
   // Modal handlers
   const openLendModal = (pool: PoolInfo) => {
     setSelectedPool(pool)
@@ -153,8 +178,12 @@ export function LendingTab({
     // Refresh data after successful transaction
     fetchMarkets()
     fetchPositions()
+    // Re-scan stuck boxes (a refund may have consumed one)
+    if (walletAddress) {
+      discoverStuckProxies(walletAddress).then(setStuckBoxes).catch(() => {})
+    }
     closeModal()
-  }, [fetchMarkets, fetchPositions])
+  }, [fetchMarkets, fetchPositions, walletAddress])
 
   // Get user's lend position for a pool
   const getLendPosition = (poolId: string): LendPositionInfo | undefined => {
@@ -343,6 +372,27 @@ export function LendingTab({
         </div>
       )}
 
+      {/* Stuck Proxy Boxes Banner */}
+      {stuckBoxes.length > 0 && (
+        <div
+          className="stuck-boxes-banner"
+          onClick={openRefundModal}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRefundModal() } }}
+          role="button"
+          tabIndex={0}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--warning, #f59e0b)" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v4" />
+            <path d="M12 16h.01" />
+          </svg>
+          <span>
+            You have <strong>{stuckBoxes.length}</strong> stuck proxy box{stuckBoxes.length !== 1 ? 'es' : ''} that can be recovered.
+          </span>
+          <button className="btn btn-secondary btn-sm">View Details</button>
+        </div>
+      )}
+
       {/* Recover Stuck Transaction Link */}
       <div className="lending-footer">
         <button className="refund-link" onClick={openRefundModal}>
@@ -412,6 +462,7 @@ export function LendingTab({
           userAddress={walletAddress}
           explorerUrl={explorerUrl}
           onSuccess={handleTransactionSuccess}
+          stuckBoxes={stuckBoxes}
         />
       )}
     </div>

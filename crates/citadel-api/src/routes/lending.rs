@@ -143,6 +143,8 @@ pub struct RepayBuildRequest {
     pub pool_id: String,
     pub collateral_box_id: String,
     pub repay_amount: u64,
+    /// Total owed with interest. Determines full vs partial repay proxy.
+    pub total_owed: u64,
     pub user_address: String,
     pub user_utxos: Vec<serde_json::Value>,
     pub current_height: i32,
@@ -826,6 +828,7 @@ async fn build_repay(
         pool_id: request.pool_id.clone(),
         collateral_box_id: request.collateral_box_id,
         repay_amount: request.repay_amount,
+        total_owed: request.total_owed,
         user_address: request.user_address,
         user_utxos,
     };
@@ -989,17 +992,8 @@ async fn build_refund(
             )
         })?;
 
-    let r4_encoded = registers
-        .get("R4")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(ApiError::bad_request(
-                    "Proxy box missing R4 (user ErgoTree)",
-                )),
-            )
-        })?;
+    let r4_encoded = registers.get("R4").and_then(|v| v.as_str());
+    let r5_encoded = registers.get("R5").and_then(|v| v.as_str());
 
     let r6_encoded = registers
         .get("R6")
@@ -1013,23 +1007,31 @@ async fn build_refund(
             )
         })?;
 
-    // Decode R4: Coll[Byte] containing user's ErgoTree
-    // Format: 0e (type) + VLQ length + ErgoTree bytes
-    let r4_user_tree = decode_sigma_byte_array(r4_encoded).map_err(|e| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ApiError::bad_request(format!("Invalid R4 encoding: {}", e))),
-        )
-    })?;
+    // Decode user ErgoTree from R4 or R5.
+    // Lend/Withdraw/Borrow proxies store it in R4 (Coll[Byte]).
+    // Repay/PartialRepay proxies store it in R5 (R4 is a Long).
+    let user_ergo_tree = r4_encoded
+        .and_then(|r4| decode_sigma_byte_array(r4).ok())
+        .or_else(|| r5_encoded.and_then(|r5| decode_sigma_byte_array(r5).ok()))
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::bad_request(
+                    "Proxy box missing valid user ErgoTree in R4 or R5",
+                )),
+            )
+        })?;
 
-    // Decode R6: Long containing refund height
-    // Format: 05 (type) + zigzag VLQ encoded value
-    let r6_refund_height = decode_sigma_long(r6_encoded).map_err(|e| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ApiError::bad_request(format!("Invalid R6 encoding: {}", e))),
-        )
-    })?;
+    // Decode R6: Int or Long containing refund height
+    // Old proxies used Long (0x05), new proxies use Int (0x04) after the encoding fix
+    let r6_refund_height = decode_sigma_long(r6_encoded)
+        .or_else(|_| decode_sigma_int(r6_encoded).map(|v| v as i64))
+        .map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::bad_request(format!("Invalid R6 encoding: {}", e))),
+            )
+        })?;
 
     // Build ProxyBoxData
     let proxy_box = ProxyBoxData {
@@ -1040,8 +1042,12 @@ async fn build_refund(
         ergo_tree,
         assets,
         creation_height,
-        r4_user_tree,
+        user_ergo_tree,
         r6_refund_height,
+        additional_registers: registers
+            .iter()
+            .filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string())))
+            .collect(),
     };
 
     // Build the refund transaction
@@ -1093,6 +1099,41 @@ fn decode_sigma_byte_array(hex_str: &str) -> Result<String, String> {
 
     // Extract the data bytes and return as hex
     Ok(hex::encode(&bytes[idx..idx + length]))
+}
+
+/// Decode a Sigma Int from register hex string
+/// Format: 04 (type tag) + zigzag-encoded VLQ value
+fn decode_sigma_int(hex_str: &str) -> Result<i32, String> {
+    let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid hex: {}", e))?;
+
+    if bytes.is_empty() || bytes[0] != 0x04 {
+        return Err("Not an Int type (expected 0x04 prefix)".to_string());
+    }
+
+    let mut idx = 1;
+    let mut zigzag: u32 = 0;
+    let mut shift = 0;
+
+    while idx < bytes.len() {
+        if shift >= 32 {
+            return Err("VLQ value too large for Int".to_string());
+        }
+        let byte = bytes[idx];
+        zigzag |= ((byte & 0x7f) as u32) << shift;
+        idx += 1;
+        if byte & 0x80 == 0 {
+            break;
+        }
+        shift += 7;
+    }
+
+    let value = if zigzag & 1 == 0 {
+        (zigzag >> 1) as i32
+    } else {
+        -((zigzag >> 1) as i32) - 1
+    };
+
+    Ok(value)
 }
 
 /// Decode a Sigma Long from register hex string

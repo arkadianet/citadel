@@ -3,6 +3,35 @@
 //! Pool configurations for all Duckpools lending markets.
 //! All pools defined as configuration data for easy extension.
 
+/// Type of proxy operation (for stuck box discovery)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProxyOperationType {
+    Lend,
+    Withdraw,
+    Borrow,
+    Repay,
+    PartialRepay,
+}
+
+impl ProxyOperationType {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Lend => "Lend",
+            Self::Withdraw => "Withdraw",
+            Self::Borrow => "Borrow",
+            Self::Repay => "Repay",
+            Self::PartialRepay => "Partial Repay",
+        }
+    }
+}
+
+/// A unique proxy address with its operation type
+#[derive(Debug, Clone)]
+pub struct ProxyAddressInfo {
+    pub address: &'static str,
+    pub operation: ProxyOperationType,
+}
+
 /// Proxy contract addresses for Duckpools operations
 #[derive(Debug, Clone)]
 pub struct ProxyContracts {
@@ -368,6 +397,33 @@ pub fn get_pool(pool_id: &str) -> Option<&'static PoolConfig> {
     get_pools().iter().find(|p| p.id == pool_id)
 }
 
+/// Collect unique proxy contract addresses across all pools.
+///
+/// Deduplicates shared addresses (token pools share lend/withdraw/repay/partial_repay).
+/// Returns ~16 unique addresses tagged with their operation type.
+pub fn unique_proxy_addresses() -> Vec<ProxyAddressInfo> {
+    let mut seen = std::collections::HashSet::new();
+    let mut result = Vec::new();
+
+    for pool in get_pools() {
+        let entries = [
+            (pool.proxy_contracts.lend_address, ProxyOperationType::Lend),
+            (pool.proxy_contracts.withdraw_address, ProxyOperationType::Withdraw),
+            (pool.proxy_contracts.borrow_address, ProxyOperationType::Borrow),
+            (pool.proxy_contracts.repay_address, ProxyOperationType::Repay),
+            (pool.proxy_contracts.partial_repay_address, ProxyOperationType::PartialRepay),
+        ];
+
+        for (addr, op) in entries {
+            if !addr.is_empty() && seen.insert(addr) {
+                result.push(ProxyAddressInfo { address: addr, operation: op });
+            }
+        }
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -406,6 +462,28 @@ mod tests {
             fees::calculate_service_fee(300000, fees::TOKEN_THRESHOLDS),
             1402
         );
+    }
+
+    #[test]
+    fn test_unique_proxy_addresses() {
+        let addrs = unique_proxy_addresses();
+        // ERG pool: 5 unique addresses
+        // Token pools: 4 shared (lend, withdraw, repay, partial_repay) + 7 unique borrow = 11
+        // Total: 5 + 11 = 16
+        assert_eq!(addrs.len(), 16);
+
+        // Verify no duplicates
+        let unique: std::collections::HashSet<&str> = addrs.iter().map(|a| a.address).collect();
+        assert_eq!(unique.len(), addrs.len());
+    }
+
+    #[test]
+    fn test_proxy_operation_type_labels() {
+        assert_eq!(ProxyOperationType::Lend.label(), "Lend");
+        assert_eq!(ProxyOperationType::Withdraw.label(), "Withdraw");
+        assert_eq!(ProxyOperationType::Borrow.label(), "Borrow");
+        assert_eq!(ProxyOperationType::Repay.label(), "Repay");
+        assert_eq!(ProxyOperationType::PartialRepay.label(), "Partial Repay");
     }
 
     #[test]

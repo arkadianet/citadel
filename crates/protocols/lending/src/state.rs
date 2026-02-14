@@ -46,6 +46,10 @@ pub struct PoolState {
     // Box IDs for reference
     pub pool_box_id: String,
 
+    /// Borrow token ID from pool box tokens[2], for collateral box discovery.
+    /// Populated at runtime from pool box, not hardcoded.
+    pub borrow_token_id: Option<String>,
+
     // Collateral options fetched from on-chain parameter box
     pub collateral_options: Vec<CollateralOption>,
 
@@ -91,6 +95,8 @@ pub struct PoolBoxData {
     pub lp_tokens_in_circulation: u64,
     pub borrow_tokens_in_circulation: u64,
     pub currency_amount: u64, // For token pools
+    /// Borrow token ID extracted from pool box tokens[2]. Used for collateral box discovery.
+    pub borrow_token_id: Option<String>,
 }
 
 impl PoolState {
@@ -136,6 +142,7 @@ impl PoolState {
             borrow_apy,
             lp_tokens_in_circulation: box_data.lp_tokens_in_circulation,
             pool_box_id: box_data.box_id.clone(),
+            borrow_token_id: box_data.borrow_token_id.clone(),
             collateral_options: vec![],
             user_lend_position: None,
             user_borrow_positions: vec![],
@@ -161,6 +168,27 @@ impl BorrowPosition {
     }
 }
 
+/// A stuck proxy box discovered on-chain belonging to the user
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StuckProxyBox {
+    pub box_id: String,
+    /// Operation type: "Lend", "Withdraw", "Borrow", "Repay", "Partial Repay"
+    pub operation: String,
+    pub value_nano: i64,
+    pub refund_height: i64,
+    pub current_height: u32,
+    pub can_refund: bool,
+    pub blocks_remaining: i64,
+    pub tokens: Vec<StuckBoxToken>,
+}
+
+/// Token held in a stuck proxy box
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StuckBoxToken {
+    pub token_id: String,
+    pub amount: u64,
+}
+
 /// Health factor status for UI color coding
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HealthStatus {
@@ -180,6 +208,7 @@ mod tests {
             lp_tokens_in_circulation: 500_000_000_000,
             borrow_tokens_in_circulation: 100_000_000_000,
             currency_amount: 0,
+            borrow_token_id: Some("d90d4000ed4b826856b93fc3d1e2c10ecb8a08dc0172fe72f58c43d28e681b49".to_string()),
         }
     }
 
@@ -206,6 +235,7 @@ mod tests {
             lp_tokens_in_circulation: 1000,
             borrow_tokens_in_circulation: 50,
             currency_amount: 1_000_000, // 10000 SigUSD (2 decimals)
+            borrow_token_id: Some("1d7857a82d2f3d00d58cbd3b6ad337c98b6aa5e1021a17deb7527e0c3c148be7".to_string()),
         };
         let state = PoolState::from_pool_box(
             "sigusd",

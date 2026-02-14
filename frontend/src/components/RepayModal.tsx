@@ -242,6 +242,7 @@ export function RepayModal({
         pool_id: pool.pool_id,
         collateral_box_id: borrowPosition.collateral_box_id,
         repay_amount: calculated.amountRaw,
+        total_owed: totalOwed,
         user_address: userAddress,
         user_utxos: utxos,
         current_height: nodeStatus.chain_height,

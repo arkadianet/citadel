@@ -6,7 +6,7 @@
 use citadel_core::{NodeError, ProtocolError};
 use ergo_lib::ergotree_ir::chain::ergo_box::{ErgoBox, NonMandatoryRegisterId};
 use ergo_lib::ergotree_ir::mir::constant::{Constant, Literal};
-use ergo_lib::ergotree_ir::mir::value::CollKind;
+use ergo_lib::ergotree_ir::mir::value::{CollKind, NativeColl};
 use ergo_lib::ergotree_ir::types::stype::SType;
 
 // =============================================================================
@@ -29,6 +29,24 @@ pub fn extract_int(constant: &Constant) -> Result<i32, String> {
     }
 }
 
+/// Extract `(i32, i32)` from a `Constant` holding a `Tup(Int, Int)`.
+pub fn extract_int_pair(constant: &Constant) -> Result<(i32, i32), String> {
+    match &constant.v {
+        Literal::Tup(items) if items.len() == 2 => {
+            let a = match &items.as_slice()[0] {
+                Literal::Int(v) => *v,
+                other => return Err(format!("Expected Int in tuple[0], got {:?}", other)),
+            };
+            let b = match &items.as_slice()[1] {
+                Literal::Int(v) => *v,
+                other => return Err(format!("Expected Int in tuple[1], got {:?}", other)),
+            };
+            Ok((a, b))
+        }
+        other => Err(format!("Expected Tup(Int, Int), got {:?}", other)),
+    }
+}
+
 /// Extract `Vec<i64>` from an ergo-lib `Constant` that holds a `Coll[Long]`.
 pub fn extract_long_coll(constant: &Constant) -> Result<Vec<i64>, String> {
     match &constant.v {
@@ -47,6 +65,39 @@ pub fn extract_long_coll(constant: &Constant) -> Result<Vec<i64>, String> {
                 Ok(result)
             }
             _ => Err(format!("Expected Coll[Long], got {:?}", coll)),
+        },
+        other => Err(format!("Expected Coll literal, got {:?}", other)),
+    }
+}
+
+/// Extract `Vec<Vec<u8>>` from an ergo-lib `Constant` that holds a `Coll[Coll[Byte]]`.
+///
+/// Used for registers containing arrays of byte arrays, such as token IDs or DEX NFT IDs
+/// in Duckpools parameter boxes.
+pub fn extract_byte_array_coll(constant: &Constant) -> Result<Vec<Vec<u8>>, String> {
+    match &constant.v {
+        Literal::Coll(coll) => match coll {
+            CollKind::WrappedColl {
+                elem_tpe: SType::SColl(inner),
+                items,
+            } if **inner == SType::SByte => {
+                let mut result = Vec::new();
+                for item in items.iter() {
+                    match item {
+                        Literal::Coll(CollKind::NativeColl(NativeColl::CollByte(bytes))) => {
+                            result.push(bytes.iter().map(|&b| b as u8).collect());
+                        }
+                        other => {
+                            return Err(format!(
+                                "Expected Coll[Byte] in Coll[Coll[Byte]], got {:?}",
+                                other
+                            ))
+                        }
+                    }
+                }
+                Ok(result)
+            }
+            _ => Err(format!("Expected Coll[Coll[Byte]], got {:?}", coll)),
         },
         other => Err(format!("Expected Coll literal, got {:?}", other)),
     }
@@ -190,6 +241,44 @@ mod tests {
             }),
         };
         assert_eq!(extract_long_coll(&constant).unwrap(), Vec::<i64>::new());
+    }
+
+    #[test]
+    fn test_extract_byte_array_coll_ok() {
+        use std::sync::Arc;
+        let inner_items: Vec<Literal> = vec![
+            Literal::Coll(CollKind::NativeColl(NativeColl::CollByte(
+                vec![1i8, 2, 3].into(),
+            ))),
+            Literal::Coll(CollKind::NativeColl(NativeColl::CollByte(
+                vec![4i8, 5].into(),
+            ))),
+        ];
+        let constant = Constant {
+            tpe: SType::SColl(Arc::new(SType::SColl(Arc::new(SType::SByte)))),
+            v: Literal::Coll(CollKind::WrappedColl {
+                elem_tpe: SType::SColl(Arc::new(SType::SByte)),
+                items: inner_items.into(),
+            }),
+        };
+        let result = extract_byte_array_coll(&constant).unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], vec![1u8, 2, 3]);
+        assert_eq!(result[1], vec![4u8, 5]);
+    }
+
+    #[test]
+    fn test_extract_byte_array_coll_empty() {
+        use std::sync::Arc;
+        let constant = Constant {
+            tpe: SType::SColl(Arc::new(SType::SColl(Arc::new(SType::SByte)))),
+            v: Literal::Coll(CollKind::WrappedColl {
+                elem_tpe: SType::SColl(Arc::new(SType::SByte)),
+                items: vec![].into(),
+            }),
+        };
+        let result = extract_byte_array_coll(&constant).unwrap();
+        assert!(result.is_empty());
     }
 
     #[test]

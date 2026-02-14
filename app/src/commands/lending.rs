@@ -349,10 +349,11 @@ pub async fn build_withdraw_tx(
 /// Build borrow transaction
 ///
 /// Creates a proxy box with collateral tokens and registers that Duckpools bots
-/// process to execute the borrow.
+/// process to execute the borrow. Fetches liquidation threshold/penalty from
+/// the on-chain parameter box to ensure they match what the pool contract validates.
 #[tauri::command]
 pub async fn build_borrow_tx(
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
     request: BorrowBuildRequest,
 ) -> Result<LendingBuildResponse, String> {
     // Validate amounts
@@ -367,40 +368,51 @@ pub async fn build_borrow_tx(
     let pool_config = lending_constants::get_pool(&request.pool_id)
         .ok_or_else(|| format!("Pool '{}' not found", request.pool_id))?;
 
-    // Find matching collateral option
-    // For token pools, collateral is ERG ("native"); for ERG pool, it's one of the supported tokens
-    let collateral_options = if pool_config.liquidation_threshold > 0 {
-        vec![lending::CollateralOption {
-            token_id: "native".to_string(),
-            token_name: "ERG".to_string(),
-            liquidation_threshold: pool_config.liquidation_threshold,
-            liquidation_penalty: 0,
-            dex_nft: pool_config.collateral_dex_nft.map(|s| s.to_string()),
-        }]
-    } else {
-        vec![]
-    };
+    // Get node client to fetch on-chain parameter box
+    let client = state
+        .node_client()
+        .await
+        .ok_or_else(|| "Node not connected".to_string())?;
+    let capabilities = client
+        .capabilities()
+        .await
+        .ok_or_else(|| "Node capabilities not available".to_string())?;
 
-    // For ERG pool, the collateral is a token (user-specified)
-    // For token pools, the collateral is ERG ("native")
-    let collateral_config = if pool_config.is_erg_pool {
-        // ERG pool: user provides token collateral to borrow ERG
-        // Use a synthetic collateral option with the user's specified token
-        lending::CollateralOption {
-            token_id: request.collateral_token.clone(),
-            token_name: "Collateral".to_string(),
-            liquidation_threshold: 1250, // Default threshold for ERG pool borrowing
-            liquidation_penalty: 0,
-            dex_nft: pool_config.collateral_dex_nft.map(|s| s.to_string()),
-        }
-    } else {
-        collateral_options.into_iter().next().ok_or_else(|| {
+    // Fetch real threshold/penalty from on-chain parameter box
+    let collateral_options = lending::fetch_collateral_from_parameter_box(
+        &client,
+        &capabilities,
+        pool_config,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    if collateral_options.is_empty() {
+        return Err(format!(
+            "Pool '{}' does not support borrowing (no collateral options in parameter box)",
+            request.pool_id
+        ));
+    }
+
+    // Find the matching collateral option for the user's chosen token
+    // Token pools: collateral_token = "native" (ERG)
+    // ERG pool: collateral_token = token_id of the collateral token
+    let collateral_config = collateral_options
+        .iter()
+        .find(|opt| opt.token_id == request.collateral_token)
+        .ok_or_else(|| {
             format!(
-                "Pool '{}' does not support borrowing (no collateral options)",
-                request.pool_id
+                "Collateral token '{}' not found in parameter box for pool '{}'.\nAvailable: {}",
+                request.collateral_token,
+                request.pool_id,
+                collateral_options
+                    .iter()
+                    .map(|o| format!("{} ({})", o.token_name, o.token_id))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         })?
-    };
+        .clone();
 
     // Parse user UTXOs
     let user_utxos = parse_lending_utxos(request.user_utxos)?;
@@ -450,6 +462,7 @@ pub async fn build_repay_tx(
         pool_id: request.pool_id.clone(),
         collateral_box_id: request.collateral_box_id,
         repay_amount: request.repay_amount,
+        total_owed: request.total_owed,
         user_address: request.user_address,
         user_utxos,
     };
@@ -465,84 +478,41 @@ pub async fn build_repay_tx(
 /// Build refund transaction for stuck proxy box
 #[tauri::command]
 pub async fn build_refund_tx(
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
     request: RefundBuildRequest,
 ) -> Result<LendingBuildResponse, String> {
-    // The first UTXO should be the proxy box to refund
-    if request.user_utxos.is_empty() {
-        return Err("Proxy box data required in user_utxos for refund".to_string());
-    }
+    // Fetch the proxy box directly from the node by its box ID.
+    // The proxy box lives at a contract address, not the user's wallet,
+    // so it won't appear in get_user_utxos.
+    let client = state.node_client().await.ok_or("Node not connected")?;
+    let proxy_eip12 = client
+        .get_eip12_box_by_id(&request.proxy_box_id)
+        .await
+        .map_err(|e| format!("Failed to fetch proxy box {}: {}", request.proxy_box_id, e))?;
 
-    let proxy_utxo = &request.user_utxos[0];
+    let proxy_utxo = serde_json::to_value(&proxy_eip12)
+        .map_err(|e| format!("Failed to serialize proxy box: {}", e))?;
 
-    // Validate it matches the proxy_box_id
-    let box_id = proxy_utxo["boxId"]
-        .as_str()
-        .or_else(|| proxy_utxo["box_id"].as_str())
-        .ok_or_else(|| "Proxy box missing boxId".to_string())?;
-
-    if box_id != request.proxy_box_id {
-        return Err(format!(
-            "First UTXO boxId '{}' does not match proxy_box_id '{}'",
-            box_id, request.proxy_box_id
-        ));
-    }
-
-    // Extract proxy box fields
-    let tx_id = proxy_utxo["transactionId"]
-        .as_str()
-        .or_else(|| proxy_utxo["transaction_id"].as_str())
-        .ok_or_else(|| "Proxy box missing transactionId".to_string())?
-        .to_string();
-
-    let index = proxy_utxo["index"]
-        .as_u64()
-        .ok_or_else(|| "Proxy box missing index".to_string())? as u16;
-
-    let value: i64 = match &proxy_utxo["value"] {
-        serde_json::Value::String(s) => s
-            .parse()
-            .map_err(|_| format!("Invalid proxy box value: {}", s))?,
-        serde_json::Value::Number(n) => n
-            .as_i64()
-            .ok_or_else(|| "Invalid proxy box value".to_string())?,
-        _ => return Err("Proxy box missing value".to_string()),
-    };
-
-    let ergo_tree = proxy_utxo["ergoTree"]
-        .as_str()
-        .or_else(|| proxy_utxo["ergo_tree"].as_str())
-        .ok_or_else(|| "Proxy box missing ergoTree".to_string())?
-        .to_string();
-
-    let creation_height = proxy_utxo["creationHeight"]
-        .as_i64()
-        .or_else(|| proxy_utxo["creation_height"].as_i64())
-        .ok_or_else(|| "Proxy box missing creationHeight".to_string())?
-        as i32;
+    // Extract proxy box fields from EIP-12 format
+    let value: i64 = proxy_eip12
+        .value
+        .parse()
+        .map_err(|_| format!("Invalid proxy box value: {}", proxy_eip12.value))?;
 
     // Parse assets
-    let assets: Vec<(String, i64)> = proxy_utxo["assets"]
-        .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|a| {
-                    let token_id = a["tokenId"]
-                        .as_str()
-                        .or_else(|| a["token_id"].as_str())?
-                        .to_string();
-                    let amount: i64 = match &a["amount"] {
-                        serde_json::Value::String(s) => s.parse().ok()?,
-                        serde_json::Value::Number(n) => n.as_i64()?,
-                        _ => return None,
-                    };
-                    Some((token_id, amount))
-                })
-                .collect()
+    let assets: Vec<(String, i64)> = proxy_eip12
+        .assets
+        .iter()
+        .filter_map(|a| {
+            let amount: i64 = a.amount.parse().ok()?;
+            Some((a.token_id.clone(), amount))
         })
-        .unwrap_or_default();
+        .collect();
 
-    // Extract R4 (user's ErgoTree) and R6 (refund height) from registers
+    // Extract user's ErgoTree and refund height from registers.
+    // Different proxy types store user ErgoTree in different registers:
+    // - Lend/Withdraw/Borrow: R4 = Coll[Byte] (user ErgoTree)
+    // - Repay/PartialRepay:   R5 = Coll[Byte] (user ErgoTree), R4 = Long
     let registers = proxy_utxo["additionalRegisters"]
         .as_object()
         .or_else(|| proxy_utxo["additional_registers"].as_object())
@@ -551,32 +521,44 @@ pub async fn build_refund_tx(
     let r4_encoded = registers
         .get("R4")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| "Proxy box missing R4 (user ErgoTree)".to_string())?;
+        .ok_or_else(|| "Proxy box missing R4".to_string())?;
 
     let r6_encoded = registers
         .get("R6")
         .and_then(|v| v.as_str())
         .ok_or_else(|| "Proxy box missing R6 (refund height)".to_string())?;
 
-    // Decode R4: Coll[Byte] containing user's ErgoTree
-    let r4_user_tree =
-        decode_sigma_byte_array(r4_encoded).map_err(|e| format!("Invalid R4 encoding: {}", e))?;
+    // Try R4 as Coll[Byte] first (lend/withdraw/borrow proxies).
+    // If that fails (repay proxies store a Long in R4), fall back to R5.
+    let user_ergo_tree = match decode_sigma_byte_array(r4_encoded) {
+        Ok(tree) => tree,
+        Err(_) => {
+            // Repay/PartialRepay proxy: user ErgoTree is in R5
+            let r5_encoded = registers
+                .get("R5")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| "Proxy box missing user ErgoTree in R4 or R5".to_string())?;
+            decode_sigma_byte_array(r5_encoded)
+                .map_err(|e| format!("Invalid R5 encoding: {}", e))?
+        }
+    };
 
-    // Decode R6: Long containing refund height
+    // Decode R6: Int or Long containing refund height
     let r6_refund_height =
-        decode_sigma_long(r6_encoded).map_err(|e| format!("Invalid R6 encoding: {}", e))?;
+        decode_sigma_int_or_long(r6_encoded).map_err(|e| format!("Invalid R6 encoding: {}", e))?;
 
-    // Build ProxyBoxData
+    // Build ProxyBoxData — include all registers for correct box ID verification
     let proxy_box = lending_tx_builder::ProxyBoxData {
         box_id: request.proxy_box_id.clone(),
-        tx_id,
-        index,
+        tx_id: proxy_eip12.transaction_id,
+        index: proxy_eip12.index,
         value,
-        ergo_tree,
+        ergo_tree: proxy_eip12.ergo_tree,
         assets,
-        creation_height,
-        r4_user_tree,
+        creation_height: proxy_eip12.creation_height,
+        user_ergo_tree,
         r6_refund_height,
+        additional_registers: proxy_eip12.additional_registers,
     };
 
     // Build the refund transaction
@@ -602,6 +584,128 @@ pub async fn build_refund_tx(
             total_to_send: String::new(),
         },
     })
+}
+
+/// Check if a box is a valid proxy box and return its info
+///
+/// Fetches the box from the node, parses registers, and returns
+/// value, refund height, and whether it looks like a proxy box.
+#[tauri::command]
+pub async fn check_proxy_box(
+    state: State<'_, AppState>,
+    box_id: String,
+) -> Result<serde_json::Value, String> {
+    use ergo_lib::ergotree_ir::chain::ergo_box::NonMandatoryRegisterId;
+    use ergo_tx::ergo_box_utils;
+
+    let client = state.node_client().await.ok_or("Node not connected")?;
+
+    // Fetch the box by ID (works without extraIndex)
+    let ergo_box_id = citadel_core::BoxId::new(&box_id);
+    let ergo_box = ergo_node_client::queries::get_box_by_id(client.inner(), &ergo_box_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let value_nano = ergo_box.value.as_i64();
+
+    // Try to parse R6 as refund height (Int or Long)
+    let refund_height: i64 = ergo_box
+        .additional_registers
+        .get_constant(NonMandatoryRegisterId::R6)
+        .ok()
+        .flatten()
+        .and_then(|c| {
+            ergo_box_utils::extract_int(&c)
+                .map(|v| v as i64)
+                .or_else(|_| ergo_box_utils::extract_long(&c))
+                .ok()
+        })
+        .unwrap_or(0);
+
+    // A proxy box should have R4 (user ErgoTree) and R6 (refund height)
+    let has_r4 = ergo_box
+        .additional_registers
+        .get_constant(NonMandatoryRegisterId::R4)
+        .ok()
+        .flatten()
+        .is_some();
+    let is_proxy_box = has_r4 && refund_height > 0;
+
+    Ok(serde_json::json!({
+        "value_nano": value_nano,
+        "refund_height": refund_height,
+        "is_proxy_box": is_proxy_box,
+    }))
+}
+
+/// Discover stuck proxy boxes belonging to the user across all Duckpools proxy contracts.
+#[tauri::command]
+pub async fn discover_stuck_proxies(
+    state: State<'_, AppState>,
+    user_address: String,
+) -> Result<serde_json::Value, String> {
+    let client = state.node_client().await.ok_or("Node not connected")?;
+    let current_height = client.current_height().await.map_err(|e| e.to_string())? as u32;
+
+    let stuck_boxes =
+        lending::fetch::discover_stuck_proxy_boxes(&client, &user_address, current_height)
+            .await
+            .map_err(|e| e.to_string())?;
+
+    serde_json::to_value(&stuck_boxes).map_err(|e| e.to_string())
+}
+
+/// Get DEX pool price for collateral calculation.
+///
+/// Fetches the Spectrum DEX pool box by its NFT and returns the
+/// ERG/token price ratio, used to auto-calculate borrow collateral amounts.
+#[tauri::command]
+pub async fn get_dex_price(
+    state: State<'_, AppState>,
+    dex_nft: String,
+) -> Result<serde_json::Value, String> {
+    let client = state
+        .node_client()
+        .await
+        .ok_or_else(|| "Node not connected".to_string())?;
+    let capabilities = client
+        .capabilities()
+        .await
+        .ok_or_else(|| "Node capabilities not available".to_string())?;
+
+    let token_id = citadel_core::TokenId::new(&dex_nft);
+    let dex_box = ergo_node_client::queries::get_box_by_token_id(
+        client.inner(),
+        &capabilities,
+        &token_id,
+    )
+    .await
+    .map_err(|e| format!("DEX box not found for NFT {}: {}", dex_nft, e))?;
+
+    // ERG reserves from box value
+    let erg_reserves = dex_box.value.as_i64() as f64;
+
+    // Token reserves from tokens[2]
+    let tokens = dex_box.tokens.as_ref().ok_or("DEX box has no tokens")?;
+    if tokens.len() < 3 {
+        return Err("DEX box has fewer than 3 tokens".to_string());
+    }
+    let token_reserves = u64::from(tokens.as_slice()[2].amount) as f64;
+
+    if erg_reserves <= 0.0 || token_reserves <= 0.0 {
+        return Err("DEX pool has zero reserves".to_string());
+    }
+
+    let erg_per_token = erg_reserves / token_reserves;
+    let token_per_erg = token_reserves / erg_reserves;
+
+    serde_json::to_value(serde_json::json!({
+        "erg_per_token": erg_per_token,
+        "token_per_erg": token_per_erg,
+        "erg_reserves": erg_reserves as u64,
+        "token_reserves": token_reserves as u64,
+    }))
+    .map_err(|e| e.to_string())
 }
 
 // =============================================================================
@@ -647,17 +751,10 @@ fn decode_sigma_byte_array(hex_str: &str) -> Result<String, String> {
     Ok(hex::encode(&bytes[idx..idx + length]))
 }
 
-/// Decode a Sigma Long from register hex string
-/// Format: 05 (type tag) + zigzag-encoded VLQ value
-fn decode_sigma_long(hex_str: &str) -> Result<i64, String> {
-    let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid hex: {}", e))?;
-
-    if bytes.is_empty() || bytes[0] != 0x05 {
-        return Err("Not a Long type (expected 0x05 prefix)".to_string());
-    }
-
-    // Decode VLQ
-    let mut idx = 1;
+/// Decode a zigzag-VLQ encoded integer from sigma-serialized bytes.
+/// Used for both Int (0x04) and Long (0x05) types.
+fn decode_zigzag_vlq(bytes: &[u8], start: usize) -> Result<i64, String> {
+    let mut idx = start;
     let mut zigzag: u64 = 0;
     let mut shift = 0;
 
@@ -674,7 +771,6 @@ fn decode_sigma_long(hex_str: &str) -> Result<i64, String> {
         shift += 7;
     }
 
-    // Decode zigzag to signed value
     let value = if zigzag & 1 == 0 {
         (zigzag >> 1) as i64
     } else {
@@ -682,4 +778,18 @@ fn decode_sigma_long(hex_str: &str) -> Result<i64, String> {
     };
 
     Ok(value)
+}
+
+/// Decode a Sigma Int or Long from register hex string
+/// Handles both type 0x04 (Int) and 0x05 (Long)
+fn decode_sigma_int_or_long(hex_str: &str) -> Result<i64, String> {
+    let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid hex: {}", e))?;
+    if bytes.is_empty() {
+        return Err("Empty register value".to_string());
+    }
+    match bytes[0] {
+        0x04 => decode_zigzag_vlq(&bytes, 1),
+        0x05 => decode_zigzag_vlq(&bytes, 1),
+        other => Err(format!("Expected Int (0x04) or Long (0x05), got 0x{:02x}", other)),
+    }
 }
