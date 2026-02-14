@@ -132,8 +132,11 @@ pub async fn fetch_pool_state(
                 error = %e,
                 "Failed to fetch parameter box, using hardcoded threshold"
             );
-            // Fallback to hardcoded values if parameter box fetch fails
-            if config.liquidation_threshold > 0 {
+            // Fallback to hardcoded values if parameter box fetch fails.
+            // Only apply for token pools (single ERG collateral). ERG pools have
+            // multiple token collateral types that must come from the parameter box —
+            // a wrong fallback would lead to invalid borrow construction.
+            if config.liquidation_threshold > 0 && !config.is_erg_pool {
                 pool_state.collateral_options = vec![CollateralOption {
                     token_id: "native".to_string(),
                     token_name: "ERG".to_string(),
@@ -767,7 +770,10 @@ fn calculate_interest_compound(
             // Base child consumed — approximate with full parent epoch rate.
             // This slightly overestimates (includes rates 0..child_idx we should skip).
             if (parent_idx as usize) < interest.parent_rates.len() {
-                compound = interest.parent_rates[parent_idx as usize] as u128;
+                let epoch_rate = interest.parent_rates[parent_idx as usize];
+                if epoch_rate > 0 {
+                    compound = epoch_rate as u128;
+                }
             }
         }
 
