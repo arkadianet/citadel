@@ -530,16 +530,17 @@ pub async fn build_refund_tx(
 
     // Try R4 as Coll[Byte] first (lend/withdraw/borrow proxies).
     // If that fails (repay proxies store a Long in R4), fall back to R5.
-    let user_ergo_tree = match decode_sigma_byte_array(r4_encoded) {
-        Ok(tree) => tree,
+    let (user_ergo_tree, is_repay_proxy) = match decode_sigma_byte_array(r4_encoded) {
+        Ok(tree) => (tree, false),
         Err(_) => {
             // Repay/PartialRepay proxy: user ErgoTree is in R5
             let r5_encoded = registers
                 .get("R5")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| "Proxy box missing user ErgoTree in R4 or R5".to_string())?;
-            decode_sigma_byte_array(r5_encoded)
-                .map_err(|e| format!("Invalid R5 encoding: {}", e))?
+            let tree = decode_sigma_byte_array(r5_encoded)
+                .map_err(|e| format!("Invalid R5 encoding: {}", e))?;
+            (tree, true)
         }
     };
 
@@ -558,6 +559,7 @@ pub async fn build_refund_tx(
         creation_height: proxy_eip12.creation_height,
         user_ergo_tree,
         r6_refund_height,
+        is_repay_proxy,
         additional_registers: proxy_eip12.additional_registers,
     };
 

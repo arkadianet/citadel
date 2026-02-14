@@ -1010,8 +1010,9 @@ async fn build_refund(
     // Decode user ErgoTree from R4 or R5.
     // Lend/Withdraw/Borrow proxies store it in R4 (Coll[Byte]).
     // Repay/PartialRepay proxies store it in R5 (R4 is a Long).
-    let user_ergo_tree = r4_encoded
-        .and_then(|r4| decode_sigma_byte_array(r4).ok())
+    let r4_as_tree = r4_encoded.and_then(|r4| decode_sigma_byte_array(r4).ok());
+    let is_repay_proxy = r4_as_tree.is_none();
+    let user_ergo_tree = r4_as_tree
         .or_else(|| r5_encoded.and_then(|r5| decode_sigma_byte_array(r5).ok()))
         .ok_or_else(|| {
             (
@@ -1044,6 +1045,7 @@ async fn build_refund(
         creation_height,
         user_ergo_tree,
         r6_refund_height,
+        is_repay_proxy,
         additional_registers: registers
             .iter()
             .filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string())))
