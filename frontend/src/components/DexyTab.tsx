@@ -682,7 +682,17 @@ function DexyAssetCard({
     )
   }
 
-  const canMint = walletAddress && state.can_mint
+  // FreeMint is the only mint type the app can build.
+  // can_mint only checks the rate condition; we also need free_mint_available > 0.
+  const freeMintReady = state.can_mint && state.free_mint_available > 0
+  const canMint = walletAddress && freeMintReady
+
+  // Estimate time until FreeMint resets (~2 min per block on Ergo)
+  const blocksUntilReset = state.free_mint_reset_height - state.current_height
+  const freeMintResetsIn = blocksUntilReset > 0
+    ? blocksUntilReset <= 30 ? `~${blocksUntilReset * 2}m`
+      : `~${Math.round(blocksUntilReset * 2 / 60)}h`
+    : null
 
   return (
     <div className={`token-card ${colorClass}`}>
@@ -746,7 +756,12 @@ function DexyAssetCard({
             className={`action-btn ${canMint ? `primary ${colorClass}` : ''}`}
             disabled={!canMint}
             onClick={onMint}
-            title={!walletAddress ? 'Connect wallet first' : !state.can_mint ? 'Minting unavailable' : `Mint ${tokenName}`}
+            title={
+              !walletAddress ? 'Connect wallet first'
+                : !state.can_mint ? 'Minting unavailable (rate condition not met)'
+                : state.free_mint_available <= 0 ? `FreeMint exhausted${freeMintResetsIn ? ` (resets in ${freeMintResetsIn})` : ''}`
+                : `Mint ${tokenName}`
+            }
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 4v16m8-8H4" />
@@ -767,23 +782,46 @@ function DexyAssetCard({
         </div>
 
         <div className="status-badges">
-          <span className={`status-badge ${state.can_mint ? 'available' : 'unavailable'}`}>
-            <span className="dot" />
-            Mint {state.can_mint ? 'Available' : 'Unavailable'}
-          </span>
+          {freeMintReady ? (
+            <span className="status-badge available">
+              <span className="dot" />
+              Mint Available
+            </span>
+          ) : state.can_mint && state.free_mint_available <= 0 ? (
+            <span className="status-badge exhausted">
+              <span className="dot" />
+              FreeMint Exhausted{freeMintResetsIn && ` (resets ${freeMintResetsIn})`}
+            </span>
+          ) : (
+            <span className="status-badge unavailable">
+              <span className="dot" />
+              Mint Unavailable
+            </span>
+          )}
           {(() => {
-            // Compare effective cost per token: FreeMint (oracle rate) vs LP Swap (lp rate + 0.3% fee)
+            // Compare cost per token: FreeMint (oracle rate) vs LP Swap (lp rate + 0.3% fee)
             const mintRate = state.oracle_rate_nano
             const swapEffective = state.lp_rate_nano * 1.003
             const mintBetter = state.can_mint && mintRate < swapEffective
             const savingPct = Math.abs(mintRate - swapEffective) / Math.max(mintRate, swapEffective) * 100
+            if (!mintBetter) {
+              return (
+                <span className="status-badge best-path swap-best">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Best: LP Swap
+                  {savingPct > 0.1 && <span className="saving-pct">({savingPct.toFixed(1)}% cheaper)</span>}
+                </span>
+              )
+            }
             return (
-              <span className={`status-badge best-path ${mintBetter ? 'mint-best' : 'swap-best'}`}>
+              <span className={`status-badge best-path mint-best${!freeMintReady ? ' dimmed' : ''}`}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                Best: {mintBetter ? 'Mint' : 'LP Swap'}
-                {savingPct > 0.1 && <span className="saving-pct">({savingPct.toFixed(1)}% cheaper)</span>}
+                {freeMintReady ? 'Best: Mint' : 'Mint cheaper, but exhausted'}
+                {savingPct > 0.1 && <span className="saving-pct">({savingPct.toFixed(1)}%)</span>}
               </span>
             )
           })()}
