@@ -207,6 +207,16 @@
   color: var(--red-400);
 }
 
+/* FreeMint exhausted badge */
+.status-badge.exhausted {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--amber-400);
+}
+
+.status-badge.exhausted .dot {
+  background: var(--amber-400);
+}
+
 /* Best path badge */
 .status-badge.best-path {
   display: inline-flex;
@@ -226,6 +236,10 @@
 .status-badge.swap-best {
   background: rgba(59, 130, 246, 0.1);
   color: #60a5fa;
+}
+
+.status-badge.mint-best.dimmed {
+  opacity: 0.5;
 }
 
 .saving-pct {

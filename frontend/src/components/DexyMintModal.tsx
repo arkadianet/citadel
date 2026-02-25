@@ -111,13 +111,23 @@ export function DexyMintModal({
   const [ratesError, setRatesError] = useState<string | null>(null)
   const [selectedPath, setSelectedPath] = useState<PathType | null>(null)
 
-  // Get the effective rate for the selected path
+  // Mint rate from state prop (oracle rate, always available when modal is open)
+  const oracleMintRate = useMemo(() => {
+    if (!state) return null
+    const multiplier = Math.pow(10, config.decimals)
+    return (state.oracle_rate_nano / 1e9) * multiplier
+  }, [state, config.decimals])
+
+  // Get the effective rate: path-specific if available, else oracle rate
   const effectiveRate = useMemo(() => {
-    if (!rates || !selectedPath) return null
-    const path = rates.paths[selectedPath]
-    // Use effective_rate (includes fees) or erg_per_token
-    return path.effective_rate || path.erg_per_token || null
-  }, [rates, selectedPath])
+    if (rates && selectedPath) {
+      const path = rates.paths[selectedPath]
+      if (path.effective_rate) return path.effective_rate
+      if (path.erg_per_token) return path.erg_per_token
+    }
+    // Fallback to oracle rate (what the mint tx actually uses)
+    return oracleMintRate
+  }, [rates, selectedPath, oracleMintRate])
 
   // Get the selected path data
   const selectedPathData = useMemo(() => {
@@ -193,7 +203,7 @@ export function DexyMintModal({
       setRates(null)
       setRatesError(null)
       setRecipientAddress('')
-      // Fetch rates for FreeMint path
+      // Fetch rates for path info (limits, availability)
       setRatesLoading(true)
       invoke<DexyRates>('get_dexy_rates', { variant })
         .then((fetchedRates) => {
@@ -317,7 +327,7 @@ export function DexyMintModal({
   }
 
   const handleMaxClick = () => {
-    if (!state || !effectiveRate || !selectedPathData) return
+    if (!state || !effectiveRate) return
 
     const availableErg = (ergBalance / 1e9) - (TX_FEE_NANO / 1e9) - 0.001 // Leave small buffer
     const tokenMultiplier = Math.pow(10, config.decimals)
@@ -326,12 +336,12 @@ export function DexyMintModal({
     const maxFromErg = availableErg / effectiveRate
     const maxFromBank = state.dexy_in_bank / tokenMultiplier
 
-    // Also consider path-specific limits
+    // Also consider path-specific limits if loaded
     let maxFromPath = maxFromBank
-    if (selectedPathData.max_tokens !== undefined) {
+    if (selectedPathData?.max_tokens !== undefined) {
       maxFromPath = Math.min(maxFromPath, selectedPathData.max_tokens / tokenMultiplier)
     }
-    if (selectedPathData.remaining_today !== undefined) {
+    if (selectedPathData?.remaining_today !== undefined) {
       maxFromPath = Math.min(maxFromPath, selectedPathData.remaining_today / tokenMultiplier)
     }
 

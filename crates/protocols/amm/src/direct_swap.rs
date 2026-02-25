@@ -258,10 +258,7 @@ pub fn build_direct_swap_eip12(
         }
     };
 
-    // Build outputs list
-    let mut outputs = vec![new_pool_output, user_swap_output, fee_output];
-
-    // Change output
+    // Change calculation
     let change_erg = selected.total_erg - user_erg_needed;
     let spent_token = match input {
         SwapInput::Erg { .. } => None,
@@ -275,6 +272,27 @@ pub fn build_direct_swap_eip12(
             MIN_CHANGE_VALUE, change_erg
         )));
     }
+
+    // If change ERG is too small for a separate change box and there are no change
+    // tokens, fold it into the user swap output to avoid losing ERG.
+    let user_swap_output = if change_erg > 0
+        && change_erg < MIN_CHANGE_VALUE
+        && change_tokens.is_empty()
+    {
+        let base_value: u64 = user_swap_output
+            .value
+            .parse()
+            .map_err(|_| AmmError::TxBuildError("Invalid swap output value".to_string()))?;
+        Eip12Output {
+            value: (base_value + change_erg).to_string(),
+            ..user_swap_output
+        }
+    } else {
+        user_swap_output
+    };
+
+    // Build outputs list
+    let mut outputs = vec![new_pool_output, user_swap_output, fee_output];
 
     if change_erg >= MIN_CHANGE_VALUE || !change_tokens.is_empty() {
         let change_output = Eip12Output {
@@ -678,5 +696,74 @@ mod tests {
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("T2T"));
+    }
+
+    #[test]
+    fn test_direct_swap_token_to_erg_small_change_folded_into_output() {
+        // Regression: when user's ERG input minus TX_FEE is below MIN_CHANGE_VALUE
+        // and there are no change tokens, the leftover ERG must be folded into the
+        // user swap output instead of being silently dropped.
+        let pool = test_n2t_pool();
+        let pool_box = test_pool_box();
+        let token_id =
+            "token_y_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string();
+
+        // User UTXO with exactly the swap tokens and small ERG (just above TX_FEE)
+        let user_utxo = Eip12InputBox {
+            value: "1956185".to_string(), // small: 1,956,185 nanoERG
+            assets: vec![Eip12Asset {
+                token_id: token_id.clone(),
+                amount: "2192".to_string(), // exact swap amount, no leftover tokens
+            }],
+            ..test_user_utxo()
+        };
+
+        let input = SwapInput::Token {
+            token_id: token_id.clone(),
+            amount: 2192,
+        };
+        let output = calculator::calculate_output(1_000_000, 100_000_000_000, 2192, 997, 1000);
+
+        let result = build_direct_swap_eip12(
+            &pool_box,
+            &pool,
+            &input,
+            1,
+            &[user_utxo],
+            "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            1_000_000,
+            None,
+        );
+
+        assert!(result.is_ok(), "Should build: {:?}", result.err());
+        let build = result.unwrap();
+
+        // Should have exactly 3 outputs: pool, user swap, miner fee
+        // (no separate change box since change_erg < MIN_CHANGE_VALUE)
+        assert_eq!(build.unsigned_tx.outputs.len(), 3);
+
+        // Verify total ERG balances: inputs == outputs
+        let total_input_erg: u64 = build
+            .unsigned_tx
+            .inputs
+            .iter()
+            .map(|i| i.value.parse::<u64>().unwrap())
+            .sum();
+        let total_output_erg: u64 = build
+            .unsigned_tx
+            .outputs
+            .iter()
+            .map(|o| o.value.parse::<u64>().unwrap())
+            .sum();
+        assert_eq!(
+            total_input_erg, total_output_erg,
+            "ERG inputs ({}) must equal outputs ({})",
+            total_input_erg, total_output_erg
+        );
+
+        // User swap output should include the leftover ERG
+        let change_erg = 1_956_185u64 - TX_FEE;
+        let user_swap_value: u64 = build.unsigned_tx.outputs[1].value.parse().unwrap();
+        assert_eq!(user_swap_value, output + change_erg);
     }
 }

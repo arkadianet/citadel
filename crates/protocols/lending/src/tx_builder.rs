@@ -215,6 +215,10 @@ pub struct ProxyBoxData {
     pub user_ergo_tree: String,
     /// Block height after which refund is allowed (from R6)
     pub r6_refund_height: i64,
+    /// Whether this is a repay/partial-repay proxy (affects refund output count).
+    /// Repay proxies need 3 outputs to trigger operation path (avoids R6 type check).
+    /// All other proxies use 2 outputs to trigger proveDlog refund path.
+    pub is_repay_proxy: bool,
     /// All additional registers (R4-R9) as sigma-serialized hex.
     /// Must be included in the input box for correct box ID verification.
     pub additional_registers: HashMap<String, String>,
@@ -1510,23 +1514,26 @@ pub fn build_borrow_tx(
 ///     - `value >= SELF.R4[Long].get` (R4=0 for our proxies, so any value)
 ///     - `R4[Coll[Byte]].get == SELF.id` (output R4 = proxy box ID)
 ///
-/// To handle both types universally, we always create 3 outputs:
-/// - Output 0: user (tokens + R4=proxy_box_id) — triggers operationPath for repay proxies
-/// - Output 1: user (dummy min box) — ensures OUTPUTS.size >= 3
-/// - Output 2: miner fee
+/// **Repay/PartialRepay proxies** (is_repay_proxy=true): 3 outputs to trigger the
+/// operation path, which avoids the R6[Int] type check that fails on old Long-encoded proxies.
 ///
-/// This is compatible with proveDlog proxies (signature validates regardless of output count)
-/// and with repay proxies (triggers the operation path which doesn't check R6 type).
+/// **All other proxies** (is_repay_proxy=false): 2 outputs to trigger the proveDlog
+/// refund path. Using 3 outputs on these would incorrectly trigger the operation path
+/// which expects valid pool/collateral outputs, causing script evaluation failure.
 ///
 /// # Errors
-/// - `InsufficientBalance`: If proxy box value too low to cover fee + 2 min outputs
+/// - `InsufficientBalance`: If proxy box value too low to cover fee + min outputs
 pub fn build_refund_tx(
     proxy_box: ProxyBoxData,
     current_height: i32,
 ) -> Result<RefundResponse, BuildError> {
-    // We need 3 outputs: user (tokens), user (dummy), miner fee.
-    // Minimum ERG: MIN_BOX_VALUE_NANO * 2 + TX_FEE_NANO
-    let min_required = MIN_BOX_VALUE_NANO * 2 + TX_FEE_NANO;
+    let use_three_outputs = proxy_box.is_repay_proxy;
+
+    let min_required = if use_three_outputs {
+        MIN_BOX_VALUE_NANO * 2 + TX_FEE_NANO
+    } else {
+        MIN_BOX_VALUE_NANO + TX_FEE_NANO
+    };
     if proxy_box.value < min_required {
         return Err(BuildError::InsufficientBalance {
             required: min_required,
@@ -1534,8 +1541,11 @@ pub fn build_refund_tx(
         });
     }
 
-    // User receives all ERG minus fee and dummy box
-    let primary_value = proxy_box.value - TX_FEE_NANO - MIN_BOX_VALUE_NANO;
+    let primary_value = if use_three_outputs {
+        proxy_box.value - TX_FEE_NANO - MIN_BOX_VALUE_NANO
+    } else {
+        proxy_box.value - TX_FEE_NANO
+    };
 
     // Build the input (the proxy box being spent)
     let input = Eip12InputBox {
@@ -1576,16 +1586,7 @@ pub fn build_refund_tx(
         additional_registers: refund_registers,
     };
 
-    // Output 1: Dummy min box to user — ensures OUTPUTS.size >= 3
-    let dummy_output = Eip12Output {
-        value: MIN_BOX_VALUE_NANO.to_string(),
-        ergo_tree: proxy_box.user_ergo_tree.clone(),
-        assets: vec![],
-        creation_height: current_height,
-        additional_registers: HashMap::new(),
-    };
-
-    // Output 2: Miner fee
+    // Miner fee output
     let fee_output = Eip12Output {
         value: TX_FEE_NANO.to_string(),
         ergo_tree: MINER_FEE_ERGO_TREE.to_string(),
@@ -1594,11 +1595,25 @@ pub fn build_refund_tx(
         additional_registers: HashMap::new(),
     };
 
-    // Build unsigned transaction (3 outputs)
+    let outputs = if use_three_outputs {
+        // Repay proxies: 3 outputs triggers operation path (avoids R6 type check)
+        let dummy_output = Eip12Output {
+            value: MIN_BOX_VALUE_NANO.to_string(),
+            ergo_tree: proxy_box.user_ergo_tree.clone(),
+            assets: vec![],
+            creation_height: current_height,
+            additional_registers: HashMap::new(),
+        };
+        vec![primary_output, dummy_output, fee_output]
+    } else {
+        // All other proxies: 2 outputs triggers proveDlog refund path
+        vec![primary_output, fee_output]
+    };
+
     let unsigned_tx = Eip12UnsignedTx {
         inputs: vec![input],
         data_inputs: vec![],
-        outputs: vec![primary_output, dummy_output, fee_output],
+        outputs,
     };
 
     // Serialize to JSON
@@ -2541,6 +2556,7 @@ mod tests {
             creation_height: 1000000,
             user_ergo_tree,
             r6_refund_height: refund_height,
+            is_repay_proxy: false,
             additional_registers: HashMap::new(), // Test helper — real boxes have registers
         }
     }
@@ -2570,13 +2586,13 @@ mod tests {
         assert!(tx["inputs"].is_array());
         assert!(tx["outputs"].is_array());
 
-        // Should have 3 outputs: primary refund, dummy min box, fee
+        // Non-repay proxy: 2 outputs (refund + fee)
         let outputs = tx["outputs"].as_array().unwrap();
-        assert_eq!(outputs.len(), 3);
+        assert_eq!(outputs.len(), 2);
 
         // Verify primary refund output (output 0)
         let primary_output = &outputs[0];
-        let expected_primary_value = proxy_box.value - TX_FEE_NANO - MIN_BOX_VALUE_NANO;
+        let expected_primary_value = proxy_box.value - TX_FEE_NANO;
         assert_eq!(
             primary_output["value"].as_str().unwrap(),
             expected_primary_value.to_string()
@@ -2587,15 +2603,8 @@ mod tests {
         assert!(r4.starts_with("0e20")); // Coll[Byte] prefix for 32 bytes
         assert!(r4.contains(&"a".repeat(64))); // Contains box ID
 
-        // Verify dummy output (output 1) — min box to user
-        let dummy_output = &outputs[1];
-        assert_eq!(
-            dummy_output["value"].as_str().unwrap(),
-            MIN_BOX_VALUE_NANO.to_string()
-        );
-
-        // Verify fee output (output 2)
-        let fee_output = &outputs[2];
+        // Verify fee output (output 1)
+        let fee_output = &outputs[1];
         assert_eq!(
             fee_output["value"].as_str().unwrap(),
             TX_FEE_NANO.to_string()
@@ -2668,11 +2677,10 @@ mod tests {
         let current_height = 1_001_000;
         let refund_height = 1_000_720;
 
-        // Proxy box with too little ERG (less than MIN_BOX_VALUE * 2 + TX_FEE)
-        // Need at least 3_000_000 nanoERG for 3 outputs
+        // Non-repay proxy: need at least MIN_BOX_VALUE + TX_FEE for 2 outputs
         let proxy_box = sample_proxy_box(
             &"a".repeat(64),
-            2_500_000, // 0.0025 ERG - not enough for 3 outputs
+            1_500_000, // Not enough for MIN_BOX_VALUE + TX_FEE = 2_000_000
             vec![],
             refund_height,
         );
@@ -2685,8 +2693,8 @@ mod tests {
                 required,
                 available,
             }) => {
-                assert_eq!(required, MIN_BOX_VALUE_NANO * 2 + TX_FEE_NANO);
-                assert_eq!(available, 2_500_000);
+                assert_eq!(required, MIN_BOX_VALUE_NANO + TX_FEE_NANO);
+                assert_eq!(available, 1_500_000);
             }
             _ => panic!("Expected InsufficientBalance error"),
         }
@@ -2697,8 +2705,8 @@ mod tests {
         let current_height = 1_001_000;
         let refund_height = 1_000_720;
 
-        // Proxy box with exactly minimum required value for 3 outputs
-        let min_required = MIN_BOX_VALUE_NANO * 2 + TX_FEE_NANO; // 3_000_000
+        // Non-repay proxy: minimum value is MIN_BOX_VALUE + TX_FEE = 2_000_000
+        let min_required = MIN_BOX_VALUE_NANO + TX_FEE_NANO;
         let proxy_box = sample_proxy_box(&"a".repeat(64), min_required, vec![], refund_height);
 
         let result = build_refund_tx(proxy_box, current_height);
@@ -2707,13 +2715,36 @@ mod tests {
         let response = result.unwrap();
         let tx: serde_json::Value = serde_json::from_str(&response.unsigned_tx).unwrap();
         let outputs = tx["outputs"].as_array().unwrap();
-        assert_eq!(outputs.len(), 3);
-        // Primary output gets MIN_BOX_VALUE_NANO (3M - 1M fee - 1M dummy)
+        assert_eq!(outputs.len(), 2);
+        // Primary output gets MIN_BOX_VALUE_NANO (2M - 1M fee)
         assert_eq!(
             outputs[0]["value"].as_str().unwrap(),
             MIN_BOX_VALUE_NANO.to_string()
         );
-        // Dummy output gets MIN_BOX_VALUE_NANO
+    }
+
+    #[test]
+    fn test_build_refund_tx_repay_proxy_three_outputs() {
+        let current_height = 1_001_000;
+        let refund_height = 1_000_720;
+
+        let mut proxy_box = sample_proxy_box(
+            &"a".repeat(64),
+            10_000_000_000,
+            vec![],
+            refund_height,
+        );
+        proxy_box.is_repay_proxy = true;
+
+        let result = build_refund_tx(proxy_box, current_height);
+        assert!(result.is_ok(), "Repay proxy refund should succeed: {:?}", result.err());
+
+        let response = result.unwrap();
+        let tx: serde_json::Value = serde_json::from_str(&response.unsigned_tx).unwrap();
+        let outputs = tx["outputs"].as_array().unwrap();
+        // Repay proxy: 3 outputs (refund + dummy + fee)
+        assert_eq!(outputs.len(), 3);
+        // Dummy output
         assert_eq!(
             outputs[1]["value"].as_str().unwrap(),
             MIN_BOX_VALUE_NANO.to_string()
@@ -2732,6 +2763,7 @@ mod tests {
             creation_height: 1000000,
             user_ergo_tree: "0008cd...".to_string(),
             r6_refund_height: 1000720,
+            is_repay_proxy: false,
             additional_registers: HashMap::new(),
         };
 
