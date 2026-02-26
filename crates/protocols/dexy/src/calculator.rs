@@ -153,6 +153,94 @@ pub fn validate_lp_swap(
     }
 }
 
+/// Result of LP deposit calculation
+#[derive(Debug, Clone)]
+pub struct LpDepositResult {
+    /// LP tokens user will receive
+    pub lp_tokens_out: i64,
+    /// ERG actually consumed from deposit
+    pub consumed_erg: i64,
+    /// Dexy actually consumed from deposit
+    pub consumed_dexy: i64,
+}
+
+/// Calculate LP deposit (mint LP tokens)
+///
+/// Returns LP tokens received and actual amounts consumed.
+/// Uses i128 intermediates to prevent overflow (matches contract's BigInt).
+pub fn calculate_lp_deposit(
+    deposit_erg: i64,
+    deposit_dexy: i64,
+    reserves_x: i64,
+    reserves_y: i64,
+    lp_reserves: i64,
+    initial_lp: i64,
+) -> LpDepositResult {
+    let supply = initial_lp - lp_reserves;
+
+    let shares_by_x = (deposit_erg as i128 * supply as i128 / reserves_x as i128) as i64;
+    let shares_by_y = (deposit_dexy as i128 * supply as i128 / reserves_y as i128) as i64;
+    let lp_tokens_out = shares_by_x.min(shares_by_y);
+
+    let (consumed_erg, consumed_dexy) = if shares_by_x <= shares_by_y {
+        // ERG is limiting - all ERG consumed, compute consumed Dexy
+        let consumed_y = (lp_tokens_out as i128 * reserves_y as i128 / supply as i128) as i64;
+        (deposit_erg, consumed_y)
+    } else {
+        // Dexy is limiting - all Dexy consumed, compute consumed ERG
+        let consumed_x = (lp_tokens_out as i128 * reserves_x as i128 / supply as i128) as i64;
+        (consumed_x, deposit_dexy)
+    };
+
+    LpDepositResult {
+        lp_tokens_out,
+        consumed_erg,
+        consumed_dexy,
+    }
+}
+
+/// Result of LP redeem calculation
+#[derive(Debug, Clone)]
+pub struct LpRedeemResult {
+    /// ERG user receives (after 2% fee)
+    pub erg_out: i64,
+    /// Dexy tokens user receives (after 2% fee)
+    pub dexy_out: i64,
+}
+
+/// Calculate LP redeem (burn LP tokens)
+///
+/// Applies 2% redemption fee (user gets 98% of proportional share).
+pub fn calculate_lp_redeem(
+    lp_to_burn: i64,
+    reserves_x: i64,
+    reserves_y: i64,
+    lp_reserves: i64,
+    initial_lp: i64,
+) -> LpRedeemResult {
+    let supply = initial_lp - lp_reserves;
+
+    let erg_out = (lp_to_burn as i128 * reserves_x as i128 / supply as i128 * 98 / 100) as i64;
+    let dexy_out = (lp_to_burn as i128 * reserves_y as i128 / supply as i128 * 98 / 100) as i64;
+
+    LpRedeemResult { erg_out, dexy_out }
+}
+
+/// Check if LP redeem is allowed (oracle rate gate)
+///
+/// Redeem is blocked when LP rate < 98% of oracle rate (depeg protection).
+pub fn can_redeem_lp(
+    lp_erg_reserves: i64,
+    lp_dexy_reserves: i64,
+    oracle_rate_adjusted: i64,
+) -> bool {
+    if lp_dexy_reserves == 0 {
+        return false;
+    }
+    let lp_rate = lp_erg_reserves / lp_dexy_reserves;
+    lp_rate > oracle_rate_adjusted * 98 / 100
+}
+
 /// Calculate price impact for an LP swap as a percentage.
 pub fn calculate_lp_swap_price_impact(
     input_amount: i64,
@@ -412,6 +500,115 @@ mod tests {
             );
             // Large trade should have significant impact
             assert!(impact > 1.0, "Impact too low for large trade: {}", impact);
+        }
+    }
+
+    mod lp_deposit_redeem_tests {
+        use super::*;
+
+        #[test]
+        fn test_calculate_lp_deposit_proportional() {
+            // Pool: 1000 ERG, 500K Dexy, 100B initialLp, 99.9B reserved = 100M circulating
+            let initial_lp: i64 = 100_000_000_000;
+            let lp_reserves: i64 = 99_900_000_000;
+            let erg_reserves: i64 = 1_000_000_000_000;
+            let dexy_reserves: i64 = 500_000;
+
+            let result = calculate_lp_deposit(
+                10_000_000_000,
+                5_000,
+                erg_reserves,
+                dexy_reserves,
+                lp_reserves,
+                initial_lp,
+            );
+
+            // supply = 100M. shares_by_x = 10B * 100M / 1000B = 1M. shares_by_y = 5000 * 100M / 500K = 1M
+            assert_eq!(result.lp_tokens_out, 1_000_000);
+            assert_eq!(result.consumed_erg, 10_000_000_000);
+            assert_eq!(result.consumed_dexy, 5_000);
+        }
+
+        #[test]
+        fn test_calculate_lp_deposit_unbalanced_excess_dexy() {
+            let initial_lp: i64 = 100_000_000_000;
+            let lp_reserves: i64 = 99_900_000_000;
+            let erg_reserves: i64 = 1_000_000_000_000;
+            let dexy_reserves: i64 = 500_000;
+
+            let result = calculate_lp_deposit(
+                10_000_000_000,
+                10_000,
+                erg_reserves,
+                dexy_reserves,
+                lp_reserves,
+                initial_lp,
+            );
+
+            // shares_by_x = 1M, shares_by_y = 2M -> limited by X
+            assert_eq!(result.lp_tokens_out, 1_000_000);
+            assert_eq!(result.consumed_erg, 10_000_000_000);
+            assert_eq!(result.consumed_dexy, 5_000);
+        }
+
+        #[test]
+        fn test_calculate_lp_deposit_unbalanced_excess_erg() {
+            let initial_lp: i64 = 100_000_000_000;
+            let lp_reserves: i64 = 99_900_000_000;
+            let erg_reserves: i64 = 1_000_000_000_000;
+            let dexy_reserves: i64 = 500_000;
+
+            let result = calculate_lp_deposit(
+                20_000_000_000,
+                5_000,
+                erg_reserves,
+                dexy_reserves,
+                lp_reserves,
+                initial_lp,
+            );
+
+            // shares_by_x = 2M, shares_by_y = 1M -> limited by Y
+            assert_eq!(result.lp_tokens_out, 1_000_000);
+            assert_eq!(result.consumed_erg, 10_000_000_000);
+            assert_eq!(result.consumed_dexy, 5_000);
+        }
+
+        #[test]
+        fn test_calculate_lp_redeem() {
+            let initial_lp: i64 = 100_000_000_000;
+            let lp_reserves: i64 = 99_900_000_000;
+            let erg_reserves: i64 = 1_000_000_000_000;
+            let dexy_reserves: i64 = 500_000;
+
+            let result = calculate_lp_redeem(
+                1_000_000,
+                erg_reserves,
+                dexy_reserves,
+                lp_reserves,
+                initial_lp,
+            );
+
+            // raw_erg = 1M * 1000B / 100M = 10B. After 2% fee: 10B * 98 / 100 = 9.8B
+            // raw_dexy = 1M * 500K / 100M = 5000. After 2% fee: 5000 * 98 / 100 = 4900
+            assert_eq!(result.erg_out, 9_800_000_000);
+            assert_eq!(result.dexy_out, 4_900);
+        }
+
+        #[test]
+        fn test_can_redeem_lp_allowed() {
+            // LP rate = 1000B / 500K = 2M. Oracle * 98/100 = 2M * 98/100 = 1.96M. 2M > 1.96M -> true
+            assert!(can_redeem_lp(1_000_000_000_000, 500_000, 2_000_000));
+        }
+
+        #[test]
+        fn test_can_redeem_lp_blocked() {
+            // LP rate = 490K / 500K = 0. Oracle * 98/100 = 1M * 98/100 = 980K. 0 > 980K -> false
+            assert!(!can_redeem_lp(490_000, 500_000, 1_000_000));
+        }
+
+        #[test]
+        fn test_can_redeem_lp_zero_reserves() {
+            assert!(!can_redeem_lp(1_000_000_000_000, 0, 2_000_000));
         }
     }
 }
