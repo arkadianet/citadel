@@ -482,13 +482,10 @@ pub async fn preview_lp_deposit(
 
     // Fetch LP box to get lp_token_reserves
     let lp_token_id = citadel_core::TokenId::new(&ids.lp_nft);
-    let lp_box = ergo_node_client::queries::get_box_by_token_id(
-        client.inner(),
-        &capabilities,
-        &lp_token_id,
-    )
-    .await
-    .map_err(|e| format!("LP box not found: {}", e))?;
+    let lp_box =
+        ergo_node_client::queries::get_box_by_token_id(client.inner(), &capabilities, &lp_token_id)
+            .await
+            .map_err(|e| format!("LP box not found: {}", e))?;
     let lp_data = parse_lp_box(&lp_box, &ids).map_err(|e| e.to_string())?;
 
     let calc = calculate_lp_deposit(
@@ -640,13 +637,10 @@ pub async fn preview_lp_redeem(
         .map_err(|e| e.to_string())?;
 
     let lp_token_id = citadel_core::TokenId::new(&ids.lp_nft);
-    let lp_box = ergo_node_client::queries::get_box_by_token_id(
-        client.inner(),
-        &capabilities,
-        &lp_token_id,
-    )
-    .await
-    .map_err(|e| format!("LP box not found: {}", e))?;
+    let lp_box =
+        ergo_node_client::queries::get_box_by_token_id(client.inner(), &capabilities, &lp_token_id)
+            .await
+            .map_err(|e| format!("LP box not found: {}", e))?;
     let lp_data = parse_lp_box(&lp_box, &ids).map_err(|e| e.to_string())?;
 
     // Check oracle rate gate (depeg protection)

@@ -1401,8 +1401,10 @@ pub fn build_lp_deposit_tx(
         - constants::MIN_BOX_VALUE_NANO;
 
     // Collect remaining tokens, subtracting consumed Dexy
-    let change_tokens =
-        collect_change_tokens(&selected.boxes, Some((dexy_token_id, calc.consumed_dexy as u64)));
+    let change_tokens = collect_change_tokens(
+        &selected.boxes,
+        Some((dexy_token_id, calc.consumed_dexy as u64)),
+    );
 
     if change_erg >= constants::MIN_BOX_VALUE_NANO || !change_tokens.is_empty() {
         let change_value = change_erg.max(constants::MIN_BOX_VALUE_NANO);
@@ -1489,9 +1491,8 @@ pub fn build_lp_redeem_tx(
         oracle_rate_adjusted,
     ) {
         return Err(TxError::BuildFailed {
-            message:
-                "LP redeem blocked: LP rate below 98% of oracle rate (depeg protection)"
-                    .to_string(),
+            message: "LP redeem blocked: LP rate below 98% of oracle rate (depeg protection)"
+                .to_string(),
         });
     }
 
@@ -2492,23 +2493,23 @@ mod tests {
 
         #[test]
         fn test_lp_deposit_rejects_zero_erg() {
-            let ctx = create_deposit_context(
-                1_000_000_000_000,
-                500_000,
-                99_900_000_000,
-            );
+            let ctx = create_deposit_context(1_000_000_000_000, 500_000, 99_900_000_000);
             let request = LpDepositRequest {
                 variant: DexyVariant::Gold,
                 deposit_erg: 0,
                 deposit_dexy: 100,
                 user_address: "user_addr".to_string(),
                 user_ergo_tree: "user_ergo_tree".to_string(),
-                user_inputs: vec![create_test_input(100_000_000_000, vec![(DEXY_TOKEN_ID, 1000)])],
+                user_inputs: vec![create_test_input(
+                    100_000_000_000,
+                    vec![(DEXY_TOKEN_ID, 1000)],
+                )],
                 current_height: 100000,
                 recipient_ergo_tree: None,
             };
 
-            let result = build_lp_deposit_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
+            let result =
+                build_lp_deposit_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
             assert!(result.is_err());
             match result.unwrap_err() {
                 TxError::BuildFailed { message } => {
@@ -2520,23 +2521,23 @@ mod tests {
 
         #[test]
         fn test_lp_deposit_rejects_zero_dexy() {
-            let ctx = create_deposit_context(
-                1_000_000_000_000,
-                500_000,
-                99_900_000_000,
-            );
+            let ctx = create_deposit_context(1_000_000_000_000, 500_000, 99_900_000_000);
             let request = LpDepositRequest {
                 variant: DexyVariant::Gold,
                 deposit_erg: 10_000_000_000,
                 deposit_dexy: 0,
                 user_address: "user_addr".to_string(),
                 user_ergo_tree: "user_ergo_tree".to_string(),
-                user_inputs: vec![create_test_input(100_000_000_000, vec![(DEXY_TOKEN_ID, 1000)])],
+                user_inputs: vec![create_test_input(
+                    100_000_000_000,
+                    vec![(DEXY_TOKEN_ID, 1000)],
+                )],
                 current_height: 100000,
                 recipient_ergo_tree: None,
             };
 
-            let result = build_lp_deposit_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
+            let result =
+                build_lp_deposit_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
             assert!(result.is_err());
             match result.unwrap_err() {
                 TxError::BuildFailed { message } => {
@@ -2570,7 +2571,8 @@ mod tests {
                 recipient_ergo_tree: None,
             };
 
-            let result = build_lp_deposit_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
+            let result =
+                build_lp_deposit_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
             assert!(result.is_ok(), "Build failed: {:?}", result.err());
 
             let build = result.unwrap();
@@ -2585,7 +2587,11 @@ mod tests {
             assert_eq!(tx.data_inputs.len(), 0);
 
             // Outputs: LP + Mint NFT + User reward + Fee + Change
-            assert!(tx.outputs.len() >= 4, "Expected at least 4 outputs, got {}", tx.outputs.len());
+            assert!(
+                tx.outputs.len() >= 4,
+                "Expected at least 4 outputs, got {}",
+                tx.outputs.len()
+            );
 
             // Output 0: Updated LP box
             assert_eq!(tx.outputs[0].ergo_tree, "lp_ergo_tree_hex");
@@ -2618,10 +2624,7 @@ mod tests {
             let user_output = &tx.outputs[2];
             assert_eq!(user_output.ergo_tree, "user_ergo_tree");
             assert!(
-                user_output
-                    .assets
-                    .iter()
-                    .any(|a| a.token_id == LP_TOKEN_ID),
+                user_output.assets.iter().any(|a| a.token_id == LP_TOKEN_ID),
                 "User should receive LP tokens"
             );
             let lp_out: i64 = user_output
@@ -2643,11 +2646,7 @@ mod tests {
 
         #[test]
         fn test_lp_deposit_with_recipient() {
-            let ctx = create_deposit_context(
-                1_000_000_000_000,
-                500_000,
-                99_900_000_000,
-            );
+            let ctx = create_deposit_context(1_000_000_000_000, 500_000, 99_900_000_000);
 
             let request = LpDepositRequest {
                 variant: DexyVariant::Gold,
@@ -2663,7 +2662,8 @@ mod tests {
                 recipient_ergo_tree: Some("recipient_ergo_tree".to_string()),
             };
 
-            let result = build_lp_deposit_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
+            let result =
+                build_lp_deposit_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
             assert!(result.is_ok(), "Build failed: {:?}", result.err());
 
             let tx = &result.unwrap().unsigned_tx;
@@ -2739,11 +2739,7 @@ mod tests {
             assert!(result.is_err());
             match result.unwrap_err() {
                 TxError::BuildFailed { message } => {
-                    assert!(
-                        message.contains("depeg protection"),
-                        "Got: {}",
-                        message
-                    );
+                    assert!(message.contains("depeg protection"), "Got: {}", message);
                 }
                 other => panic!("Expected BuildFailed, got {:?}", other),
             }
@@ -2792,7 +2788,11 @@ mod tests {
             assert_eq!(tx.data_inputs[0].box_id, "oracle_box_id");
 
             // Outputs: LP + Redeem NFT + User + Fee
-            assert!(tx.outputs.len() >= 4, "Expected at least 4 outputs, got {}", tx.outputs.len());
+            assert!(
+                tx.outputs.len() >= 4,
+                "Expected at least 4 outputs, got {}",
+                tx.outputs.len()
+            );
 
             // Output 0: Updated LP box (ERG and Dexy decrease)
             assert_eq!(tx.outputs[0].ergo_tree, "lp_ergo_tree_hex");
@@ -2839,11 +2839,7 @@ mod tests {
         #[test]
         fn test_lp_redeem_no_oracle_fails() {
             // Create deposit context (no oracle) and try to use it for redeem
-            let ctx = create_deposit_context(
-                1_000_000_000_000,
-                500_000,
-                99_900_000_000,
-            );
+            let ctx = create_deposit_context(1_000_000_000_000, 500_000, 99_900_000_000);
 
             let request = LpRedeemRequest {
                 variant: DexyVariant::Gold,
@@ -2888,11 +2884,7 @@ mod tests {
 
         #[test]
         fn test_lp_pool_output_preserves_token_order() {
-            let ctx = create_deposit_context(
-                1_000_000_000_000,
-                500_000,
-                99_900_000_000,
-            );
+            let ctx = create_deposit_context(1_000_000_000_000, 500_000, 99_900_000_000);
 
             let output = build_lp_pool_output(
                 &ctx,
@@ -2917,11 +2909,7 @@ mod tests {
 
         #[test]
         fn test_action_nft_output_self_preservation() {
-            let ctx = create_deposit_context(
-                1_000_000_000_000,
-                500_000,
-                99_900_000_000,
-            );
+            let ctx = create_deposit_context(1_000_000_000_000, 500_000, 99_900_000_000);
 
             let output = build_action_nft_output(&ctx, 100001);
 

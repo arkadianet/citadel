@@ -779,15 +779,14 @@ pub async fn fetch_lp_tx_context(
 
             let oracle_data = parse_oracle_box(&oracle_box)?;
 
-            let (oracle_tx_id, oracle_index) =
-                ergo_node_client::queries::get_box_creation_info(
-                    client.inner(),
-                    &oracle_box.box_id().to_string(),
-                )
-                .await
-                .map_err(|e| ProtocolError::BoxParseError {
-                    message: format!("Failed to get box creation info: {}", e),
-                })?;
+            let (oracle_tx_id, oracle_index) = ergo_node_client::queries::get_box_creation_info(
+                client.inner(),
+                &oracle_box.box_id().to_string(),
+            )
+            .await
+            .map_err(|e| ProtocolError::BoxParseError {
+                message: format!("Failed to get box creation info: {}", e),
+            })?;
             let data_input =
                 Eip12DataInputBox::from_ergo_box(&oracle_box, oracle_tx_id, oracle_index);
 
