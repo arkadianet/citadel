@@ -184,11 +184,17 @@ pub fn calculate_lp_deposit(
 
     let (consumed_erg, consumed_dexy) = if shares_by_x <= shares_by_y {
         // ERG is limiting - all ERG consumed, compute consumed Dexy
-        let consumed_y = (lp_tokens_out as i128 * reserves_y as i128 / supply as i128) as i64;
+        // Ceiling division ensures enough Dexy to justify lp_tokens_out shares
+        let s = supply as i128;
+        let consumed_y =
+            ((lp_tokens_out as i128 * reserves_y as i128 + s - 1) / s) as i64;
         (deposit_erg, consumed_y)
     } else {
         // Dexy is limiting - all Dexy consumed, compute consumed ERG
-        let consumed_x = (lp_tokens_out as i128 * reserves_x as i128 / supply as i128) as i64;
+        // Ceiling division ensures enough ERG to justify lp_tokens_out shares
+        let s = supply as i128;
+        let consumed_x =
+            ((lp_tokens_out as i128 * reserves_x as i128 + s - 1) / s) as i64;
         (consumed_x, deposit_dexy)
     };
 
@@ -609,6 +615,39 @@ mod tests {
         #[test]
         fn test_can_redeem_lp_zero_reserves() {
             assert!(!can_redeem_lp(1_000_000_000_000, 0, 2_000_000));
+        }
+
+        #[test]
+        fn test_lp_deposit_real_world_use_pool() {
+            // Real USE pool values that triggered "Script reduced to false"
+            let initial_lp: i64 = 9_223_372_036_854_775_000;
+            let lp_reserves: i64 = 9_223_371_891_932_916_706;
+            let erg_reserves: i64 = 243_129_173_608_123;
+            let dexy_reserves: i64 = 86_588_538;
+
+            let result = calculate_lp_deposit(
+                10_000_000, // 0.01 ERG
+                4,          // 0.004 USE
+                erg_reserves,
+                dexy_reserves,
+                lp_reserves,
+                initial_lp,
+            );
+
+            // ERG is limiting: shares_by_x = 5960, shares_by_y = 6694
+            assert_eq!(result.lp_tokens_out, 5960);
+
+            // Consumed dexy must satisfy: shares <= consumed_dexy * supply / reserves_y
+            // i.e. consumed_dexy * supply / reserves_y >= 5960
+            let supply = initial_lp - lp_reserves;
+            let shares_check =
+                (result.consumed_dexy as i128 * supply as i128 / dexy_reserves as i128) as i64;
+            assert!(
+                shares_check >= result.lp_tokens_out,
+                "Contract would fail: {} shares but dexy only justifies {}",
+                result.lp_tokens_out,
+                shares_check
+            );
         }
     }
 }
