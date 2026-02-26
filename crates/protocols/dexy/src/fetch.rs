@@ -777,6 +777,12 @@ mod tests {
                 .to_string(),
             lp_swap_nft: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 .to_string(),
+            lp_token_id: "1111111111111111111111111111111111111111111111111111111111111111"
+                .to_string(),
+            lp_mint_nft: "2222222222222222222222222222222222222222222222222222222222222222"
+                .to_string(),
+            lp_redeem_nft: "3333333333333333333333333333333333333333333333333333333333333333"
+                .to_string(),
         }
     }
 

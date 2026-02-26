@@ -89,6 +89,14 @@ impl DexyVariant {
         }
     }
 
+    /// Initial LP token supply (compile-time constant in pool contracts)
+    pub fn initial_lp(&self) -> i64 {
+        match self {
+            DexyVariant::Gold => 100_000_000_000,
+            DexyVariant::Usd => 9_223_372_036_854_775_000,
+        }
+    }
+
     /// Human-readable peg description
     pub fn peg_description(&self) -> &'static str {
         match self {
@@ -144,6 +152,18 @@ pub mod gold_mainnet {
     /// LP Swap NFT - for LP swaps
     pub const LP_SWAP_NFT_ID: &str =
         "ff7b7eff3c818f9dc573ca03a723a7f6ed1615bf27980ebd4a6c91986b26f801";
+
+    /// LP Token ID - bearer token for liquidity providers
+    pub const LP_TOKEN_ID: &str =
+        "cf74432b2d3ab8a1a934b6326a1004e1a19aec7b357c57209018c4aa35226246";
+
+    /// LP Mint NFT - identifies the LP Mint action box
+    pub const LP_MINT_NFT_ID: &str =
+        "19b8281b141d19c5b3843a4a77e616d6df05f601e5908159b1eaf3d9da20e664";
+
+    /// LP Redeem NFT - identifies the LP Redeem action box
+    pub const LP_REDEEM_NFT_ID: &str =
+        "08c47eef5e782f146cae5e8cfb5e9d26b18442f82f3c5808b1563b6e3b23f729";
 }
 
 /// DexyUSD (USE) mainnet constants
@@ -178,6 +198,18 @@ pub mod usd_mainnet {
     /// LP Swap NFT - for LP swaps
     pub const LP_SWAP_NFT_ID: &str =
         "ef461517a55b8bfcd30356f112928f3333b5b50faf472e8374081307a09110cf";
+
+    /// LP Token ID - bearer token for liquidity providers
+    pub const LP_TOKEN_ID: &str =
+        "804a66426283b8281240df8f9de783651986f20ad6391a71b26b9e7d6faad099";
+
+    /// LP Mint NFT - identifies the LP Mint action box
+    pub const LP_MINT_NFT_ID: &str =
+        "2cf9fb512f487254777ac1d086a55cda9e74a1009fe0d30390a3792f050de58f";
+
+    /// LP Redeem NFT - identifies the LP Redeem action box
+    pub const LP_REDEEM_NFT_ID: &str =
+        "1bfea21924f670ca5f13dd6819ed3bf833ec5a3113d5b6ae87d806db29b94b9a";
 }
 
 /// NFT IDs for a specific Dexy variant
@@ -191,6 +223,9 @@ pub struct DexyIds {
     pub free_mint_nft: String,
     pub buyback_nft: String,
     pub lp_swap_nft: String,
+    pub lp_token_id: String,
+    pub lp_mint_nft: String,
+    pub lp_redeem_nft: String,
 }
 
 impl DexyIds {
@@ -205,6 +240,9 @@ impl DexyIds {
             free_mint_nft: gold_mainnet::FREE_MINT_NFT_ID.to_string(),
             buyback_nft: gold_mainnet::BUYBACK_NFT_ID.to_string(),
             lp_swap_nft: gold_mainnet::LP_SWAP_NFT_ID.to_string(),
+            lp_token_id: gold_mainnet::LP_TOKEN_ID.to_string(),
+            lp_mint_nft: gold_mainnet::LP_MINT_NFT_ID.to_string(),
+            lp_redeem_nft: gold_mainnet::LP_REDEEM_NFT_ID.to_string(),
         }
     }
 
@@ -219,6 +257,9 @@ impl DexyIds {
             free_mint_nft: usd_mainnet::FREE_MINT_NFT_ID.to_string(),
             buyback_nft: usd_mainnet::BUYBACK_NFT_ID.to_string(),
             lp_swap_nft: usd_mainnet::LP_SWAP_NFT_ID.to_string(),
+            lp_token_id: usd_mainnet::LP_TOKEN_ID.to_string(),
+            lp_mint_nft: usd_mainnet::LP_MINT_NFT_ID.to_string(),
+            lp_redeem_nft: usd_mainnet::LP_REDEEM_NFT_ID.to_string(),
         }
     }
 
