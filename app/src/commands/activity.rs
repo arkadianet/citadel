@@ -189,6 +189,150 @@ async fn trace_bank_nft(
     results
 }
 
+/// Trace an LP pool NFT backwards through the chain to find recent swap/deposit/redeem activity.
+///
+/// Classifies each LP box transition:
+/// - ERG up + Dexy down (or vice versa) = swap
+/// - ERG up + Dexy up + LP tokens decrease = deposit (add liquidity)
+/// - ERG down + Dexy down + LP tokens increase = redeem (remove liquidity)
+async fn trace_lp_pool(
+    client: &NodeClient,
+    lp_box_id: &str,
+    lp_nft_id: &str,
+    lp_token_id: &str,
+    dexy_token_id: &str,
+    protocol: &str,
+    token_name: &str,
+    count: usize,
+) -> Vec<ProtocolInteraction> {
+    let mut results = Vec::new();
+    let mut current_box_id = lp_box_id.to_string();
+
+    for _ in 0..count {
+        let current_box = match client.get_blockchain_box_by_id(&current_box_id).await {
+            Ok(b) => b,
+            Err(_) => break,
+        };
+
+        let tx_id = match current_box["transactionId"].as_str() {
+            Some(id) => id.to_string(),
+            None => break,
+        };
+
+        let current_value = current_box["value"].as_i64().unwrap_or(0);
+        let current_height = current_box["settlementHeight"]
+            .as_u64()
+            .or_else(|| current_box["creationHeight"].as_u64())
+            .unwrap_or(0);
+
+        let get_token_amount = |box_val: &serde_json::Value, token_id: &str| -> i64 {
+            box_val["assets"]
+                .as_array()
+                .and_then(|arr| {
+                    arr.iter().find_map(|t| {
+                        if t["tokenId"].as_str() == Some(token_id) {
+                            t["amount"].as_i64()
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .unwrap_or(0)
+        };
+
+        let current_dexy = get_token_amount(&current_box, dexy_token_id);
+        let current_lp = get_token_amount(&current_box, lp_token_id);
+
+        // Get the transaction to find the previous LP box (in inputs)
+        let tx = match client.get_transaction_by_id(&tx_id).await {
+            Ok(t) => t,
+            Err(_) => break,
+        };
+
+        let timestamp = tx["timestamp"].as_u64().unwrap_or(0);
+        let height = tx["inclusionHeight"].as_u64().unwrap_or(current_height);
+
+        // Find which input had the LP NFT
+        let mut found_prev_box: Option<serde_json::Value> = None;
+        let mut found_prev_box_id: Option<String> = None;
+
+        if let Some(inputs) = tx["inputs"].as_array() {
+            for input in inputs {
+                if let Some(input_box_id) = input["boxId"].as_str() {
+                    if input_box_id == current_box_id {
+                        continue;
+                    }
+                    if let Ok(input_box) = client.get_blockchain_box_by_id(input_box_id).await {
+                        let has_nft = input_box["assets"]
+                            .as_array()
+                            .map(|arr| arr.iter().any(|t| t["tokenId"].as_str() == Some(lp_nft_id)))
+                            .unwrap_or(false);
+                        if has_nft {
+                            found_prev_box_id = Some(input_box_id.to_string());
+                            found_prev_box = Some(input_box);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        let prev_box = match found_prev_box {
+            Some(b) => b,
+            None => break,
+        };
+
+        let prev_value = prev_box["value"].as_i64().unwrap_or(0);
+        let prev_dexy = get_token_amount(&prev_box, dexy_token_id);
+        let prev_lp = get_token_amount(&prev_box, lp_token_id);
+
+        let erg_change = current_value - prev_value;
+        let dexy_change = current_dexy - prev_dexy;
+        let lp_change = current_lp - prev_lp;
+
+        // Classify the operation
+        let (operation, erg_reported, token_reported) =
+            if lp_change < 0 && erg_change > 0 && dexy_change > 0 {
+                // LP tokens left pool (distributed to user) + both reserves increased = deposit
+                ("lp_deposit", erg_change, dexy_change)
+            } else if lp_change > 0 && erg_change < 0 && dexy_change < 0 {
+                // LP tokens returned to pool + both reserves decreased = redeem
+                ("lp_redeem", erg_change, dexy_change)
+            } else if erg_change > 0 && dexy_change < 0 {
+                // ERG in, Dexy out = someone bought Dexy (swap)
+                ("swap", erg_change, dexy_change.abs())
+            } else if erg_change < 0 && dexy_change > 0 {
+                // ERG out, Dexy in = someone sold Dexy (swap)
+                ("swap", erg_change, dexy_change.abs())
+            } else {
+                // Unknown or no meaningful change
+                current_box_id = match found_prev_box_id {
+                    Some(id) => id,
+                    None => break,
+                };
+                continue;
+            };
+
+        results.push(ProtocolInteraction {
+            tx_id: tx_id.clone(),
+            height,
+            timestamp,
+            protocol: protocol.to_string(),
+            operation: operation.to_string(),
+            token: token_name.to_string(),
+            erg_change_nano: erg_reported,
+            token_amount_change: token_reported,
+        });
+
+        current_box_id = match found_prev_box_id {
+            Some(id) => id,
+            None => break,
+        };
+    }
+
+    results
+}
+
 /// Get recent protocol interactions by tracing bank NFTs
 #[tauri::command]
 pub async fn get_protocol_activity(
@@ -301,7 +445,7 @@ pub async fn get_protocol_activity(
     Ok(all)
 }
 
-/// Get recent Dexy-only protocol interactions by tracing DexyGold and DexyUSD bank NFTs
+/// Get recent Dexy protocol interactions by tracing bank NFTs (mint/redeem) and LP pool NFTs (swap/deposit/redeem).
 #[tauri::command]
 pub async fn get_dexy_activity(
     state: State<'_, AppState>,
@@ -324,7 +468,8 @@ pub async fn get_dexy_activity(
 
     let count = count as usize;
 
-    let dexy_gold_fut = async {
+    // Trace bank NFTs for mint/redeem
+    let dexy_gold_bank_fut = async {
         if let Some(ids) = &dexy_gold_ids {
             let dexy_state = match fetch_dexy_state(&client, &capabilities, ids).await {
                 Ok(s) => s,
@@ -345,7 +490,7 @@ pub async fn get_dexy_activity(
         }
     };
 
-    let dexy_usd_fut = async {
+    let dexy_usd_bank_fut = async {
         if let Some(ids) = &dexy_usd_ids {
             let dexy_state = match fetch_dexy_state(&client, &capabilities, ids).await {
                 Ok(s) => s,
@@ -366,11 +511,63 @@ pub async fn get_dexy_activity(
         }
     };
 
-    let (dexy_gold_activity, dexy_usd_activity) = tokio::join!(dexy_gold_fut, dexy_usd_fut);
+    // Trace LP pool NFTs for swap/deposit/redeem
+    let dexy_gold_lp_fut = async {
+        if let Some(ids) = &dexy_gold_ids {
+            let dexy_state = match fetch_dexy_state(&client, &capabilities, ids).await {
+                Ok(s) => s,
+                Err(_) => return Vec::new(),
+            };
+            trace_lp_pool(
+                &client,
+                &dexy_state.lp_box_id,
+                &ids.lp_nft,
+                &ids.lp_token_id,
+                &ids.dexy_token,
+                "DexyGold",
+                "DexyGold",
+                count,
+            )
+            .await
+        } else {
+            Vec::new()
+        }
+    };
+
+    let dexy_usd_lp_fut = async {
+        if let Some(ids) = &dexy_usd_ids {
+            let dexy_state = match fetch_dexy_state(&client, &capabilities, ids).await {
+                Ok(s) => s,
+                Err(_) => return Vec::new(),
+            };
+            trace_lp_pool(
+                &client,
+                &dexy_state.lp_box_id,
+                &ids.lp_nft,
+                &ids.lp_token_id,
+                &ids.dexy_token,
+                "DexyUSD",
+                "USE",
+                count,
+            )
+            .await
+        } else {
+            Vec::new()
+        }
+    };
+
+    let (gold_bank, usd_bank, gold_lp, usd_lp) = tokio::join!(
+        dexy_gold_bank_fut,
+        dexy_usd_bank_fut,
+        dexy_gold_lp_fut,
+        dexy_usd_lp_fut
+    );
 
     let mut all: Vec<ProtocolInteraction> = Vec::new();
-    all.extend(dexy_gold_activity);
-    all.extend(dexy_usd_activity);
+    all.extend(gold_bank);
+    all.extend(usd_bank);
+    all.extend(gold_lp);
+    all.extend(usd_lp);
     all.sort_by(|a, b| b.height.cmp(&a.height));
     all.truncate(count);
 

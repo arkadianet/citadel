@@ -708,7 +708,15 @@ export function DexyTab({
             ) : (
               <div className="dexy-activity-list">
                 {activity.map((item, idx) => {
-                  const isMint = item.operation === 'mint'
+                  const op = item.operation
+                  const opLabel = op === 'mint' ? 'Mint'
+                    : op === 'redeem' ? 'Redeem'
+                    : op === 'swap' ? 'Swap'
+                    : op === 'lp_deposit' ? 'Add Liquidity'
+                    : op === 'lp_redeem' ? 'Remove Liquidity'
+                    : item.operation
+                  const opClass = op === 'mint' || op === 'lp_deposit' ? 'mint'
+                    : op === 'swap' ? 'swap' : 'redeem'
                   const ergAbs = Math.abs(item.erg_change_nano) / 1e9
                   const icon = TOKEN_ICONS[item.token]
                   return (
@@ -719,11 +727,13 @@ export function DexyTab({
                       role="button"
                       tabIndex={0}
                     >
-                      <div className={`activity-op-icon ${isMint ? 'mint' : 'redeem'}`}>
+                      <div className={`activity-op-icon ${opClass}`}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          {isMint
-                            ? <path d="M12 19V5M5 12l7-7 7 7" />
-                            : <path d="M12 5v14M5 12l7 7 7-7" />
+                          {op === 'swap'
+                            ? <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
+                            : op === 'mint' || op === 'lp_deposit'
+                              ? <path d="M12 19V5M5 12l7-7 7 7" />
+                              : <path d="M12 5v14M5 12l7 7 7-7" />
                           }
                         </svg>
                       </div>
@@ -734,7 +744,7 @@ export function DexyTab({
                               <img src={icon} alt="" />
                             </span>
                           )}
-                          <span className="activity-op">{isMint ? 'Mint' : 'Redeem'}</span>
+                          <span className="activity-op">{opLabel}</span>
                           <span className="activity-token">{item.token}</span>
                         </div>
                         <span className="activity-protocol">{item.protocol}</span>
@@ -745,9 +755,10 @@ export function DexyTab({
                           const amt = decimals > 0
                             ? (item.token_amount_change / Math.pow(10, decimals)).toLocaleString(undefined, { maximumFractionDigits: decimals })
                             : item.token_amount_change.toLocaleString()
+                          const isPositive = op === 'mint' || op === 'lp_deposit'
                           return (
-                            <span className={`activity-token-amt ${isMint ? 'positive' : 'negative'}`}>
-                              {isMint ? '+' : '-'}{amt} {item.token}
+                            <span className={`activity-token-amt ${isPositive ? 'positive' : 'negative'}`}>
+                              {amt} {item.token}
                             </span>
                           )
                         })()}
@@ -914,6 +925,33 @@ export function DexyTab({
             )}
 
             {lpTxStep === 'idle' && (<>
+              {/* Pool Liquidity */}
+              <div className="dexy-lp-position">
+                <h3>Pool Liquidity</h3>
+                {state ? (
+                  <div className="dexy-lp-stats">
+                    <div className="dexy-lp-stat">
+                      <span className="label">ERG Reserves</span>
+                      <span className="value">{formatErg(state.lp_erg_reserves)}</span>
+                    </div>
+                    <div className="dexy-lp-stat">
+                      <span className="label">{tokenName} Reserves</span>
+                      <span className="value">{formatDexyAmount(state.lp_dexy_reserves)}</span>
+                    </div>
+                    <div className="dexy-lp-stat">
+                      <span className="label">LP Rate</span>
+                      <span className="value">{(state.lp_rate_nano / 1e9).toFixed(4)} ERG/{tokenName}</span>
+                    </div>
+                    <div className="dexy-lp-stat">
+                      <span className="label">LP Circulating</span>
+                      <span className="value">{circulatingLp.toLocaleString()}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="dexy-lp-empty">Loading pool data...</p>
+                )}
+              </div>
+
               {/* LP Position Display */}
               <div className="dexy-lp-position">
                 <h3>Your LP Position</h3>
@@ -1008,7 +1046,7 @@ export function DexyTab({
                 )}
                 <div className="dexy-lp-form">
                   <div className="dexy-lp-input-group">
-                    <label>LP Tokens to burn</label>
+                    <label>LP Tokens to redeem</label>
                     <input
                       type="number"
                       value={redeemLp}

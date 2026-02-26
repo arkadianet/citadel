@@ -520,6 +520,11 @@
   color: var(--amber-400);
 }
 
+.dexy-activity-row .activity-op-icon.swap {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+}
+
 .dexy-activity-row .activity-info {
   display: flex;
   flex-direction: column;
