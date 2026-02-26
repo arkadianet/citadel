@@ -1,8 +1,20 @@
 import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { QRCodeSVG } from 'qrcode.react'
 import { DexyMintModal } from './DexyMintModal'
 import { DexySwapModal } from './DexySwapModal'
 import { getDexyActivity, type ProtocolInteraction } from '../api/protocolActivity'
+import {
+  previewLpDeposit,
+  previewLpRedeem,
+  buildLpDepositTx,
+  buildLpRedeemTx,
+  type LpPreviewResponse,
+} from '../api/dexySwap'
+import { formatErg } from '../utils/format'
+import { TxSuccess } from './TxSuccess'
+import { useTransactionFlow } from '../hooks/useTransactionFlow'
+import type { TxStatusResponse } from '../api/types'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
 import './DexyTab.css'
 
@@ -24,6 +36,9 @@ interface DexyState {
   can_mint: boolean
   rate_difference_pct: number
   dexy_circulating: number
+  lp_token_reserves: number
+  lp_circulating: number
+  can_redeem_lp: boolean
 }
 
 interface WalletBalance {
@@ -59,6 +74,16 @@ const DEXY_TOKEN_IDS: Record<DexyVariant, string> = {
 
 const DEXY_TOKEN_ID_SET = new Set(Object.values(DEXY_TOKEN_IDS))
 
+const LP_TOKEN_IDS: Record<DexyVariant, string> = {
+  gold: 'cf74432b2d3ab8a1a934b6326a1004e1a19aec7b357c57209018c4aa35226246',
+  usd: '804a66426283b8281240df8f9de783651986f20ad6391a71b26b9e7d6faad099',
+}
+
+const INITIAL_LP: Record<DexyVariant, number> = {
+  gold: 100_000_000_000,
+  usd: 9_223_372_036_854_775_000,
+}
+
 const TROY_OZ_IN_MG = 31103.5
 
 interface TokenChange {
@@ -75,6 +100,10 @@ interface RecentTx {
   timestamp: number
   erg_change_nano: number
   token_changes: TokenChange[]
+}
+
+function pollLpTxStatus(requestId: string): Promise<TxStatusResponse> {
+  return invoke<TxStatusResponse>('get_mint_tx_status', { requestId })
 }
 
 const TOKEN_ICONS: Record<string, string> = {
@@ -120,6 +149,30 @@ export function DexyTab({
   const [activityLoading, setActivityLoading] = useState(false)
   const [userTxs, setUserTxs] = useState<RecentTx[]>([])
   const [userTxsLoading, setUserTxsLoading] = useState(false)
+
+  // Sub-tab state
+  const [subTab, setSubTab] = useState<'overview' | 'liquidity'>('overview')
+
+  // LP liquidity state
+  const [depositErg, setDepositErg] = useState('')
+  const [depositDexy, setDepositDexy] = useState('')
+  const [depositPreview, setDepositPreview] = useState<LpPreviewResponse | null>(null)
+  const [redeemLp, setRedeemLp] = useState('')
+  const [redeemPreview, setRedeemPreview] = useState<LpPreviewResponse | null>(null)
+  const [lpTxStep, setLpTxStep] = useState<'idle' | 'signing' | 'success' | 'error'>('idle')
+  const [lpTxError, setLpTxError] = useState<string | null>(null)
+  const [lpTxLoading, setLpTxLoading] = useState(false)
+
+  const lpFlow = useTransactionFlow({
+    pollStatus: pollLpTxStatus,
+    isOpen: subTab === 'liquidity',
+    onSuccess: () => {
+      setLpTxStep('success')
+      fetchAllStates()
+    },
+    onError: (err) => { setLpTxError(err); setLpTxStep('error') },
+    watchParams: { protocol: 'Dexy', operation: 'liquidity', description: `Dexy LP operation` },
+  })
 
   const fetchDexyState = useCallback(async (variant: DexyVariant) => {
     try {
@@ -234,6 +287,145 @@ export function DexyTab({
     return () => { cancelled = true }
   }, [isConnected, walletBalance])
 
+  // LP deposit preview (debounced)
+  useEffect(() => {
+    const ergNano = Math.floor(parseFloat(depositErg || '0') * 1e9)
+    const dexyRaw = selectedVariant === 'usd'
+      ? Math.floor(parseFloat(depositDexy || '0') * 1000)
+      : Math.floor(parseFloat(depositDexy || '0'))
+
+    if (ergNano <= 0 || dexyRaw <= 0) {
+      setDepositPreview(null)
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const preview = await previewLpDeposit(selectedVariant, ergNano, dexyRaw)
+        setDepositPreview(preview)
+      } catch (_e) {
+        setDepositPreview(null)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [depositErg, depositDexy, selectedVariant])
+
+  // LP redeem preview (debounced)
+  useEffect(() => {
+    const lpRaw = Math.floor(parseFloat(redeemLp || '0'))
+    if (lpRaw <= 0) {
+      setRedeemPreview(null)
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const preview = await previewLpRedeem(selectedVariant, lpRaw)
+        setRedeemPreview(preview)
+      } catch (_e) {
+        setRedeemPreview(null)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [redeemLp, selectedVariant])
+
+  // Reset LP form inputs when variant changes
+  useEffect(() => {
+    setDepositErg('')
+    setDepositDexy('')
+    setDepositPreview(null)
+    setRedeemLp('')
+    setRedeemPreview(null)
+    setLpTxStep('idle')
+    setLpTxError(null)
+  }, [selectedVariant])
+
+  const handleDeposit = async () => {
+    if (!depositPreview?.can_execute || !walletAddress) return
+
+    const ergNano = Math.floor(parseFloat(depositErg || '0') * 1e9)
+    const dexyRaw = selectedVariant === 'usd'
+      ? Math.floor(parseFloat(depositDexy || '0') * 1000)
+      : Math.floor(parseFloat(depositDexy || '0'))
+
+    setLpTxLoading(true)
+    setLpTxError(null)
+
+    try {
+      const utxos = await invoke<unknown[]>('get_user_utxos')
+      const nodeStatus = await invoke<{ chain_height: number }>('get_node_status')
+
+      const buildResult = await buildLpDepositTx(
+        selectedVariant,
+        ergNano,
+        dexyRaw,
+        walletAddress,
+        utxos as object[],
+        nodeStatus.chain_height,
+      )
+
+      const signResult = await invoke<{
+        request_id: string
+        ergopay_url: string
+        nautilus_url: string
+      }>('start_mint_sign', {
+        request: {
+          unsigned_tx: buildResult.unsigned_tx,
+          message: `Add liquidity: ${depositErg} ERG + ${depositDexy} ${selectedVariant === 'usd' ? 'USE' : 'DexyGold'}`,
+        },
+      })
+
+      lpFlow.startSigning(signResult.request_id, signResult.ergopay_url, signResult.nautilus_url)
+      setLpTxStep('signing')
+    } catch (e) {
+      setLpTxError(String(e))
+      setLpTxStep('error')
+    } finally {
+      setLpTxLoading(false)
+    }
+  }
+
+  const handleRedeem = async () => {
+    if (!redeemPreview?.can_execute || !walletAddress) return
+
+    const lpRaw = Math.floor(parseFloat(redeemLp || '0'))
+
+    setLpTxLoading(true)
+    setLpTxError(null)
+
+    try {
+      const utxos = await invoke<unknown[]>('get_user_utxos')
+      const nodeStatus = await invoke<{ chain_height: number }>('get_node_status')
+
+      const buildResult = await buildLpRedeemTx(
+        selectedVariant,
+        lpRaw,
+        walletAddress,
+        utxos as object[],
+        nodeStatus.chain_height,
+      )
+
+      const signResult = await invoke<{
+        request_id: string
+        ergopay_url: string
+        nautilus_url: string
+      }>('start_mint_sign', {
+        request: {
+          unsigned_tx: buildResult.unsigned_tx,
+          message: `Remove liquidity: ${redeemLp} LP tokens`,
+        },
+      })
+
+      lpFlow.startSigning(signResult.request_id, signResult.ergopay_url, signResult.nautilus_url)
+      setLpTxStep('signing')
+    } catch (e) {
+      setLpTxError(String(e))
+      setLpTxStep('error')
+    } finally {
+      setLpTxLoading(false)
+    }
+  }
+
   const openMintModal = (variant: DexyVariant) => {
     setSelectedVariant(variant)
     setMintModalOpen(true)
@@ -337,10 +529,27 @@ export function DexyTab({
         <div className="dexy-info-divider" />
         <div className="dexy-info-item">
           <span className="dexy-info-label">Actions:</span>
-          <span className="dexy-info-value">Mint, LP Swap</span>
+          <span className="dexy-info-value">Mint, LP Swap, Liquidity</span>
         </div>
       </div>
 
+      {/* Sub-tab Navigation */}
+      <div className="dexy-sub-tabs">
+        <button
+          className={`dexy-sub-tab ${subTab === 'overview' ? 'active' : ''}`}
+          onClick={() => setSubTab('overview')}
+        >
+          Overview
+        </button>
+        <button
+          className={`dexy-sub-tab ${subTab === 'liquidity' ? 'active' : ''}`}
+          onClick={() => setSubTab('liquidity')}
+        >
+          Liquidity
+        </button>
+      </div>
+
+      {subTab === 'overview' && (<>
       {/* Asset Cards */}
       <div className="token-cards-grid">
         <DexyAssetCard
@@ -564,6 +773,293 @@ export function DexyTab({
           </div>
         </div>
       </div>
+      </>)}
+
+      {subTab === 'liquidity' && (() => {
+        const state = selectedVariant === 'gold' ? goldState : usdState
+        const tokenName = selectedVariant === 'usd' ? 'USE' : 'DexyGold'
+        const tokenDecimals = selectedVariant === 'usd' ? 3 : 0
+        const lpTokenId = LP_TOKEN_IDS[selectedVariant]
+        const userLpToken = walletBalance?.tokens.find(t => t.token_id === lpTokenId)
+        const userLpBalance = userLpToken?.amount ?? 0
+        const circulatingLp = state ? (INITIAL_LP[selectedVariant] - state.lp_token_reserves) : 0
+        const poolSharePct = circulatingLp > 0 ? (userLpBalance / circulatingLp) * 100 : 0
+        // Value after 2% redemption fee
+        const ergValue = circulatingLp > 0 && state ? Math.floor(userLpBalance * state.lp_erg_reserves / circulatingLp * 0.98) : 0
+        const dexyValue = circulatingLp > 0 && state ? Math.floor(userLpBalance * state.lp_dexy_reserves / circulatingLp * 0.98) : 0
+
+        const formatDexyAmount = (rawAmount: number): string => {
+          if (tokenDecimals === 0) return rawAmount.toLocaleString()
+          const divisor = Math.pow(10, tokenDecimals)
+          return (rawAmount / divisor).toLocaleString(undefined, {
+            minimumFractionDigits: tokenDecimals,
+            maximumFractionDigits: tokenDecimals,
+          })
+        }
+
+        return (
+          <>
+            {/* Variant Selector for Liquidity */}
+            <div className="dexy-variant-selector">
+              <button
+                className={`dexy-variant-btn ${selectedVariant === 'gold' ? 'active gold' : ''}`}
+                onClick={() => setSelectedVariant('gold')}
+              >
+                <img src="/icons/dexygold.svg" alt="DexyGold" className="dexy-variant-icon" />
+                DexyGold
+              </button>
+              <button
+                className={`dexy-variant-btn ${selectedVariant === 'usd' ? 'active usd' : ''}`}
+                onClick={() => setSelectedVariant('usd')}
+              >
+                <img src="/icons/use.svg" alt="USE" className="dexy-variant-icon" />
+                USE
+              </button>
+            </div>
+
+            {lpTxStep === 'signing' && (
+              <div className="dexy-lp-section">
+                <h3>Sign Transaction</h3>
+                <div className="mint-signing-step">
+                  {lpFlow.signMethod === 'choose' && (
+                    <div className="sign-method-choice">
+                      <p>Choose signing method:</p>
+                      <div className="sign-methods">
+                        <button className="sign-method-btn" onClick={lpFlow.handleNautilusSign}>
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2" />
+                            <path d="M8 21h8" />
+                            <path d="M12 17v4" />
+                          </svg>
+                          <span>Nautilus</span>
+                          <small>Browser Extension</small>
+                        </button>
+                        <button className="sign-method-btn" onClick={lpFlow.handleMobileSign}>
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="5" y="2" width="14" height="20" rx="2" />
+                            <line x1="12" y1="18" x2="12.01" y2="18" />
+                          </svg>
+                          <span>Mobile</span>
+                          <small>Scan QR Code</small>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {lpFlow.signMethod === 'nautilus' && (
+                    <div className="nautilus-waiting">
+                      <div className="waiting-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.5">
+                          <rect x="2" y="3" width="20" height="14" rx="2" />
+                          <path d="M8 21h8" />
+                          <path d="M12 17v4" />
+                        </svg>
+                      </div>
+                      <p>Approve in Nautilus</p>
+                      <div className="waiting-spinner" />
+                      <button className="btn btn-secondary" onClick={lpFlow.handleBackToChoice}>Back</button>
+                    </div>
+                  )}
+                  {lpFlow.signMethod === 'mobile' && lpFlow.qrUrl && (
+                    <div className="qr-signing">
+                      <p>Scan with Ergo Mobile Wallet</p>
+                      <div className="qr-container">
+                        <QRCodeSVG value={lpFlow.qrUrl} size={200} level="M" includeMargin bgColor="white" fgColor="black" />
+                      </div>
+                      <div className="waiting-spinner" />
+                      <button className="btn btn-secondary" onClick={lpFlow.handleBackToChoice}>Back</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {lpTxStep === 'success' && (
+              <div className="dexy-lp-section">
+                <div className="mint-success-step">
+                  <div className="success-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                      <polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                  </div>
+                  <h3>Transaction Submitted!</h3>
+                  {lpFlow.txId && <TxSuccess txId={lpFlow.txId} explorerUrl={explorerUrl} />}
+                  <button className="btn btn-primary" onClick={() => {
+                    setLpTxStep('idle')
+                    setDepositErg('')
+                    setDepositDexy('')
+                    setDepositPreview(null)
+                    setRedeemLp('')
+                    setRedeemPreview(null)
+                    fetchAllStates()
+                  }}>
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {lpTxStep === 'error' && (
+              <div className="dexy-lp-section">
+                <div className="mint-error-step">
+                  <div className="error-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--error)" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="15" y1="9" x2="9" y2="15" />
+                      <line x1="9" y1="9" x2="15" y2="15" />
+                    </svg>
+                  </div>
+                  <h3>Transaction Failed</h3>
+                  <p className="error-message">{lpTxError}</p>
+                  <button className="btn btn-primary" onClick={() => setLpTxStep('idle')}>
+                    Try Again
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {lpTxStep === 'idle' && (<>
+              {/* LP Position Display */}
+              <div className="dexy-lp-position">
+                <h3>Your LP Position</h3>
+                {!walletAddress ? (
+                  <p className="dexy-lp-empty">Connect wallet to see your LP position</p>
+                ) : userLpBalance > 0 ? (
+                  <div className="dexy-lp-stats">
+                    <div className="dexy-lp-stat">
+                      <span className="label">LP Tokens</span>
+                      <span className="value">{userLpBalance.toLocaleString()}</span>
+                    </div>
+                    <div className="dexy-lp-stat">
+                      <span className="label">Pool Share</span>
+                      <span className="value">{poolSharePct.toFixed(4)}%</span>
+                    </div>
+                    <div className="dexy-lp-stat">
+                      <span className="label">Value (ERG)</span>
+                      <span className="value">{formatErg(ergValue)}</span>
+                    </div>
+                    <div className="dexy-lp-stat">
+                      <span className="label">Value ({tokenName})</span>
+                      <span className="value">{formatDexyAmount(dexyValue)}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="dexy-lp-empty">No LP tokens held</p>
+                )}
+              </div>
+
+              {/* Deposit Section */}
+              <div className="dexy-lp-section">
+                <h3>Add Liquidity</h3>
+                <div className="dexy-lp-form">
+                  <div className="dexy-lp-input-group">
+                    <label>ERG Amount</label>
+                    <input
+                      type="number"
+                      value={depositErg}
+                      onChange={e => setDepositErg(e.target.value)}
+                      placeholder="0.0"
+                      min="0"
+                      step="0.1"
+                    />
+                  </div>
+                  <div className="dexy-lp-input-group">
+                    <label>{tokenName} Amount</label>
+                    <input
+                      type="number"
+                      value={depositDexy}
+                      onChange={e => setDepositDexy(e.target.value)}
+                      placeholder="0.0"
+                      min="0"
+                      step={tokenDecimals === 0 ? '1' : '0.001'}
+                    />
+                  </div>
+                  {depositPreview && depositPreview.can_execute && (
+                    <div className="dexy-lp-preview">
+                      <div className="preview-row">
+                        <span>LP Tokens to receive:</span>
+                        <span>{Number(depositPreview.lp_tokens).toLocaleString()}</span>
+                      </div>
+                      <div className="preview-row">
+                        <span>ERG consumed:</span>
+                        <span>{(Number(depositPreview.erg_amount) / 1e9).toFixed(4)} ERG</span>
+                      </div>
+                      <div className="preview-row">
+                        <span>{tokenName} consumed:</span>
+                        <span>{formatDexyAmount(Number(depositPreview.dexy_amount))}</span>
+                      </div>
+                    </div>
+                  )}
+                  {depositPreview && !depositPreview.can_execute && depositPreview.error && (
+                    <div className="dexy-lp-error">{depositPreview.error}</div>
+                  )}
+                  <button
+                    className="dexy-action-btn"
+                    disabled={!depositPreview?.can_execute || !isConnected || !walletAddress || lpTxLoading}
+                    onClick={handleDeposit}
+                  >
+                    {lpTxLoading ? 'Building...' : 'Add Liquidity'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Redeem Section */}
+              <div className="dexy-lp-section">
+                <h3>Remove Liquidity</h3>
+                {state && !state.can_redeem_lp && (
+                  <div className="dexy-lp-warning">
+                    Redemption locked: LP rate is below 98% of oracle rate (depeg protection)
+                  </div>
+                )}
+                <div className="dexy-lp-form">
+                  <div className="dexy-lp-input-group">
+                    <label>LP Tokens to burn</label>
+                    <input
+                      type="number"
+                      value={redeemLp}
+                      onChange={e => setRedeemLp(e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      step="1"
+                    />
+                    {userLpBalance > 0 && (
+                      <button className="dexy-max-btn" onClick={() => setRedeemLp(String(userLpBalance))}>
+                        MAX
+                      </button>
+                    )}
+                  </div>
+                  {redeemPreview && redeemPreview.can_execute && (
+                    <div className="dexy-lp-preview">
+                      <div className="preview-row">
+                        <span>ERG to receive:</span>
+                        <span>{(Number(redeemPreview.erg_amount) / 1e9).toFixed(4)} ERG</span>
+                      </div>
+                      <div className="preview-row">
+                        <span>{tokenName} to receive:</span>
+                        <span>{formatDexyAmount(Number(redeemPreview.dexy_amount))}</span>
+                      </div>
+                      <div className="preview-row muted">
+                        <span>Redemption fee:</span>
+                        <span>2%</span>
+                      </div>
+                    </div>
+                  )}
+                  {redeemPreview && !redeemPreview.can_execute && redeemPreview.error && (
+                    <div className="dexy-lp-error">{redeemPreview.error}</div>
+                  )}
+                  <button
+                    className="dexy-action-btn"
+                    disabled={!redeemPreview?.can_execute || !isConnected || !walletAddress || userLpBalance === 0 || lpTxLoading}
+                    onClick={handleRedeem}
+                  >
+                    {lpTxLoading ? 'Building...' : 'Remove Liquidity'}
+                  </button>
+                </div>
+              </div>
+            </>)}
+          </>
+        )
+      })()}
 
       {/* Mint Modal */}
       {mintModalOpen && walletAddress && walletBalance && (

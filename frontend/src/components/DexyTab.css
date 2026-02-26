@@ -669,3 +669,277 @@
   border: 1px solid rgba(239, 68, 68, 0.3);
   color: var(--red-400);
 }
+
+/* ============================================================================
+   Sub-tabs (Overview / Liquidity)
+   ============================================================================ */
+
+.dexy-sub-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+  background: rgb(var(--card));
+  padding: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgb(var(--border) / 0.5);
+  flex-shrink: 0;
+}
+
+.dexy-sub-tab {
+  flex: 1;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--slate-400);
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.dexy-sub-tab:hover {
+  color: rgb(var(--text));
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dexy-sub-tab.active {
+  color: rgb(var(--text));
+  background: rgba(52, 211, 153, 0.15);
+  border: 1px solid var(--emerald-400);
+}
+
+/* ============================================================================
+   Variant Selector (Liquidity tab)
+   ============================================================================ */
+
+.dexy-variant-selector {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.dexy-variant-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid rgb(var(--border) / 0.5);
+  border-radius: var(--radius-md);
+  background: rgb(var(--card));
+  color: var(--slate-400);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dexy-variant-btn:hover {
+  color: rgb(var(--text));
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dexy-variant-btn.active.gold {
+  color: var(--amber-400);
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.dexy-variant-btn.active.usd {
+  color: var(--emerald-400);
+  border-color: rgba(52, 211, 153, 0.4);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.dexy-variant-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+/* ============================================================================
+   LP Position
+   ============================================================================ */
+
+.dexy-lp-position {
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border) / 0.5);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+}
+
+.dexy-lp-position h3 {
+  margin: 0 0 12px;
+  font-size: var(--text-base);
+  color: rgb(var(--text));
+}
+
+.dexy-lp-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.dexy-lp-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dexy-lp-stat .label {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  text-transform: uppercase;
+}
+
+.dexy-lp-stat .value {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: rgb(var(--text));
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.dexy-lp-empty {
+  color: var(--slate-500);
+  font-style: italic;
+  font-size: var(--text-sm);
+}
+
+/* ============================================================================
+   LP Sections (Deposit / Redeem)
+   ============================================================================ */
+
+.dexy-lp-section {
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border) / 0.5);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+}
+
+.dexy-lp-section h3 {
+  margin: 0 0 16px;
+  font-size: var(--text-base);
+  color: rgb(var(--text));
+}
+
+.dexy-lp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dexy-lp-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+}
+
+.dexy-lp-input-group label {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+}
+
+.dexy-lp-input-group input {
+  padding: 10px 12px;
+  border: 1px solid rgb(var(--border) / 0.5);
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.2);
+  color: rgb(var(--text));
+  font-size: var(--text-base);
+  outline: none;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.dexy-lp-input-group input:focus {
+  border-color: var(--emerald-400);
+}
+
+.dexy-max-btn {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: rgba(52, 211, 153, 0.2);
+  color: var(--emerald-400);
+  border: 1px solid var(--emerald-400);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.dexy-max-btn:hover {
+  background: rgba(52, 211, 153, 0.3);
+}
+
+/* ============================================================================
+   LP Preview
+   ============================================================================ */
+
+.dexy-lp-preview {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-md);
+  padding: 12px;
+}
+
+.dexy-lp-preview .preview-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: var(--text-sm);
+  color: rgb(var(--text));
+}
+
+.dexy-lp-preview .preview-row.muted {
+  color: var(--slate-400);
+  font-size: var(--text-xs);
+}
+
+/* ============================================================================
+   LP Action Button
+   ============================================================================ */
+
+.dexy-action-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--emerald-500);
+  color: #000;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.dexy-action-btn:hover:not(:disabled) {
+  background: var(--emerald-400);
+}
+
+.dexy-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   LP Warning & Error
+   ============================================================================ */
+
+.dexy-lp-warning {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: var(--amber-400);
+  padding: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  margin-bottom: 12px;
+}
+
+.dexy-lp-error {
+  color: var(--red-400);
+  font-size: var(--text-xs);
+  padding: 4px 0;
+}
