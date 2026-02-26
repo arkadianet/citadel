@@ -63,6 +63,10 @@ pub fn run() {
             commands::build_mint_dexy,
             commands::preview_dexy_swap,
             commands::build_dexy_swap_tx,
+            commands::preview_lp_deposit,
+            commands::build_lp_deposit_tx,
+            commands::preview_lp_redeem,
+            commands::build_lp_redeem_tx,
             // Duckpools Lending Protocol
             commands::get_lending_markets,
             commands::get_lending_positions,

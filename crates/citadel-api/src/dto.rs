@@ -469,6 +469,27 @@ pub struct DexySwapBuildResponse {
     pub summary: dexy::SwapTxSummary,
 }
 
+/// Dexy LP deposit/redeem preview response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DexyLpPreviewResponse {
+    pub variant: String,
+    pub action: String,
+    pub erg_amount: String,
+    pub dexy_amount: String,
+    pub lp_tokens: String,
+    pub redemption_fee_pct: Option<f64>,
+    pub can_execute: bool,
+    pub error: Option<String>,
+    pub miner_fee_nano: String,
+}
+
+/// Dexy LP deposit/redeem build response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DexyLpBuildResponse {
+    pub unsigned_tx: serde_json::Value,
+    pub summary: dexy::LpTxSummary,
+}
+
 // =============================================================================
 // AMM Protocol DTOs
 // =============================================================================

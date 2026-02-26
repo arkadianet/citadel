@@ -1,15 +1,21 @@
 use citadel_api::dto::{
-    DexyBuildRequest, DexyBuildResponse, DexyPreviewRequest, DexyPreviewResponse,
-    DexyStateResponse, DexySwapBuildResponse, DexySwapPreviewResponse, TxSummaryDto,
+    DexyBuildRequest, DexyBuildResponse, DexyLpBuildResponse, DexyLpPreviewResponse,
+    DexyPreviewRequest, DexyPreviewResponse, DexyStateResponse, DexySwapBuildResponse,
+    DexySwapPreviewResponse, TxSummaryDto,
 };
 use citadel_api::AppState;
 use citadel_core::constants::{MIN_BOX_VALUE_NANO, TX_FEE_NANO};
 use dexy::{
-    calculator::cost_to_mint_dexy,
+    calculator::{calculate_lp_deposit, calculate_lp_redeem, can_redeem_lp, cost_to_mint_dexy},
     constants::{DexyIds, DexyVariant},
-    fetch::{fetch_dexy_state, fetch_tx_context as fetch_dexy_tx_context},
+    fetch::{
+        fetch_dexy_state, fetch_lp_tx_context, fetch_tx_context as fetch_dexy_tx_context,
+        parse_lp_box, LpAction,
+    },
     rates::DexyRates,
-    tx_builder::{build_mint_dexy_tx, validate_mint_dexy, MintDexyRequest},
+    tx_builder::{
+        build_mint_dexy_tx, validate_mint_dexy, LpDepositRequest, LpRedeemRequest, MintDexyRequest,
+    },
 };
 use tauri::State;
 
@@ -428,6 +434,338 @@ pub async fn build_dexy_swap_tx(
         .map_err(|e| format!("Failed to serialize tx: {}", e))?;
 
     Ok(DexySwapBuildResponse {
+        unsigned_tx: unsigned_tx_json,
+        summary: result.summary,
+    })
+}
+
+/// Preview LP deposit (add liquidity) - calculate LP tokens received
+#[tauri::command]
+pub async fn preview_lp_deposit(
+    state: State<'_, AppState>,
+    variant: String,
+    erg_amount: i64,
+    dexy_amount: i64,
+) -> Result<DexyLpPreviewResponse, String> {
+    let dexy_variant = variant
+        .parse::<DexyVariant>()
+        .map_err(|_| format!("Invalid variant: {}. Use 'gold' or 'usd'", variant))?;
+
+    if erg_amount <= 0 || dexy_amount <= 0 {
+        return Ok(DexyLpPreviewResponse {
+            variant: variant.clone(),
+            action: "lp_deposit".to_string(),
+            erg_amount: "0".to_string(),
+            dexy_amount: "0".to_string(),
+            lp_tokens: "0".to_string(),
+            redemption_fee_pct: None,
+            can_execute: false,
+            error: Some("Both ERG and Dexy amounts must be positive".to_string()),
+            miner_fee_nano: TX_FEE_NANO.to_string(),
+        });
+    }
+
+    let client = state
+        .node_client()
+        .await
+        .ok_or_else(|| "Node not connected".to_string())?;
+    let capabilities = client
+        .capabilities()
+        .await
+        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let config = state.config().await;
+    let ids = DexyIds::for_variant(dexy_variant, config.network)
+        .ok_or_else(|| format!("Dexy {} not available on {:?}", variant, config.network))?;
+
+    // Fetch LP box to get lp_token_reserves
+    let lp_token_id = citadel_core::TokenId::new(&ids.lp_nft);
+    let lp_box = ergo_node_client::queries::get_box_by_token_id(
+        client.inner(),
+        &capabilities,
+        &lp_token_id,
+    )
+    .await
+    .map_err(|e| format!("LP box not found: {}", e))?;
+    let lp_data = parse_lp_box(&lp_box, &ids).map_err(|e| e.to_string())?;
+
+    let calc = calculate_lp_deposit(
+        erg_amount,
+        dexy_amount,
+        lp_data.erg_reserves,
+        lp_data.dexy_reserves,
+        lp_data.lp_token_reserves,
+        dexy_variant.initial_lp(),
+    );
+
+    if calc.lp_tokens_out <= 0 {
+        return Ok(DexyLpPreviewResponse {
+            variant: variant.clone(),
+            action: "lp_deposit".to_string(),
+            erg_amount: "0".to_string(),
+            dexy_amount: "0".to_string(),
+            lp_tokens: "0".to_string(),
+            redemption_fee_pct: None,
+            can_execute: false,
+            error: Some("Deposit too small: would receive 0 LP tokens".to_string()),
+            miner_fee_nano: TX_FEE_NANO.to_string(),
+        });
+    }
+
+    Ok(DexyLpPreviewResponse {
+        variant: variant.clone(),
+        action: "lp_deposit".to_string(),
+        erg_amount: calc.consumed_erg.to_string(),
+        dexy_amount: calc.consumed_dexy.to_string(),
+        lp_tokens: calc.lp_tokens_out.to_string(),
+        redemption_fee_pct: None,
+        can_execute: true,
+        error: None,
+        miner_fee_nano: TX_FEE_NANO.to_string(),
+    })
+}
+
+/// Build LP deposit (add liquidity) transaction
+#[tauri::command]
+pub async fn build_lp_deposit_tx(
+    state: State<'_, AppState>,
+    variant: String,
+    erg_amount: i64,
+    dexy_amount: i64,
+    user_address: String,
+    user_utxos: Vec<serde_json::Value>,
+    current_height: i32,
+    recipient_address: Option<String>,
+) -> Result<DexyLpBuildResponse, String> {
+    let dexy_variant = variant
+        .parse::<DexyVariant>()
+        .map_err(|_| format!("Invalid variant: {}", variant))?;
+
+    let client = state.node_client().await.ok_or("Node not connected")?;
+    let capabilities = client
+        .capabilities()
+        .await
+        .ok_or("Node capabilities not available")?;
+    let config = state.config().await;
+    let ids = DexyIds::for_variant(dexy_variant, config.network)
+        .ok_or_else(|| format!("Dexy {} not available", variant))?;
+
+    // Fetch LP tx context (LP box + LP Mint NFT box)
+    let ctx = fetch_lp_tx_context(&client, &capabilities, &ids, LpAction::Deposit)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Parse user UTXOs
+    let user_inputs = super::parse_eip12_utxos(user_utxos)?;
+    let user_ergo_tree = user_inputs[0].ergo_tree.clone();
+
+    let recipient_ergo_tree = match &recipient_address {
+        Some(addr) if !addr.is_empty() => {
+            Some(ergo_tx::address_to_ergo_tree(addr).map_err(|e| e.to_string())?)
+        }
+        _ => None,
+    };
+
+    let request = LpDepositRequest {
+        variant: dexy_variant,
+        deposit_erg: erg_amount,
+        deposit_dexy: dexy_amount,
+        user_address,
+        user_ergo_tree,
+        user_inputs,
+        current_height,
+        recipient_ergo_tree,
+    };
+
+    let result = dexy::tx_builder::build_lp_deposit_tx(
+        &request,
+        &ctx,
+        &ids.dexy_token,
+        &ids.lp_token_id,
+        dexy_variant.initial_lp(),
+    )
+    .map_err(|e| e.to_string())?;
+
+    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
+        .map_err(|e| format!("Failed to serialize tx: {}", e))?;
+
+    Ok(DexyLpBuildResponse {
+        unsigned_tx: unsigned_tx_json,
+        summary: result.summary,
+    })
+}
+
+/// Preview LP redeem (remove liquidity) - calculate ERG and Dexy received
+#[tauri::command]
+pub async fn preview_lp_redeem(
+    state: State<'_, AppState>,
+    variant: String,
+    lp_amount: i64,
+) -> Result<DexyLpPreviewResponse, String> {
+    let dexy_variant = variant
+        .parse::<DexyVariant>()
+        .map_err(|_| format!("Invalid variant: {}. Use 'gold' or 'usd'", variant))?;
+
+    if lp_amount <= 0 {
+        return Ok(DexyLpPreviewResponse {
+            variant: variant.clone(),
+            action: "lp_redeem".to_string(),
+            erg_amount: "0".to_string(),
+            dexy_amount: "0".to_string(),
+            lp_tokens: "0".to_string(),
+            redemption_fee_pct: Some(2.0),
+            can_execute: false,
+            error: Some("LP token amount must be positive".to_string()),
+            miner_fee_nano: TX_FEE_NANO.to_string(),
+        });
+    }
+
+    let client = state
+        .node_client()
+        .await
+        .ok_or_else(|| "Node not connected".to_string())?;
+    let capabilities = client
+        .capabilities()
+        .await
+        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let config = state.config().await;
+    let ids = DexyIds::for_variant(dexy_variant, config.network)
+        .ok_or_else(|| format!("Dexy {} not available on {:?}", variant, config.network))?;
+
+    // Fetch dexy state (for oracle rate) and LP box (for lp_token_reserves)
+    let dexy_state = fetch_dexy_state(&client, &capabilities, &ids)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let lp_token_id = citadel_core::TokenId::new(&ids.lp_nft);
+    let lp_box = ergo_node_client::queries::get_box_by_token_id(
+        client.inner(),
+        &capabilities,
+        &lp_token_id,
+    )
+    .await
+    .map_err(|e| format!("LP box not found: {}", e))?;
+    let lp_data = parse_lp_box(&lp_box, &ids).map_err(|e| e.to_string())?;
+
+    // Check oracle rate gate (depeg protection)
+    if !can_redeem_lp(
+        dexy_state.lp_erg_reserves,
+        dexy_state.lp_dexy_reserves,
+        dexy_state.oracle_rate_nano,
+    ) {
+        return Ok(DexyLpPreviewResponse {
+            variant: variant.clone(),
+            action: "lp_redeem".to_string(),
+            erg_amount: "0".to_string(),
+            dexy_amount: "0".to_string(),
+            lp_tokens: lp_amount.to_string(),
+            redemption_fee_pct: Some(2.0),
+            can_execute: false,
+            error: Some(
+                "LP redeem blocked: LP rate below 98% of oracle rate (depeg protection)"
+                    .to_string(),
+            ),
+            miner_fee_nano: TX_FEE_NANO.to_string(),
+        });
+    }
+
+    let calc = calculate_lp_redeem(
+        lp_amount,
+        lp_data.erg_reserves,
+        lp_data.dexy_reserves,
+        lp_data.lp_token_reserves,
+        dexy_variant.initial_lp(),
+    );
+
+    if calc.erg_out <= 0 || calc.dexy_out <= 0 {
+        return Ok(DexyLpPreviewResponse {
+            variant: variant.clone(),
+            action: "lp_redeem".to_string(),
+            erg_amount: "0".to_string(),
+            dexy_amount: "0".to_string(),
+            lp_tokens: lp_amount.to_string(),
+            redemption_fee_pct: Some(2.0),
+            can_execute: false,
+            error: Some("Redeem too small: would receive 0 ERG or Dexy tokens".to_string()),
+            miner_fee_nano: TX_FEE_NANO.to_string(),
+        });
+    }
+
+    Ok(DexyLpPreviewResponse {
+        variant: variant.clone(),
+        action: "lp_redeem".to_string(),
+        erg_amount: calc.erg_out.to_string(),
+        dexy_amount: calc.dexy_out.to_string(),
+        lp_tokens: lp_amount.to_string(),
+        redemption_fee_pct: Some(2.0),
+        can_execute: true,
+        error: None,
+        miner_fee_nano: TX_FEE_NANO.to_string(),
+    })
+}
+
+/// Build LP redeem (remove liquidity) transaction
+#[tauri::command]
+pub async fn build_lp_redeem_tx(
+    state: State<'_, AppState>,
+    variant: String,
+    lp_amount: i64,
+    user_address: String,
+    user_utxos: Vec<serde_json::Value>,
+    current_height: i32,
+    recipient_address: Option<String>,
+) -> Result<DexyLpBuildResponse, String> {
+    let dexy_variant = variant
+        .parse::<DexyVariant>()
+        .map_err(|_| format!("Invalid variant: {}", variant))?;
+
+    let client = state.node_client().await.ok_or("Node not connected")?;
+    let capabilities = client
+        .capabilities()
+        .await
+        .ok_or("Node capabilities not available")?;
+    let config = state.config().await;
+    let ids = DexyIds::for_variant(dexy_variant, config.network)
+        .ok_or_else(|| format!("Dexy {} not available", variant))?;
+
+    // Fetch LP tx context (LP box + LP Redeem NFT box + Oracle box)
+    let ctx = fetch_lp_tx_context(&client, &capabilities, &ids, LpAction::Redeem)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Parse user UTXOs
+    let user_inputs = super::parse_eip12_utxos(user_utxos)?;
+    let user_ergo_tree = user_inputs[0].ergo_tree.clone();
+
+    let recipient_ergo_tree = match &recipient_address {
+        Some(addr) if !addr.is_empty() => {
+            Some(ergo_tx::address_to_ergo_tree(addr).map_err(|e| e.to_string())?)
+        }
+        _ => None,
+    };
+
+    let request = LpRedeemRequest {
+        variant: dexy_variant,
+        lp_to_burn: lp_amount,
+        user_address,
+        user_ergo_tree,
+        user_inputs,
+        current_height,
+        recipient_ergo_tree,
+    };
+
+    let result = dexy::tx_builder::build_lp_redeem_tx(
+        &request,
+        &ctx,
+        &ids.dexy_token,
+        &ids.lp_token_id,
+        dexy_variant.initial_lp(),
+    )
+    .map_err(|e| e.to_string())?;
+
+    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
+        .map_err(|e| format!("Failed to serialize tx: {}", e))?;
+
+    Ok(DexyLpBuildResponse {
         unsigned_tx: unsigned_tx_json,
         summary: result.summary,
     })
