@@ -1,5 +1,38 @@
 use citadel_api::AppState;
+use ergo_lib::ergotree_ir::chain::address::{Address, AddressEncoder, NetworkPrefix};
+use ergo_lib::ergotree_ir::ergo_tree::ErgoTree;
+use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
 use tauri::State;
+
+/// Derive an Ergo address from an ErgoTree hex string.
+fn ergo_tree_to_address(ergo_tree_hex: &str) -> Option<String> {
+    let bytes = hex::decode(ergo_tree_hex).ok()?;
+    let tree = ErgoTree::sigma_parse_bytes(&bytes).ok()?;
+    let addr = Address::recreate_from_ergo_tree(&tree).ok()?;
+    let encoder = AddressEncoder::new(NetworkPrefix::Mainnet);
+    Some(encoder.address_to_str(&addr))
+}
+
+/// Inject `address` field into any box objects that have `ergoTree` but no `address`.
+fn enrich_addresses_from_ergo_tree(boxes: &mut [serde_json::Value]) {
+    for b in boxes.iter_mut() {
+        if let Some(obj) = b.as_object_mut() {
+            if obj
+                .get("address")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .is_some()
+            {
+                continue;
+            }
+            if let Some(tree_hex) = obj.get("ergoTree").and_then(|v| v.as_str()) {
+                if let Some(addr) = ergo_tree_to_address(tree_hex) {
+                    obj.insert("address".to_string(), serde_json::Value::String(addr));
+                }
+            }
+        }
+    }
+}
 
 /// Get full node info (/info endpoint)
 #[tauri::command]
@@ -23,9 +56,17 @@ pub async fn explorer_get_transaction(
         v.get("id").is_some() && v.get("inputs").is_some()
     }
 
-    // Try confirmed first — inputs are already enriched by the node.
-    if let Ok(tx) = client.get_transaction_by_id(&tx_id).await {
+    // Try confirmed first — inputs are enriched by the node but outputs
+    // and some inputs may be missing the `address` field.  Derive it from
+    // ergoTree so the explorer UI can display addresses for every box.
+    if let Ok(mut tx) = client.get_transaction_by_id(&tx_id).await {
         if is_valid_tx(&tx) {
+            if let Some(inputs) = tx.get_mut("inputs").and_then(|v| v.as_array_mut()) {
+                enrich_addresses_from_ergo_tree(inputs);
+            }
+            if let Some(outputs) = tx.get_mut("outputs").and_then(|v| v.as_array_mut()) {
+                enrich_addresses_from_ergo_tree(outputs);
+            }
             return Ok(tx);
         }
     }
@@ -70,6 +111,12 @@ pub async fn explorer_get_transaction(
                 }
             }
         }
+    }
+
+    // Enrich outputs with addresses derived from ergoTree (mempool outputs
+    // aren't on-chain yet so we can't look them up, but ergoTree is present).
+    if let Some(outputs) = utx.get_mut("outputs").and_then(|v| v.as_array_mut()) {
+        enrich_addresses_from_ergo_tree(outputs);
     }
 
     Ok(utx)
