@@ -8,6 +8,8 @@ use serde::Serialize;
 use sigmausd::{fetch_sigmausd_state, NftIds};
 use tauri::State;
 
+use amm::PoolType;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ProtocolInteraction {
     pub tx_id: String,
@@ -333,6 +335,83 @@ async fn trace_lp_pool(
     results
 }
 
+/// Trace recent AMM (Spectrum DEX) pool activity across all N2T pools.
+///
+/// Discovers all N2T pools, traces each pool's NFT backwards to find the
+/// most recent swap/deposit/redeem interaction, resolves token names for
+/// display, and returns merged results.  Limits concurrency to avoid
+/// exhausting file descriptors on the node connection.
+async fn trace_amm_pools(client: &NodeClient, count: usize) -> Vec<ProtocolInteraction> {
+    use futures::stream::{self, StreamExt};
+
+    let pools = match amm::discover_n2t_pools(client).await {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!("Failed to discover AMM pools for activity: {}", e);
+            return Vec::new();
+        }
+    };
+
+    // Trace each N2T pool's NFT backwards (depth=1 per pool = most recent interaction).
+    // Collect futures first, then use buffer_unordered to cap concurrent node requests.
+    let futs: Vec<_> = pools
+        .iter()
+        .filter(|p| p.pool_type == PoolType::N2T)
+        .map(|pool| {
+            let c = client.clone();
+            let box_id = pool.box_id.clone();
+            let pool_nft = pool.pool_id.clone();
+            let lp_token = pool.lp_token_id.clone();
+            let token_y_id = pool.token_y.token_id.clone();
+            async move {
+                trace_lp_pool(
+                    &c,
+                    &box_id,
+                    &pool_nft,
+                    &lp_token,
+                    &token_y_id,
+                    "DEX",
+                    &token_y_id, // placeholder — resolved below
+                    1,
+                )
+                .await
+            }
+        })
+        .collect();
+
+    let mut results: Vec<ProtocolInteraction> = stream::iter(futs)
+        .buffer_unordered(20)
+        .flat_map(stream::iter)
+        .collect()
+        .await;
+
+    // Keep only the most recent entries to limit name resolution calls
+    results.sort_by(|a, b| b.height.cmp(&a.height));
+    results.truncate(count);
+
+    // Resolve token names for the tokens in the truncated results
+    let unique_ids: std::collections::HashSet<String> =
+        results.iter().map(|r| r.token.clone()).collect();
+    let mut name_map: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    for tid in &unique_ids {
+        let display_name = client
+            .get_token_info(tid)
+            .await
+            .ok()
+            .and_then(|info| info.name)
+            .unwrap_or_else(|| format!("{}...", &tid[..8]));
+        name_map.insert(tid.clone(), display_name);
+    }
+    for r in &mut results {
+        if let Some(name) = name_map.get(&r.token) {
+            r.token = name.clone();
+        }
+    }
+
+    results
+}
+
 /// Get recent protocol interactions by tracing bank NFTs
 #[tauri::command]
 pub async fn get_protocol_activity(
@@ -475,14 +554,19 @@ pub async fn get_protocol_activity(
         }
     };
 
+    // Trace AMM (Spectrum DEX) pools for swap/deposit/redeem activity
+    let amm_fut = trace_amm_pools(&client, count);
+
     // Run all traces concurrently
-    let (sigma_activity, dexy_gold_activity, dexy_usd_activity, gold_lp, usd_lp) = tokio::join!(
-        sigma_fut,
-        dexy_gold_fut,
-        dexy_usd_fut,
-        dexy_gold_lp_fut,
-        dexy_usd_lp_fut
-    );
+    let (sigma_activity, dexy_gold_activity, dexy_usd_activity, gold_lp, usd_lp, amm_activity) =
+        tokio::join!(
+            sigma_fut,
+            dexy_gold_fut,
+            dexy_usd_fut,
+            dexy_gold_lp_fut,
+            dexy_usd_lp_fut,
+            amm_fut
+        );
 
     // Merge and sort by height descending
     let mut all: Vec<ProtocolInteraction> = Vec::new();
@@ -491,6 +575,7 @@ pub async fn get_protocol_activity(
     all.extend(dexy_usd_activity);
     all.extend(gold_lp);
     all.extend(usd_lp);
+    all.extend(amm_activity);
     all.sort_by(|a, b| b.height.cmp(&a.height));
     all.truncate(count);
 

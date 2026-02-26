@@ -95,6 +95,14 @@ const TOKEN_ICONS: Record<string, string> = {
   SigRSV: '/icons/sigrsv.svg',
   DexyGold: '/icons/dexygold.svg',
   USE: '/icons/use.svg',
+  SPF: '/icons/spf.svg',
+  NETA: '/icons/neta.svg',
+  Ergopad: '/icons/ergopad.svg',
+  Paideia: '/icons/paideia.svg',
+  QUACKS: '/icons/quacks.svg',
+  AHT: '/icons/aht.svg',
+  Flux: '/icons/flux.svg',
+  EXLE: '/icons/exle.svg',
 }
 
 const TOKEN_DECIMALS: Record<string, number> = {
@@ -407,23 +415,40 @@ export function Dashboard({
                           <span className="activity-protocol">{item.protocol}</span>
                         </div>
                         <div className="activity-amounts">
-                          {item.token_amount_change > 0 && (() => {
+                          {op === 'swap' && item.token_amount_change > 0 ? (() => {
+                            // Swap direction: erg_change_nano > 0 means pool gained ERG = user paid ERG, received token
+                            const userPaidErg = item.erg_change_nano > 0
                             const decimals = TOKEN_DECIMALS[item.token] ?? 0
-                            const amt = decimals > 0
+                            const tokenAmt = decimals > 0
                               ? (item.token_amount_change / Math.pow(10, decimals)).toLocaleString(undefined, { maximumFractionDigits: decimals })
                               : item.token_amount_change.toLocaleString()
-                            const isPositive = op === 'mint' || op === 'lp_deposit'
-                            return (
-                              <span className={`activity-token-amt ${isPositive ? 'positive' : 'negative'}`}>
-                                {amt} {item.token}
+                            const ergAmt = ergAbs.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                            return userPaidErg ? (<>
+                              <span className="activity-token-amt positive">+{tokenAmt} {item.token}</span>
+                              <span className="activity-erg-amt negative">-{ergAmt} ERG</span>
+                            </>) : (<>
+                              <span className="activity-token-amt negative">-{tokenAmt} {item.token}</span>
+                              <span className="activity-erg-amt positive">+{ergAmt} ERG</span>
+                            </>)
+                          })() : (<>
+                            {item.token_amount_change > 0 && (() => {
+                              const decimals = TOKEN_DECIMALS[item.token] ?? 0
+                              const amt = decimals > 0
+                                ? (item.token_amount_change / Math.pow(10, decimals)).toLocaleString(undefined, { maximumFractionDigits: decimals })
+                                : item.token_amount_change.toLocaleString()
+                              const isPositive = op === 'mint' || op === 'lp_deposit'
+                              return (
+                                <span className={`activity-token-amt ${isPositive ? 'positive' : 'negative'}`}>
+                                  {amt} {item.token}
+                                </span>
+                              )
+                            })()}
+                            {ergAbs > 0 && (
+                              <span className="activity-erg-amt">
+                                {ergAbs.toLocaleString(undefined, { maximumFractionDigits: 2 })} ERG
                               </span>
-                            )
-                          })()}
-                          {ergAbs > 0 && (
-                            <span className="activity-erg-amt">
-                              {ergAbs.toLocaleString(undefined, { maximumFractionDigits: 2 })} ERG
-                            </span>
-                          )}
+                            )}
+                          </>)}
                         </div>
                         <span className="activity-time">
                           {item.timestamp > 0 ? formatTimeAgo(item.timestamp) : `#${item.height}`}

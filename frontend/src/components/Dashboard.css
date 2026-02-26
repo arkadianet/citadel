@@ -448,6 +448,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+.activity-erg-amt.positive {
+  color: var(--emerald-400);
+}
+
+.activity-erg-amt.negative {
+  color: var(--amber-400);
+}
+
 .activity-time {
   font-size: var(--text-xs);
   color: var(--slate-600);
