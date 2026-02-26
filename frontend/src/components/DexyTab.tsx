@@ -153,6 +153,8 @@ export function DexyTab({
   const [depositDexy, setDepositDexy] = useState('')
   const [depositPreview, setDepositPreview] = useState<LpPreviewResponse | null>(null)
   const [redeemLp, setRedeemLp] = useState('')
+  const [redeemErg, setRedeemErg] = useState('')
+  const [redeemDexy, setRedeemDexy] = useState('')
   const [redeemPreview, setRedeemPreview] = useState<LpPreviewResponse | null>(null)
   const [lpTxStep, setLpTxStep] = useState<'idle' | 'signing' | 'success' | 'error'>('idle')
   const [lpTxError, setLpTxError] = useState<string | null>(null)
@@ -330,6 +332,8 @@ export function DexyTab({
     setDepositDexy('')
     setDepositPreview(null)
     setRedeemLp('')
+    setRedeemErg('')
+    setRedeemDexy('')
     setRedeemPreview(null)
     setLpTxStep('idle')
     setLpTxError(null)
@@ -407,7 +411,7 @@ export function DexyTab({
       }>('start_mint_sign', {
         request: {
           unsigned_tx: buildResult.unsigned_tx,
-          message: `Remove liquidity: ${redeemLp} LP tokens`,
+          message: `Remove liquidity: ${redeemErg} ERG + ${redeemDexy} ${selectedVariant === 'usd' ? 'USE' : 'DexyGold'}`,
         },
       })
 
@@ -1078,25 +1082,109 @@ export function DexyTab({
                     <input
                       type="number"
                       value={redeemLp}
-                      onChange={e => setRedeemLp(e.target.value)}
+                      onChange={e => {
+                        const val = e.target.value
+                        setRedeemLp(val)
+                        if (state && circulatingLp > 0) {
+                          const lp = parseFloat(val || '0')
+                          if (lp > 0) {
+                            const ergOut = Math.floor(lp * state.lp_erg_reserves / circulatingLp * 98 / 100)
+                            const dexyOut = Math.floor(lp * state.lp_dexy_reserves / circulatingLp * 98 / 100)
+                            setRedeemErg((ergOut / 1e9).toFixed(4))
+                            setRedeemDexy(tokenDecimals > 0
+                              ? (dexyOut / Math.pow(10, tokenDecimals)).toFixed(tokenDecimals)
+                              : Math.floor(dexyOut).toString())
+                          } else {
+                            setRedeemErg('')
+                            setRedeemDexy('')
+                          }
+                        }
+                      }}
                       placeholder="0"
                       min="0"
                       step="1"
                     />
                     {userLpBalance > 0 && (
-                      <button className="dexy-max-btn" onClick={() => setRedeemLp(String(userLpBalance))}>
+                      <button className="dexy-max-btn" onClick={() => {
+                        const lp = userLpBalance
+                        setRedeemLp(String(lp))
+                        if (state && circulatingLp > 0) {
+                          const ergOut = Math.floor(lp * state.lp_erg_reserves / circulatingLp * 98 / 100)
+                          const dexyOut = Math.floor(lp * state.lp_dexy_reserves / circulatingLp * 98 / 100)
+                          setRedeemErg((ergOut / 1e9).toFixed(4))
+                          setRedeemDexy(tokenDecimals > 0
+                            ? (dexyOut / Math.pow(10, tokenDecimals)).toFixed(tokenDecimals)
+                            : Math.floor(dexyOut).toString())
+                        }
+                      }}>
                         MAX
                       </button>
                     )}
                   </div>
+                  <div className="dexy-lp-input-group">
+                    <label>ERG to receive</label>
+                    <input
+                      type="number"
+                      value={redeemErg}
+                      onChange={e => {
+                        const val = e.target.value
+                        setRedeemErg(val)
+                        if (state && circulatingLp > 0 && state.lp_erg_reserves > 0) {
+                          const ergVal = parseFloat(val || '0')
+                          if (ergVal > 0) {
+                            const ergNano = ergVal * 1e9
+                            const lpNeeded = Math.ceil(ergNano * circulatingLp * 100 / (state.lp_erg_reserves * 98))
+                            const dexyOut = Math.floor(lpNeeded * state.lp_dexy_reserves / circulatingLp * 98 / 100)
+                            setRedeemLp(String(lpNeeded))
+                            setRedeemDexy(tokenDecimals > 0
+                              ? (dexyOut / Math.pow(10, tokenDecimals)).toFixed(tokenDecimals)
+                              : Math.floor(dexyOut).toString())
+                          } else {
+                            setRedeemLp('')
+                            setRedeemDexy('')
+                          }
+                        }
+                      }}
+                      placeholder="0.0"
+                      min="0"
+                      step="0.1"
+                    />
+                  </div>
+                  <div className="dexy-lp-input-group">
+                    <label>{tokenName} to receive</label>
+                    <input
+                      type="number"
+                      value={redeemDexy}
+                      onChange={e => {
+                        const val = e.target.value
+                        setRedeemDexy(val)
+                        if (state && circulatingLp > 0 && state.lp_dexy_reserves > 0) {
+                          const dexyVal = parseFloat(val || '0')
+                          if (dexyVal > 0) {
+                            const dexyRaw = dexyVal * Math.pow(10, tokenDecimals)
+                            const lpNeeded = Math.ceil(dexyRaw * circulatingLp * 100 / (state.lp_dexy_reserves * 98))
+                            const ergOut = Math.floor(lpNeeded * state.lp_erg_reserves / circulatingLp * 98 / 100)
+                            setRedeemLp(String(lpNeeded))
+                            setRedeemErg((ergOut / 1e9).toFixed(4))
+                          } else {
+                            setRedeemLp('')
+                            setRedeemErg('')
+                          }
+                        }
+                      }}
+                      placeholder="0.0"
+                      min="0"
+                      step={tokenDecimals === 0 ? '1' : '0.001'}
+                    />
+                  </div>
                   {redeemPreview && redeemPreview.can_execute && (
                     <div className="dexy-lp-preview">
                       <div className="preview-row">
-                        <span>ERG to receive:</span>
+                        <span>ERG to receive (confirmed):</span>
                         <span>{(Number(redeemPreview.erg_amount) / 1e9).toFixed(4)} ERG</span>
                       </div>
                       <div className="preview-row">
-                        <span>{tokenName} to receive:</span>
+                        <span>{tokenName} to receive (confirmed):</span>
                         <span>{formatDexyAmount(Number(redeemPreview.dexy_amount))}</span>
                       </div>
                       <div className="preview-row muted">
