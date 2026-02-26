@@ -1,21 +1,26 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { QRCodeSVG } from 'qrcode.react'
 import { formatErg } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
 import { AdvancedOptions, useRecipientAddress } from './AdvancedOptions'
+import { useTransactionFlow } from '../hooks/useTransactionFlow'
+import { TX_FEE_NANO } from '../constants'
+import type { TxStatusResponse } from '../api/types'
+import '../components/DexyMintModal.css'
 
 export type SigmaUsdAction = 'mint_sigusd' | 'redeem_sigusd' | 'mint_sigrsv' | 'redeem_sigrsv'
 
-interface PreviewResponse {
-  erg_amount_nano: string
-  protocol_fee_nano: string
-  tx_fee_nano: string
-  total_erg_nano: string
-  token_amount: string
-  token_name: string
-  can_execute: boolean
-  error: string | null
+interface SigmaUsdState {
+  sigusd_price_nano: number
+  sigrsv_price_nano: number
+  max_sigusd_mintable: number
+  max_sigrsv_mintable: number
+  max_sigrsv_redeemable: number
+  can_mint_sigusd: boolean
+  can_mint_sigrsv: boolean
+  can_redeem_sigusd: boolean
+  can_redeem_sigrsv: boolean
 }
 
 interface TransactionModalProps {
@@ -24,43 +29,49 @@ interface TransactionModalProps {
   action: SigmaUsdAction
   walletAddress: string
   ergBalance: number
-  tokenBalance?: number // For redeem operations
+  tokenBalance?: number
   explorerUrl: string
   onSuccess: (txId: string) => void
+  state: SigmaUsdState
 }
 
-type TxStep = 'input' | 'preview' | 'signing' | 'success' | 'error'
-type SignMethod = 'choose' | 'mobile' | 'nautilus'
+type TxStep = 'input' | 'signing' | 'success' | 'error'
+
+const PROTOCOL_FEE_RATE = 0.02
 
 const ACTION_CONFIG = {
   mint_sigusd: {
     title: 'Mint SigUSD',
-    inputLabel: 'Amount (SigUSD)',
     decimals: 2,
     isRedeem: false,
     tokenName: 'SigUSD',
+    icon: '/icons/sigmausd.svg',
   },
   redeem_sigusd: {
     title: 'Redeem SigUSD',
-    inputLabel: 'Amount (SigUSD)',
     decimals: 2,
     isRedeem: true,
     tokenName: 'SigUSD',
+    icon: '/icons/sigmausd.svg',
   },
   mint_sigrsv: {
     title: 'Mint SigRSV',
-    inputLabel: 'Amount (SigRSV)',
     decimals: 0,
     isRedeem: false,
     tokenName: 'SigRSV',
+    icon: '/icons/sigrsv.svg',
   },
   redeem_sigrsv: {
     title: 'Redeem SigRSV',
-    inputLabel: 'Amount (SigRSV)',
     decimals: 0,
     isRedeem: true,
     tokenName: 'SigRSV',
+    icon: '/icons/sigrsv.svg',
   },
+}
+
+function pollMintStatus(requestId: string): Promise<TxStatusResponse> {
+  return invoke<TxStatusResponse>('get_mint_tx_status', { requestId })
 }
 
 export function TransactionModal({
@@ -72,97 +83,236 @@ export function TransactionModal({
   tokenBalance,
   explorerUrl,
   onSuccess,
+  state,
 }: TransactionModalProps) {
   const config = ACTION_CONFIG[action]
   const { recipientAddress, setRecipientAddress, addressValid, recipientOrNull } = useRecipientAddress()
   const [step, setStep] = useState<TxStep>('input')
-  const [amount, setAmount] = useState('')
-  const [preview, setPreview] = useState<PreviewResponse | null>(null)
+  const [ergInput, setErgInput] = useState('')
+  const [tokenInput, setTokenInput] = useState('')
+  const [lastEdited, setLastEdited] = useState<'erg' | 'token'>('token')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [qrUrl, setQrUrl] = useState<string | null>(null)
-  const [nautilusUrl, setNautilusUrl] = useState<string | null>(null)
-  const [requestId, setRequestId] = useState<string | null>(null)
-  const [txId, setTxId] = useState<string | null>(null)
-  const [signMethod, setSignMethod] = useState<SignMethod>('choose')
+
+  const flow = useTransactionFlow({
+    pollStatus: pollMintStatus,
+    isOpen,
+    onSuccess: () => setStep('success'),
+    onError: (err) => { setError(err); setStep('error') },
+    watchParams: { protocol: 'SigmaUSD', operation: config.isRedeem ? 'redeem' : 'mint', description: `${config.title}` },
+  })
+
+  // Token price in nanoERG per 1 display unit
+  const priceNano = useMemo(() => {
+    return action.includes('sigusd') ? state.sigusd_price_nano : state.sigrsv_price_nano
+  }, [action, state.sigusd_price_nano, state.sigrsv_price_nano])
+
+  // Price in ERG per display unit (for input calculations)
+  const priceErg = priceNano / 1e9
+
+  // Calculate amounts in real-time
+  const calculated = useMemo(() => {
+    const activeInput = lastEdited === 'erg' ? ergInput : tokenInput
+    if (!activeInput || !priceErg) {
+      return { tokenAmount: 0, ergAmount: 0, protocolFee: 0, totalErg: 0, isValid: false, hasEnoughErg: true, hasEnoughTokens: true, withinLimit: true }
+    }
+
+    const value = parseFloat(activeInput)
+    if (isNaN(value) || value <= 0) {
+      return { tokenAmount: 0, ergAmount: 0, protocolFee: 0, totalErg: 0, isValid: false, hasEnoughErg: true, hasEnoughTokens: true, withinLimit: true }
+    }
+
+    const tokenMultiplier = Math.pow(10, config.decimals)
+    const txFeeErg = TX_FEE_NANO / 1e9
+    let tokenAmount: number
+    let ergBase: number
+
+    if (config.isRedeem) {
+      // Redeem: user provides tokens, receives ERG
+      if (lastEdited === 'token') {
+        tokenAmount = value
+        ergBase = tokenAmount * priceErg
+      } else {
+        // User typed desired ERG output → calculate token amount
+        ergBase = (value + txFeeErg) / (1 - PROTOCOL_FEE_RATE)
+        tokenAmount = ergBase / priceErg
+        tokenAmount = Math.ceil(tokenAmount * tokenMultiplier) / tokenMultiplier
+        ergBase = tokenAmount * priceErg
+      }
+      const protocolFee = ergBase * PROTOCOL_FEE_RATE
+      const netErg = ergBase - protocolFee - txFeeErg
+
+      const tokenAmountRaw = Math.round(tokenAmount * tokenMultiplier)
+      const hasEnoughTokens = tokenBalance !== undefined ? tokenAmountRaw <= tokenBalance : true
+      const hasEnoughErg = true // Redeem doesn't need ERG (only tx fee, covered by proceeds)
+
+      // Check limits
+      let withinLimit = true
+      if (action === 'redeem_sigrsv' && state.max_sigrsv_redeemable > 0) {
+        withinLimit = tokenAmountRaw <= state.max_sigrsv_redeemable
+      }
+
+      return {
+        tokenAmount,
+        tokenAmountRaw,
+        ergAmount: ergBase,
+        protocolFee,
+        netErg,
+        totalErg: txFeeErg,
+        isValid: tokenAmount > 0 && netErg > 0 && hasEnoughTokens && withinLimit,
+        hasEnoughErg,
+        hasEnoughTokens,
+        withinLimit,
+      }
+    } else {
+      // Mint: user pays ERG, receives tokens
+      if (lastEdited === 'token') {
+        tokenAmount = value
+        ergBase = tokenAmount * priceErg
+      } else {
+        // User typed ERG amount → calculate tokens
+        ergBase = (value - txFeeErg) / (1 + PROTOCOL_FEE_RATE)
+        tokenAmount = ergBase / priceErg
+        tokenAmount = Math.floor(tokenAmount * tokenMultiplier) / tokenMultiplier
+        ergBase = tokenAmount * priceErg
+      }
+      const protocolFee = ergBase * PROTOCOL_FEE_RATE
+      const totalErg = ergBase + protocolFee + txFeeErg
+
+      const tokenAmountRaw = Math.round(tokenAmount * tokenMultiplier)
+      const hasEnoughErg = totalErg <= ergBalance / 1e9
+      const hasEnoughTokens = true
+
+      // Check limits
+      let withinLimit = true
+      if (action === 'mint_sigusd' && state.max_sigusd_mintable > 0) {
+        withinLimit = tokenAmountRaw <= state.max_sigusd_mintable
+      }
+      if (action === 'mint_sigrsv' && state.max_sigrsv_mintable > 0) {
+        withinLimit = tokenAmountRaw <= state.max_sigrsv_mintable
+      }
+
+      return {
+        tokenAmount,
+        tokenAmountRaw,
+        ergAmount: ergBase,
+        protocolFee,
+        totalErg,
+        isValid: tokenAmount > 0 && hasEnoughErg && withinLimit,
+        hasEnoughErg,
+        hasEnoughTokens,
+        withinLimit,
+      }
+    }
+  }, [ergInput, tokenInput, lastEdited, priceErg, config.decimals, config.isRedeem, ergBalance, tokenBalance, action, state])
 
   useEffect(() => {
     if (isOpen) {
       setStep('input')
-      setAmount('')
-      setPreview(null)
+      setErgInput('')
+      setTokenInput('')
+      setLastEdited('token')
       setError(null)
-      setQrUrl(null)
-      setNautilusUrl(null)
-      setRequestId(null)
-      setTxId(null)
-      setSignMethod('choose')
       setRecipientAddress('')
     }
   }, [isOpen, action])
 
-  useEffect(() => {
-    if (step !== 'signing' || !requestId) return
-
-    let isPolling = false
-    const poll = async () => {
-      if (isPolling) return
-      isPolling = true
-      try {
-        const status = await invoke<{ status: string; tx_id: string | null; error: string | null }>(
-          'get_mint_tx_status',
-          { requestId }
-        )
-
-        if (status.status === 'submitted' && status.tx_id) {
-          setTxId(status.tx_id)
-          setStep('success')
-        } else if (status.status === 'failed' || status.status === 'expired') {
-          setError(status.error || 'Transaction failed')
-          setStep('error')
-        }
-      } catch (e) {
-        console.error('Poll error:', e)
-      } finally {
-        isPolling = false
-      }
-    }
-
-    const interval = setInterval(poll, 2000)
-    return () => clearInterval(interval)
-  }, [step, requestId])
-
-  const handlePreview = async () => {
-    const multiplier = config.decimals === 2 ? 100 : 1
-    const amountRaw = Math.round(parseFloat(amount) * multiplier)
-    if (isNaN(amountRaw) || amountRaw <= 0) {
-      setError('Please enter a valid amount')
-      return
-    }
-
-    setLoading(true)
+  const handleErgChange = (value: string) => {
+    setErgInput(value)
+    setLastEdited('erg')
     setError(null)
-
-    try {
-      const result = await invoke<PreviewResponse>('preview_sigmausd_tx', {
-        request: { action, amount: amountRaw, user_address: walletAddress }
-      })
-
-      setPreview(result)
-      if (result.can_execute) {
-        setStep('preview')
+    const parsed = parseFloat(value)
+    if (!isNaN(parsed) && parsed > 0 && priceErg) {
+      const txFeeErg = TX_FEE_NANO / 1e9
+      const tokenMultiplier = Math.pow(10, config.decimals)
+      let tokenValue: number
+      if (config.isRedeem) {
+        const ergBase = (parsed + txFeeErg) / (1 - PROTOCOL_FEE_RATE)
+        tokenValue = ergBase / priceErg
+        tokenValue = Math.ceil(tokenValue * tokenMultiplier) / tokenMultiplier
       } else {
-        setError(result.error || 'Cannot execute')
+        const ergBase = (parsed - txFeeErg) / (1 + PROTOCOL_FEE_RATE)
+        tokenValue = ergBase / priceErg
+        tokenValue = Math.floor(tokenValue * tokenMultiplier) / tokenMultiplier
       }
-    } catch (e) {
-      setError(String(e))
-    } finally {
-      setLoading(false)
+      if (tokenValue > 0) {
+        setTokenInput(config.decimals === 0 ? Math.floor(tokenValue).toString() : tokenValue.toFixed(config.decimals))
+      } else {
+        setTokenInput('')
+      }
+    } else {
+      setTokenInput('')
+    }
+  }
+
+  const handleTokenChange = (value: string) => {
+    setTokenInput(value)
+    setLastEdited('token')
+    setError(null)
+    const parsed = parseFloat(value)
+    if (!isNaN(parsed) && parsed > 0 && priceErg) {
+      const txFeeErg = TX_FEE_NANO / 1e9
+      const ergBase = parsed * priceErg
+      if (config.isRedeem) {
+        const protocolFee = ergBase * PROTOCOL_FEE_RATE
+        const netErg = ergBase - protocolFee - txFeeErg
+        setErgInput(netErg > 0 ? netErg.toFixed(4) : '')
+      } else {
+        const protocolFee = ergBase * PROTOCOL_FEE_RATE
+        const totalErg = ergBase + protocolFee + txFeeErg
+        setErgInput(totalErg.toFixed(4))
+      }
+    } else {
+      setErgInput('')
+    }
+  }
+
+  const handleMaxClick = () => {
+    if (!priceErg) return
+    const txFeeErg = TX_FEE_NANO / 1e9
+    const tokenMultiplier = Math.pow(10, config.decimals)
+
+    if (config.isRedeem) {
+      // Max is the token balance (or limit, whichever is lower)
+      let maxRaw = tokenBalance ?? 0
+      if (action === 'redeem_sigrsv' && state.max_sigrsv_redeemable > 0) {
+        maxRaw = Math.min(maxRaw, state.max_sigrsv_redeemable)
+      }
+      const maxToken = maxRaw / tokenMultiplier
+      const ergBase = maxToken * priceErg
+      const protocolFee = ergBase * PROTOCOL_FEE_RATE
+      const netErg = ergBase - protocolFee - txFeeErg
+
+      setTokenInput(config.decimals === 0 ? Math.floor(maxToken).toString() : maxToken.toFixed(config.decimals))
+      setErgInput(netErg > 0 ? netErg.toFixed(4) : '0')
+      setLastEdited('token')
+    } else {
+      // Max from ERG balance
+      const availableErg = (ergBalance / 1e9) - txFeeErg - 0.001 // small buffer
+      const ergBase = availableErg / (1 + PROTOCOL_FEE_RATE)
+      let maxToken = ergBase / priceErg
+      maxToken = Math.floor(maxToken * tokenMultiplier) / tokenMultiplier
+
+      // Respect minting limits
+      if (action === 'mint_sigusd' && state.max_sigusd_mintable > 0) {
+        maxToken = Math.min(maxToken, state.max_sigusd_mintable / tokenMultiplier)
+      }
+      if (action === 'mint_sigrsv' && state.max_sigrsv_mintable > 0) {
+        maxToken = Math.min(maxToken, state.max_sigrsv_mintable / tokenMultiplier)
+      }
+
+      const ergForMax = maxToken * priceErg
+      const fee = ergForMax * PROTOCOL_FEE_RATE
+      const total = ergForMax + fee + txFeeErg
+
+      setTokenInput(config.decimals === 0 ? Math.floor(maxToken).toString() : maxToken.toFixed(config.decimals))
+      setErgInput(total.toFixed(4))
+      setLastEdited('token')
     }
   }
 
   const handleSign = async () => {
-    if (!preview) return
+    if (!calculated.isValid || !calculated.tokenAmountRaw) return
 
     setLoading(true)
     setError(null)
@@ -171,13 +321,10 @@ export function TransactionModal({
       const nodeStatus = await invoke<{ chain_height: number }>('get_node_status')
       const utxos = await invoke<object[]>('get_user_utxos')
 
-      const multiplier = config.decimals === 2 ? 100 : 1
-      const amountRaw = Math.round(parseFloat(amount) * multiplier)
-
       const buildResult = await invoke<{ unsigned_tx: object; summary: object }>('build_sigmausd_tx', {
         request: {
           action,
-          amount: amountRaw,
+          amount: calculated.tokenAmountRaw,
           user_address: walletAddress,
           user_utxos: utxos,
           current_height: nodeStatus.chain_height,
@@ -188,209 +335,252 @@ export function TransactionModal({
       const signResult = await invoke<{ request_id: string; ergopay_url: string; nautilus_url: string }>('start_mint_sign', {
         request: {
           unsigned_tx: buildResult.unsigned_tx,
-          message: `${config.title}: ${amount} ${config.tokenName}`
+          message: `${config.title}: ${tokenInput} ${config.tokenName}`
         }
       })
 
-      setRequestId(signResult.request_id)
-      setQrUrl(signResult.ergopay_url)
-      setNautilusUrl(signResult.nautilus_url)
+      flow.startSigning(signResult.request_id, signResult.ergopay_url, signResult.nautilus_url)
       setStep('signing')
     } catch (e) {
       setError(String(e))
-      setStep('error')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleNautilusSign = async () => {
-    if (!nautilusUrl) return
-    setSignMethod('nautilus')
-    try {
-      await invoke('open_nautilus', { nautilusUrl })
-    } catch (e) {
-      setError(String(e))
-    }
-  }
-
-  const handleMobileSign = () => {
-    setSignMethod('mobile')
-  }
-
-  const handleBackToChoice = () => {
-    setSignMethod('choose')
-  }
-
   if (!isOpen) return null
+
+  const showInfo = (ergInput || tokenInput) && calculated.tokenAmount > 0
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal mint-modal" onClick={e => e.stopPropagation()}>
+      <div className="modal dexy-mint-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{config.title}</h2>
-          <button className="close-btn" onClick={onClose}>×</button>
+          <button className="close-btn" onClick={onClose}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
         </div>
 
         <div className="modal-content">
           {step === 'input' && (
             <div className="mint-input-step">
-              <div className="form-group">
-                <label className="form-label">{config.inputLabel}</label>
-                <input
-                  type="number"
-                  className="input"
-                  value={amount}
-                  onChange={e => setAmount(e.target.value)}
-                  placeholder="0.00"
-                  min={config.decimals === 2 ? "0.01" : "1"}
-                  step={config.decimals === 2 ? "0.01" : "1"}
-                />
+              {/* Swap Inputs */}
+              <div className="swap-inputs">
+                {/* Top field: You Pay (ERG for mint, Token for redeem) */}
+                <div className="swap-field">
+                  <div className="swap-field-header">
+                    <span className="swap-field-label">
+                      {config.isRedeem ? 'You Provide' : 'You Pay'}
+                    </span>
+                    <span className="swap-field-balance">
+                      {config.isRedeem
+                        ? `Balance: ${tokenBalance !== undefined ? (tokenBalance / Math.pow(10, config.decimals)).toLocaleString(undefined, { maximumFractionDigits: config.decimals }) : '0'} ${config.tokenName}`
+                        : `Balance: ${formatErg(ergBalance)} ERG`
+                      }
+                    </span>
+                  </div>
+                  <div className="swap-field-input">
+                    <input
+                      type="number"
+                      value={config.isRedeem ? tokenInput : ergInput}
+                      onChange={e => config.isRedeem ? handleTokenChange(e.target.value) : handleErgChange(e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      step={config.isRedeem ? Math.pow(10, -config.decimals) : 0.0001}
+                    />
+                    <div className="swap-field-token">
+                      <span>{config.isRedeem ? config.tokenName : 'ERG'}</span>
+                      <button className="max-btn" onClick={handleMaxClick} type="button">MAX</button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Arrow separator */}
+                <div className="swap-arrow">&darr;</div>
+
+                {/* Bottom field: You Receive (Token for mint, ERG for redeem) */}
+                <div className="swap-field">
+                  <div className="swap-field-header">
+                    <span className="swap-field-label">You Receive</span>
+                  </div>
+                  <div className="swap-field-input">
+                    <input
+                      type="number"
+                      value={config.isRedeem ? ergInput : tokenInput}
+                      onChange={e => config.isRedeem ? handleErgChange(e.target.value) : handleTokenChange(e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      step={config.isRedeem ? 0.0001 : Math.pow(10, -config.decimals)}
+                    />
+                    <span className="swap-field-token">
+                      {config.isRedeem ? 'ERG' : config.tokenName}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <p className="balance-hint">
-                {config.isRedeem
-                  ? `Available: ${tokenBalance ?? 0} ${config.tokenName}`
-                  : `Available: ${(ergBalance / 1e9).toFixed(4)} ERG`}
-              </p>
+
+              {/* Validation Warnings */}
+              {showInfo && !calculated.hasEnoughErg && (
+                <div className="message warning">
+                  Insufficient ERG balance (need {calculated.totalErg.toFixed(4)} ERG)
+                </div>
+              )}
+              {showInfo && !calculated.hasEnoughTokens && (
+                <div className="message warning">
+                  Insufficient {config.tokenName} balance
+                </div>
+              )}
+              {showInfo && !calculated.withinLimit && (
+                <div className="message warning">
+                  Exceeds {config.isRedeem ? 'redeemable' : 'mintable'} limit
+                </div>
+              )}
+
+              {/* Inline Fee Breakdown */}
+              {showInfo && (
+                <div className="mint-info">
+                  <div className="info-row">
+                    <span>Rate</span>
+                    <span>{priceErg.toFixed(config.tokenName === 'SigRSV' ? 8 : 4)} ERG / {config.tokenName}</span>
+                  </div>
+                  <div className="info-row">
+                    <span>Protocol Fee (2%)</span>
+                    <span>{calculated.protocolFee.toFixed(4)} ERG</span>
+                  </div>
+                  <div className="info-row">
+                    <span>Transaction Fee</span>
+                    <span>{(TX_FEE_NANO / 1e9).toFixed(4)} ERG</span>
+                  </div>
+                </div>
+              )}
+
               <AdvancedOptions
                 recipientAddress={recipientAddress}
                 onRecipientChange={setRecipientAddress}
                 addressValid={addressValid}
               />
-              {error && <div className="message error">{error}</div>}
-              <button
-                className="btn btn-primary"
-                onClick={handlePreview}
-                disabled={loading || !amount || (!!recipientAddress && addressValid !== true)}
-              >
-                {loading ? 'Calculating...' : 'Preview'}
-              </button>
-            </div>
-          )}
 
-          {step === 'preview' && preview && (
-            <div className="mint-preview-step">
-              <div className="preview-summary">
-                <div className="preview-row">
-                  <span>{config.isRedeem ? 'You Provide' : 'You Pay'}</span>
-                  <span>
-                    {config.isRedeem
-                      ? `${amount} ${config.tokenName}`
-                      : `${formatErg(Number(preview.total_erg_nano))} ERG`}
-                  </span>
-                </div>
-                <div className="preview-row detail">
-                  <span>{config.isRedeem ? 'ERG Value' : 'Base Cost'}</span>
-                  <span>{formatErg(Number(preview.erg_amount_nano))} ERG</span>
-                </div>
-                <div className="preview-row detail">
-                  <span>Protocol Fee (2%)</span>
-                  <span>{formatErg(Number(preview.protocol_fee_nano))} ERG</span>
-                </div>
-                <div className="preview-row detail">
-                  <span>Network Fee</span>
-                  <span>{formatErg(Number(preview.tx_fee_nano))} ERG</span>
-                </div>
-                <div className="preview-row highlight">
-                  <span>You Receive</span>
-                  <span>
-                    {config.isRedeem
-                      ? `${formatErg(Number(preview.erg_amount_nano))} ERG`
-                      : `${amount} ${config.tokenName}`}
-                  </span>
-                </div>
-              </div>
               {error && <div className="message error">{error}</div>}
-              <div className="button-group">
-                <button className="btn btn-secondary" onClick={() => setStep('input')}>Back</button>
-                <button className="btn btn-primary" onClick={handleSign} disabled={loading}>
-                  {loading ? 'Building...' : 'Sign with Wallet'}
+
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={onClose}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSign}
+                  disabled={loading || !calculated.isValid || (!!recipientAddress && addressValid !== true)}
+                >
+                  {loading ? 'Building...' : 'Sign Transaction'}
                 </button>
               </div>
             </div>
           )}
 
-          {step === 'signing' && signMethod === 'choose' && (
+          {step === 'signing' && (
             <div className="mint-signing-step">
-              <p>Choose your signing method</p>
-              <div className="wallet-options">
-                <button className="wallet-option" onClick={handleNautilusSign}>
-                  <div className="wallet-option-icon">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              {flow.signMethod === 'choose' && (
+                <div className="sign-method-choice">
+                  <p>Choose signing method:</p>
+                  <div className="sign-methods">
+                    <button className="sign-method-btn" onClick={flow.handleNautilusSign}>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2" />
+                        <path d="M8 21h8" />
+                        <path d="M12 17v4" />
+                      </svg>
+                      <span>Nautilus</span>
+                      <small>Browser Extension</small>
+                    </button>
+                    <button className="sign-method-btn" onClick={flow.handleMobileSign}>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="5" y="2" width="14" height="20" rx="2" />
+                        <line x1="12" y1="18" x2="12.01" y2="18" />
+                      </svg>
+                      <span>Mobile</span>
+                      <small>Scan QR Code</small>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {flow.signMethod === 'nautilus' && (
+                <div className="nautilus-waiting">
+                  <div className="waiting-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.5">
                       <rect x="2" y="3" width="20" height="14" rx="2" />
                       <path d="M8 21h8" />
                       <path d="M12 17v4" />
                     </svg>
                   </div>
-                  <div className="wallet-option-info">
-                    <span className="wallet-option-name">Nautilus Extension</span>
-                    <span className="wallet-option-desc">Sign with browser extension</span>
-                  </div>
-                </button>
-
-                <button className="wallet-option" onClick={handleMobileSign}>
-                  <div className="wallet-option-icon">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="5" y="2" width="14" height="20" rx="2" />
-                      <line x1="12" y1="18" x2="12.01" y2="18" />
-                    </svg>
-                  </div>
-                  <div className="wallet-option-info">
-                    <span className="wallet-option-name">Mobile Wallet</span>
-                    <span className="wallet-option-desc">Scan QR code with Ergo Wallet</span>
-                  </div>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {step === 'signing' && signMethod === 'nautilus' && (
-            <div className="mint-signing-step">
-              <p>Approve the transaction in Nautilus</p>
-              <div className="nautilus-waiting">
-                <div className="nautilus-icon">
-                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.5">
-                    <rect x="2" y="3" width="20" height="14" rx="2" />
-                    <path d="M8 21h8" />
-                    <path d="M12 17v4" />
-                  </svg>
+                  <p>Approve in Nautilus</p>
+                  <div className="waiting-spinner" />
+                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>
+                    Back
+                  </button>
                 </div>
-                <p className="signing-hint">Waiting for Nautilus approval...</p>
-              </div>
-              <div className="button-group">
-                <button className="btn btn-secondary" onClick={handleBackToChoice}>Back</button>
-                <button className="btn btn-primary" onClick={handleNautilusSign}>Open Nautilus Again</button>
-              </div>
-            </div>
-          )}
+              )}
 
-          {step === 'signing' && signMethod === 'mobile' && qrUrl && (
-            <div className="mint-signing-step">
-              <p>Scan with your Ergo wallet to sign</p>
-              <div className="qr-container">
-                <QRCodeSVG value={qrUrl} size={200} />
-              </div>
-              <p className="signing-hint">Waiting for signature...</p>
-              <button className="btn btn-secondary" onClick={handleBackToChoice}>Back</button>
+              {flow.signMethod === 'mobile' && flow.qrUrl && (
+                <div className="qr-signing">
+                  <p>Scan with Ergo Mobile Wallet</p>
+                  <div className="qr-container">
+                    <QRCodeSVG
+                      value={flow.qrUrl}
+                      size={200}
+                      level="M"
+                      includeMargin
+                      bgColor="white"
+                      fgColor="black"
+                    />
+                  </div>
+                  <div className="waiting-spinner" />
+                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>
+                    Back
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
           {step === 'success' && (
             <div className="mint-success-step">
-              <div className="success-icon">✓</div>
+              <div className="success-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+              </div>
               <h3>Transaction Submitted!</h3>
-              <p>Your {config.title.toLowerCase()} transaction has been submitted.</p>
-              {txId && <TxSuccess txId={txId} explorerUrl={explorerUrl} />}
-              <button className="btn btn-primary" onClick={() => { if (txId) onSuccess(txId); onClose(); }}>Done</button>
+              {flow.txId && <TxSuccess txId={flow.txId} explorerUrl={explorerUrl} />}
+              <button className="btn btn-primary" onClick={() => { if (flow.txId) onSuccess(flow.txId); onClose(); }}>
+                Done
+              </button>
             </div>
           )}
 
           {step === 'error' && (
             <div className="mint-error-step">
-              <div className="error-icon">✕</div>
+              <div className="error-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--error)" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="15" y1="9" x2="9" y2="15" />
+                  <line x1="9" y1="9" x2="15" y2="15" />
+                </svg>
+              </div>
               <h3>Transaction Failed</h3>
-              <p>{error}</p>
-              <button className="btn btn-primary" onClick={() => setStep('input')}>Try Again</button>
+              <p className="error-message">{error}</p>
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={onClose}>
+                  Close
+                </button>
+                <button className="btn btn-primary" onClick={() => { setStep('input'); setError(null) }}>
+                  Try Again
+                </button>
+              </div>
             </div>
           )}
         </div>

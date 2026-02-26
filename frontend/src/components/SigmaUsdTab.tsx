@@ -806,6 +806,7 @@ export function SigmaUsdTab({
               fetchSigmaUsdActivity()
               fetchUserSigmaUsdTxs()
             }}
+            state={state}
           />
         )}
       </div>
