@@ -1356,8 +1356,8 @@ function DexyAssetCard({
             </span>
           )}
           {(() => {
-            // Compare cost per token: FreeMint (oracle rate) vs LP Swap (lp rate + 0.3% fee)
-            const mintRate = state.oracle_rate_nano
+            // Compare cost per token: FreeMint (oracle rate + 0.5% bank fee) vs LP Swap (lp rate + 0.3% LP fee)
+            const mintRate = state.oracle_rate_nano * 1.005
             const swapEffective = state.lp_rate_nano * 1.003
             const mintBetter = state.can_mint && mintRate < swapEffective
             const savingPct = Math.abs(mintRate - swapEffective) / Math.max(mintRate, swapEffective) * 100
