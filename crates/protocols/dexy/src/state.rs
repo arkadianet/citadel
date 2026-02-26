@@ -46,6 +46,14 @@ pub struct DexyState {
     /// LP rate: nanoERG per Dexy token (calculated from reserves)
     pub lp_rate_nano: i64,
 
+    // LP liquidity state
+    /// LP tokens held in pool box (unissued reserves)
+    pub lp_token_reserves: i64,
+    /// Circulating LP supply (initial_lp - lp_token_reserves)
+    pub lp_circulating: i64,
+    /// Whether LP redeem is currently allowed (oracle rate gate)
+    pub can_redeem_lp: bool,
+
     // Derived state
     /// Whether minting is currently available
     pub can_mint: bool,
@@ -135,6 +143,15 @@ impl DexyState {
             free_mint.available
         };
 
+        // LP liquidity state
+        let lp_token_reserves = lp.lp_token_reserves;
+        let lp_circulating = variant.initial_lp() - lp_token_reserves;
+        let can_redeem_lp = crate::calculator::can_redeem_lp(
+            lp.erg_reserves,
+            lp.dexy_reserves,
+            adjusted_oracle_rate,
+        );
+
         Self {
             variant,
             bank_erg_nano: bank.erg_value,
@@ -150,6 +167,9 @@ impl DexyState {
             lp_dexy_reserves: lp.dexy_reserves,
             lp_box_id: lp.box_id.clone(),
             lp_rate_nano: calculated.lp_rate_nano,
+            lp_token_reserves,
+            lp_circulating,
+            can_redeem_lp,
             can_mint: calculated.can_mint,
             rate_difference_pct: calculated.rate_difference_pct,
             dexy_circulating: calculated.dexy_circulating,

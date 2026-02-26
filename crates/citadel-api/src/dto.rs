@@ -381,6 +381,12 @@ pub struct DexyStateResponse {
     pub lp_box_id: String,
     /// LP rate (nanoERG per token)
     pub lp_rate_nano: i64,
+    /// LP tokens held in pool box (unissued reserves)
+    pub lp_token_reserves: i64,
+    /// Circulating LP supply (initial_lp - lp_token_reserves)
+    pub lp_circulating: i64,
+    /// Whether LP redeem is currently allowed (oracle rate gate)
+    pub can_redeem_lp: bool,
     /// Whether minting is available
     pub can_mint: bool,
     /// Rate difference percentage (oracle vs LP)
