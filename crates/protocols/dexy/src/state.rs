@@ -78,6 +78,8 @@ pub struct DexyLpBoxData {
     pub box_id: String,
     pub erg_reserves: i64,
     pub dexy_reserves: i64,
+    /// Unissued LP tokens held in the pool box
+    pub lp_token_reserves: i64,
 }
 
 /// Raw FreeMint box data
@@ -187,6 +189,7 @@ mod tests {
             box_id: "lp789".to_string(),
             erg_reserves: 500_000_000_000,
             dexy_reserves: 500_000,
+            lp_token_reserves: 0,
         };
         assert_eq!(lp.box_id, "lp789");
         assert_eq!(lp.erg_reserves, 500_000_000_000);
@@ -223,6 +226,7 @@ mod tests {
             box_id: "lp789".to_string(),
             erg_reserves: 1_000_000_000_000, // 1000 ERG
             dexy_reserves: 1_000_000,        // 1M dexy tokens
+            lp_token_reserves: 0,
         };
         let free_mint = DexyFreeMintBoxData {
             box_id: "freemint123".to_string(),
@@ -275,6 +279,7 @@ mod tests {
             box_id: "lp789".to_string(),
             erg_reserves: 1_000_000_000_000,
             dexy_reserves: 1_000_000, // 1M dexy tokens in LP
+            lp_token_reserves: 0,
         };
         let free_mint = DexyFreeMintBoxData {
             box_id: "freemint123".to_string(),

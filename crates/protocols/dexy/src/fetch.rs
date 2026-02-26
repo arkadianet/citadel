@@ -157,7 +157,7 @@ pub fn parse_oracle_box(ergo_box: &ErgoBox) -> Result<DexyOracleBoxData, Protoco
 
 /// Parse LP box into DexyLpBoxData
 ///
-/// Extracts ERG reserves and Dexy token reserves from the LP box.
+/// Extracts ERG reserves, Dexy token reserves, and LP token reserves from the LP box.
 pub fn parse_lp_box(ergo_box: &ErgoBox, ids: &DexyIds) -> Result<DexyLpBoxData, ProtocolError> {
     let box_id = ergo_box.box_id().to_string();
 
@@ -171,10 +171,16 @@ pub fn parse_lp_box(ergo_box: &ErgoBox, ids: &DexyIds) -> Result<DexyLpBoxData, 
             message: format!("Token {} not found in box", ids.dexy_token),
         })?;
 
+    // LP token reserves (unissued LP tokens held in the pool box)
+    let lp_token_reserves = find_token_amount(ergo_box, &ids.lp_token_id)
+        .map(|v| v as i64)
+        .unwrap_or(0);
+
     Ok(DexyLpBoxData {
         box_id,
         erg_reserves,
         dexy_reserves,
+        lp_token_reserves,
     })
 }
 
@@ -634,6 +640,177 @@ pub async fn fetch_swap_tx_context(
         swap_ergo_tree,
         swap_box,
         swap_tokens,
+    })
+}
+
+/// Context needed for building Dexy LP deposit/redeem transactions
+///
+/// LP deposit: INPUTS [LP, MintNFT, UserUTXOs], no data inputs
+/// LP redeem: INPUTS [LP, RedeemNFT, UserUTXOs], DATA_INPUTS [Oracle]
+#[derive(Debug, Clone)]
+pub struct DexyLpTxContext {
+    // LP box (Input 0)
+    pub lp_input: Eip12InputBox,
+    pub lp_erg_reserves: i64,
+    pub lp_dexy_reserves: i64,
+    pub lp_token_reserves: i64,
+    pub lp_ergo_tree: String,
+    pub lp_box: ErgoBox,
+    pub lp_tokens: Vec<(String, u64)>,
+
+    // Action box (Input 1) - either Mint NFT or Redeem NFT
+    pub action_input: Eip12InputBox,
+    pub action_erg_value: i64,
+    pub action_ergo_tree: String,
+    pub action_box: ErgoBox,
+    pub action_tokens: Vec<(String, u64)>,
+
+    // Oracle (for redeem only - data input)
+    pub oracle_data_input: Option<Eip12DataInputBox>,
+    pub oracle_rate_nano: Option<i64>,
+}
+
+/// Which LP action box to fetch
+pub enum LpAction {
+    Deposit,
+    Redeem,
+}
+
+/// Fetch boxes needed for LP deposit/redeem transactions.
+///
+/// For deposit: fetches LP box + LP Mint NFT box (no oracle needed)
+/// For redeem: fetches LP box + LP Redeem NFT box + Oracle box (data input)
+pub async fn fetch_lp_tx_context(
+    client: &NodeClient,
+    capabilities: &NodeCapabilities,
+    ids: &DexyIds,
+    action: LpAction,
+) -> Result<DexyLpTxContext, ProtocolError> {
+    // Fetch LP box by LP NFT
+    let lp_token_id = TokenId::new(&ids.lp_nft);
+    let lp_box =
+        ergo_node_client::queries::get_box_by_token_id(client.inner(), capabilities, &lp_token_id)
+            .await
+            .map_err(|e| ProtocolError::BoxParseError {
+                message: format!("LP box not found: {}", e),
+            })?;
+
+    let (lp_tx_id, lp_index) = ergo_node_client::queries::get_box_creation_info(
+        client.inner(),
+        &lp_box.box_id().to_string(),
+    )
+    .await
+    .map_err(|e| ProtocolError::BoxParseError {
+        message: format!("Failed to get box creation info: {}", e),
+    })?;
+    let lp_input = Eip12InputBox::from_ergo_box(&lp_box, lp_tx_id, lp_index);
+
+    // Parse LP reserves (now includes lp_token_reserves)
+    let lp_data = parse_lp_box(&lp_box, ids)?;
+    let lp_ergo_tree = {
+        use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
+        lp_box
+            .ergo_tree
+            .sigma_serialize_bytes()
+            .map(|bytes| base16::encode_lower(&bytes))
+            .map_err(|e| ProtocolError::BoxParseError {
+                message: format!("Failed to serialize LP ErgoTree: {}", e),
+            })?
+    };
+    let lp_tokens = collect_box_tokens(&lp_box);
+
+    // Fetch action box: Mint NFT for deposit, Redeem NFT for redeem
+    let action_nft_id = match action {
+        LpAction::Deposit => &ids.lp_mint_nft,
+        LpAction::Redeem => &ids.lp_redeem_nft,
+    };
+    let action_label = match action {
+        LpAction::Deposit => "LP Mint NFT",
+        LpAction::Redeem => "LP Redeem NFT",
+    };
+
+    let action_token_id = TokenId::new(action_nft_id);
+    let action_box = ergo_node_client::queries::get_box_by_token_id(
+        client.inner(),
+        capabilities,
+        &action_token_id,
+    )
+    .await
+    .map_err(|e| ProtocolError::BoxParseError {
+        message: format!("{} box not found: {}", action_label, e),
+    })?;
+
+    let (action_tx_id, action_index) = ergo_node_client::queries::get_box_creation_info(
+        client.inner(),
+        &action_box.box_id().to_string(),
+    )
+    .await
+    .map_err(|e| ProtocolError::BoxParseError {
+        message: format!("Failed to get box creation info: {}", e),
+    })?;
+    let action_input = Eip12InputBox::from_ergo_box(&action_box, action_tx_id, action_index);
+
+    let action_erg_value = action_box.value.as_i64();
+    let action_ergo_tree = {
+        use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
+        action_box
+            .ergo_tree
+            .sigma_serialize_bytes()
+            .map(|bytes| base16::encode_lower(&bytes))
+            .map_err(|e| ProtocolError::BoxParseError {
+                message: format!("Failed to serialize {} ErgoTree: {}", action_label, e),
+            })?
+    };
+    let action_tokens = collect_box_tokens(&action_box);
+
+    // For Redeem: fetch oracle box as data input
+    let (oracle_data_input, oracle_rate_nano) = match action {
+        LpAction::Redeem => {
+            let oracle_token_id = TokenId::new(&ids.oracle_pool_nft);
+            let oracle_box = ergo_node_client::queries::get_box_by_token_id(
+                client.inner(),
+                capabilities,
+                &oracle_token_id,
+            )
+            .await
+            .map_err(|e| ProtocolError::BoxParseError {
+                message: format!("Oracle box not found: {}", e),
+            })?;
+
+            let oracle_data = parse_oracle_box(&oracle_box)?;
+
+            let (oracle_tx_id, oracle_index) =
+                ergo_node_client::queries::get_box_creation_info(
+                    client.inner(),
+                    &oracle_box.box_id().to_string(),
+                )
+                .await
+                .map_err(|e| ProtocolError::BoxParseError {
+                    message: format!("Failed to get box creation info: {}", e),
+                })?;
+            let data_input =
+                Eip12DataInputBox::from_ergo_box(&oracle_box, oracle_tx_id, oracle_index);
+
+            (Some(data_input), Some(oracle_data.rate_nano))
+        }
+        LpAction::Deposit => (None, None),
+    };
+
+    Ok(DexyLpTxContext {
+        lp_input,
+        lp_erg_reserves: lp_data.erg_reserves,
+        lp_dexy_reserves: lp_data.dexy_reserves,
+        lp_token_reserves: lp_data.lp_token_reserves,
+        lp_ergo_tree,
+        lp_box,
+        lp_tokens,
+        action_input,
+        action_erg_value,
+        action_ergo_tree,
+        action_box,
+        action_tokens,
+        oracle_data_input,
+        oracle_rate_nano,
     })
 }
 

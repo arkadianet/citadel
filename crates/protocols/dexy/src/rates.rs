@@ -355,6 +355,7 @@ mod tests {
             box_id: "lp789".to_string(),
             erg_reserves: lp_erg,
             dexy_reserves: lp_dexy,
+            lp_token_reserves: 0,
         };
         let free_mint = DexyFreeMintBoxData {
             box_id: "freemint123".to_string(),
@@ -633,6 +634,7 @@ mod tests {
             box_id: "lp789".to_string(),
             erg_reserves: 1_850_000_000_000, // 1850 ERG
             dexy_reserves: 1_000_000,        // 1M tokens
+            lp_token_reserves: 0,
         };
         let free_mint = DexyFreeMintBoxData {
             box_id: "freemint123".to_string(),
