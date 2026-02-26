@@ -39,12 +39,13 @@ use ergo_tx::{
 };
 
 use crate::calculator::{
-    calculate_lp_swap_output, calculate_lp_swap_price_impact, validate_lp_swap,
+    calculate_lp_deposit, calculate_lp_redeem, calculate_lp_swap_output,
+    calculate_lp_swap_price_impact, can_redeem_lp, validate_lp_swap,
 };
 use crate::constants::{
     DexyVariant, BANK_FEE_NUM, BUYBACK_FEE_NUM, FEE_DENOM, LP_SWAP_FEE_DENOM, LP_SWAP_FEE_NUM,
 };
-use crate::fetch::{DexySwapTxContext, DexyTxContext};
+use crate::fetch::{DexyLpTxContext, DexySwapTxContext, DexyTxContext};
 use crate::state::DexyState;
 
 /// FreeMint period length in blocks (1/2 day on mainnet)
@@ -1162,6 +1163,466 @@ fn build_swap_nft_output(ctx: &DexySwapTxContext, height: i32) -> Eip12Output {
     }
 }
 
+// =============================================================================
+// LP Deposit / Redeem Transaction Builders
+// =============================================================================
+
+/// Request to build an LP deposit (add liquidity) transaction
+#[derive(Debug, Clone)]
+pub struct LpDepositRequest {
+    pub variant: DexyVariant,
+    pub deposit_erg: i64,
+    pub deposit_dexy: i64,
+    pub user_address: String,
+    pub user_ergo_tree: String,
+    pub user_inputs: Vec<Eip12InputBox>,
+    pub current_height: i32,
+    pub recipient_ergo_tree: Option<String>,
+}
+
+/// Request to build an LP redeem (remove liquidity) transaction
+#[derive(Debug, Clone)]
+pub struct LpRedeemRequest {
+    pub variant: DexyVariant,
+    pub lp_to_burn: i64,
+    pub user_address: String,
+    pub user_ergo_tree: String,
+    pub user_inputs: Vec<Eip12InputBox>,
+    pub current_height: i32,
+    pub recipient_ergo_tree: Option<String>,
+}
+
+/// Summary of an LP deposit or redeem transaction for display
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LpTxSummary {
+    pub action: String,
+    pub erg_amount: i64,
+    pub dexy_amount: i64,
+    pub lp_tokens: i64,
+    pub miner_fee_nano: i64,
+}
+
+/// Build result for LP deposit/redeem transactions
+#[derive(Debug)]
+pub struct LpBuildResult {
+    pub unsigned_tx: Eip12UnsignedTx,
+    pub summary: LpTxSummary,
+}
+
+/// Build updated LP pool box output for deposit/redeem transactions.
+///
+/// Preserves token order from the input LP box while updating the ERG value,
+/// LP token reserve, and Dexy token amount.
+fn build_lp_pool_output(
+    ctx: &DexyLpTxContext,
+    new_erg: i64,
+    new_lp_tokens: i64,
+    new_dexy: i64,
+    lp_token_id: &str,
+    dexy_token_id: &str,
+    height: i32,
+) -> Eip12Output {
+    // Preserve token order from ctx.lp_tokens, update amounts
+    let mut assets = Vec::new();
+    for (token_id, amount) in &ctx.lp_tokens {
+        if token_id == lp_token_id {
+            assets.push(Eip12Asset::new(token_id, new_lp_tokens));
+        } else if token_id == dexy_token_id {
+            assets.push(Eip12Asset::new(token_id, new_dexy));
+        } else {
+            assets.push(Eip12Asset::new(token_id, *amount as i64));
+        }
+    }
+
+    Eip12Output {
+        value: new_erg.to_string(),
+        ergo_tree: ctx.lp_ergo_tree.clone(),
+        assets,
+        creation_height: height,
+        additional_registers: ctx.lp_input.additional_registers.clone(),
+    }
+}
+
+/// Build preserved action NFT box output (exact self-preservation).
+///
+/// Used for both LP Mint and LP Redeem action boxes.
+fn build_action_nft_output(ctx: &DexyLpTxContext, height: i32) -> Eip12Output {
+    let assets: Vec<Eip12Asset> = ctx
+        .action_tokens
+        .iter()
+        .map(|(id, amt)| Eip12Asset::new(id, *amt as i64))
+        .collect();
+
+    Eip12Output {
+        value: ctx.action_erg_value.to_string(),
+        ergo_tree: ctx.action_ergo_tree.clone(),
+        assets,
+        creation_height: height,
+        additional_registers: ctx.action_input.additional_registers.clone(),
+    }
+}
+
+/// Build an LP deposit (add liquidity) transaction.
+///
+/// Creates an unsigned EIP-12 transaction that deposits ERG and Dexy tokens
+/// into the LP pool in exchange for LP tokens.
+///
+/// # Transaction Structure
+///
+/// **Inputs:**
+/// - 0: LP box (lpNFT)
+/// - 1: LP Mint box (lpMintNFT) -- persistent action singleton
+/// - 2+: User UTXOs (must contain deposit_erg + deposit_dexy)
+///
+/// **Data Inputs:** (none)
+///
+/// **Outputs:**
+/// - 0: Updated LP box (more ERG, more Dexy, fewer reserved LP tokens)
+/// - 1: LP Mint box (exact self-preservation)
+/// - 2: User reward (LP tokens received + min box value)
+/// - 3: Miner fee
+/// - 4: Change output (remaining user tokens/ERG, if needed)
+pub fn build_lp_deposit_tx(
+    request: &LpDepositRequest,
+    ctx: &DexyLpTxContext,
+    dexy_token_id: &str,
+    lp_token_id: &str,
+    initial_lp: i64,
+) -> Result<LpBuildResult, TxError> {
+    // Determine output ErgoTree (recipient or self)
+    let output_ergo_tree = request
+        .recipient_ergo_tree
+        .as_deref()
+        .unwrap_or(&request.user_ergo_tree);
+
+    // 1. Validate deposit amounts
+    if request.deposit_erg <= 0 {
+        return Err(TxError::BuildFailed {
+            message: "Deposit ERG amount must be positive".to_string(),
+        });
+    }
+    if request.deposit_dexy <= 0 {
+        return Err(TxError::BuildFailed {
+            message: "Deposit Dexy amount must be positive".to_string(),
+        });
+    }
+
+    // 2. Calculate LP tokens to receive
+    let calc = calculate_lp_deposit(
+        request.deposit_erg,
+        request.deposit_dexy,
+        ctx.lp_erg_reserves,
+        ctx.lp_dexy_reserves,
+        ctx.lp_token_reserves,
+        initial_lp,
+    );
+
+    if calc.lp_tokens_out <= 0 {
+        return Err(TxError::BuildFailed {
+            message: "Deposit too small: would receive 0 LP tokens".to_string(),
+        });
+    }
+
+    tracing::info!("=== LP Deposit Transaction Build ===");
+    tracing::info!(
+        "Deposit: erg={}, dexy={}",
+        request.deposit_erg,
+        request.deposit_dexy
+    );
+    tracing::info!(
+        "LP reserves: erg={}, dexy={}, lp_tokens={}",
+        ctx.lp_erg_reserves,
+        ctx.lp_dexy_reserves,
+        ctx.lp_token_reserves
+    );
+    tracing::info!(
+        "Calculated: lp_tokens_out={}, consumed_erg={}, consumed_dexy={}",
+        calc.lp_tokens_out,
+        calc.consumed_erg,
+        calc.consumed_dexy
+    );
+
+    // 3. Select user UTXOs: need consumed_erg + TX_FEE + MIN_BOX_VALUE, and consumed_dexy tokens
+    let min_erg = calc.consumed_erg + constants::TX_FEE_NANO + constants::MIN_BOX_VALUE_NANO;
+    let selected = select_token_boxes(
+        &request.user_inputs,
+        dexy_token_id,
+        calc.consumed_dexy as u64,
+        min_erg as u64,
+    )
+    .map_err(|e| TxError::BuildFailed {
+        message: e.to_string(),
+    })?;
+
+    // 4. Build inputs: LP (0), LP Mint NFT (1), User UTXOs (2+)
+    let mut inputs = vec![ctx.lp_input.clone(), ctx.action_input.clone()];
+    inputs.extend(selected.boxes.clone());
+
+    // 5. Build outputs
+    let mut outputs = Vec::new();
+
+    // Output 0: Updated LP box
+    let new_lp_erg = ctx.lp_erg_reserves + calc.consumed_erg;
+    let new_lp_dexy = ctx.lp_dexy_reserves + calc.consumed_dexy;
+    let new_lp_token_reserves = ctx.lp_token_reserves - calc.lp_tokens_out;
+
+    outputs.push(build_lp_pool_output(
+        ctx,
+        new_lp_erg,
+        new_lp_token_reserves,
+        new_lp_dexy,
+        lp_token_id,
+        dexy_token_id,
+        request.current_height,
+    ));
+
+    // Output 1: LP Mint box (exact self-preservation)
+    outputs.push(build_action_nft_output(ctx, request.current_height));
+
+    // Output 2: User reward (LP tokens)
+    outputs.push(Eip12Output::change(
+        constants::MIN_BOX_VALUE_NANO,
+        output_ergo_tree,
+        vec![Eip12Asset::new(lp_token_id, calc.lp_tokens_out)],
+        request.current_height,
+    ));
+
+    // Output 3: Miner fee
+    outputs.push(Eip12Output::fee(
+        constants::TX_FEE_NANO,
+        request.current_height,
+    ));
+
+    // Output 4: Change output (if needed)
+    // Remaining ERG = user total - consumed_erg - TX_FEE - MIN_BOX_VALUE (for reward output)
+    let change_erg = selected.total_erg as i64
+        - calc.consumed_erg
+        - constants::TX_FEE_NANO
+        - constants::MIN_BOX_VALUE_NANO;
+
+    // Collect remaining tokens, subtracting consumed Dexy
+    let change_tokens =
+        collect_change_tokens(&selected.boxes, Some((dexy_token_id, calc.consumed_dexy as u64)));
+
+    if change_erg >= constants::MIN_BOX_VALUE_NANO || !change_tokens.is_empty() {
+        let change_value = change_erg.max(constants::MIN_BOX_VALUE_NANO);
+        outputs.push(Eip12Output::change(
+            change_value,
+            &request.user_ergo_tree,
+            change_tokens,
+            request.current_height,
+        ));
+    }
+
+    // 6. Build unsigned transaction (no data inputs for deposit)
+    let unsigned_tx = Eip12UnsignedTx {
+        inputs,
+        data_inputs: vec![],
+        outputs,
+    };
+
+    let summary = LpTxSummary {
+        action: format!("lp_deposit_{}", request.variant.as_str()),
+        erg_amount: calc.consumed_erg,
+        dexy_amount: calc.consumed_dexy,
+        lp_tokens: calc.lp_tokens_out,
+        miner_fee_nano: constants::TX_FEE_NANO,
+    };
+
+    Ok(LpBuildResult {
+        unsigned_tx,
+        summary,
+    })
+}
+
+/// Build an LP redeem (remove liquidity) transaction.
+///
+/// Creates an unsigned EIP-12 transaction that burns LP tokens to withdraw
+/// ERG and Dexy tokens from the LP pool.
+///
+/// # Transaction Structure
+///
+/// **Inputs:**
+/// - 0: LP box (lpNFT)
+/// - 1: LP Redeem box (lpRedeemNFT) -- persistent action singleton
+/// - 2+: User UTXOs (must contain lp_to_burn LP tokens)
+///
+/// **Data Inputs:**
+/// - 0: Oracle box (oraclePoolNFT) -- for depeg protection gate
+///
+/// **Outputs:**
+/// - 0: Updated LP box (less ERG, less Dexy, more reserved LP tokens)
+/// - 1: LP Redeem box (exact self-preservation)
+/// - 2: User return (receives withdrawn ERG + Dexy tokens)
+/// - 3: Miner fee
+/// - 4: Change output (if needed)
+pub fn build_lp_redeem_tx(
+    request: &LpRedeemRequest,
+    ctx: &DexyLpTxContext,
+    dexy_token_id: &str,
+    lp_token_id: &str,
+    initial_lp: i64,
+) -> Result<LpBuildResult, TxError> {
+    // Determine output ErgoTree (recipient or self)
+    let output_ergo_tree = request
+        .recipient_ergo_tree
+        .as_deref()
+        .unwrap_or(&request.user_ergo_tree);
+
+    // 1. Validate LP token amount
+    if request.lp_to_burn <= 0 {
+        return Err(TxError::BuildFailed {
+            message: "LP tokens to burn must be positive".to_string(),
+        });
+    }
+
+    // 2. Pre-flight: check oracle rate gate (depeg protection)
+    let oracle_rate_nano = ctx.oracle_rate_nano.ok_or_else(|| TxError::BuildFailed {
+        message: "Oracle rate required for LP redeem but not available".to_string(),
+    })?;
+
+    let oracle_rate_adjusted = oracle_rate_nano / request.variant.oracle_divisor();
+
+    if !can_redeem_lp(
+        ctx.lp_erg_reserves,
+        ctx.lp_dexy_reserves,
+        oracle_rate_adjusted,
+    ) {
+        return Err(TxError::BuildFailed {
+            message:
+                "LP redeem blocked: LP rate below 98% of oracle rate (depeg protection)"
+                    .to_string(),
+        });
+    }
+
+    // 3. Calculate withdrawal amounts
+    let calc = calculate_lp_redeem(
+        request.lp_to_burn,
+        ctx.lp_erg_reserves,
+        ctx.lp_dexy_reserves,
+        ctx.lp_token_reserves,
+        initial_lp,
+    );
+
+    if calc.erg_out <= 0 || calc.dexy_out <= 0 {
+        return Err(TxError::BuildFailed {
+            message: "Redeem too small: would receive 0 ERG or Dexy tokens".to_string(),
+        });
+    }
+
+    tracing::info!("=== LP Redeem Transaction Build ===");
+    tracing::info!(
+        "Redeem: lp_to_burn={}, oracle_rate_adjusted={}",
+        request.lp_to_burn,
+        oracle_rate_adjusted
+    );
+    tracing::info!(
+        "LP reserves: erg={}, dexy={}, lp_tokens={}",
+        ctx.lp_erg_reserves,
+        ctx.lp_dexy_reserves,
+        ctx.lp_token_reserves
+    );
+    tracing::info!(
+        "Calculated: erg_out={}, dexy_out={}",
+        calc.erg_out,
+        calc.dexy_out
+    );
+
+    // 4. Select user UTXOs: need LP tokens + min ERG for fees
+    let min_erg = constants::TX_FEE_NANO + constants::MIN_BOX_VALUE_NANO;
+    let selected = select_token_boxes(
+        &request.user_inputs,
+        lp_token_id,
+        request.lp_to_burn as u64,
+        min_erg as u64,
+    )
+    .map_err(|e| TxError::BuildFailed {
+        message: e.to_string(),
+    })?;
+
+    // 5. Build inputs: LP (0), LP Redeem NFT (1), User UTXOs (2+)
+    let mut inputs = vec![ctx.lp_input.clone(), ctx.action_input.clone()];
+    inputs.extend(selected.boxes.clone());
+
+    // 6. Data inputs: Oracle box
+    let oracle_data_input = ctx
+        .oracle_data_input
+        .as_ref()
+        .ok_or_else(|| TxError::BuildFailed {
+            message: "Oracle data input required for LP redeem but not available".to_string(),
+        })?
+        .clone();
+    let data_inputs = vec![oracle_data_input];
+
+    // 7. Build outputs
+    let mut outputs = Vec::new();
+
+    // Output 0: Updated LP box (ERG and Dexy decrease, LP token reserves increase)
+    let new_lp_erg = ctx.lp_erg_reserves - calc.erg_out;
+    let new_lp_dexy = ctx.lp_dexy_reserves - calc.dexy_out;
+    let new_lp_token_reserves = ctx.lp_token_reserves + request.lp_to_burn;
+
+    outputs.push(build_lp_pool_output(
+        ctx,
+        new_lp_erg,
+        new_lp_token_reserves,
+        new_lp_dexy,
+        lp_token_id,
+        dexy_token_id,
+        request.current_height,
+    ));
+
+    // Output 1: LP Redeem box (exact self-preservation)
+    outputs.push(build_action_nft_output(ctx, request.current_height));
+
+    // Output 2: User return (withdrawn ERG + Dexy tokens)
+    // User gets: their input ERG + withdrawn ERG - TX_FEE
+    let user_output_erg = selected.total_erg as i64 + calc.erg_out - constants::TX_FEE_NANO;
+
+    // Collect remaining tokens from selected boxes, subtracting spent LP tokens
+    let remaining_assets = collect_change_tokens(
+        &selected.boxes,
+        Some((lp_token_id, request.lp_to_burn as u64)),
+    );
+
+    // Add Dexy tokens to user output
+    let mut user_assets = vec![Eip12Asset::new(dexy_token_id, calc.dexy_out)];
+    user_assets.extend(remaining_assets);
+
+    outputs.push(Eip12Output::change(
+        user_output_erg,
+        output_ergo_tree,
+        user_assets,
+        request.current_height,
+    ));
+
+    // Output 3: Miner fee
+    outputs.push(Eip12Output::fee(
+        constants::TX_FEE_NANO,
+        request.current_height,
+    ));
+
+    // 8. Build unsigned transaction
+    let unsigned_tx = Eip12UnsignedTx {
+        inputs,
+        data_inputs,
+        outputs,
+    };
+
+    let summary = LpTxSummary {
+        action: format!("lp_redeem_{}", request.variant.as_str()),
+        erg_amount: calc.erg_out,
+        dexy_amount: calc.dexy_out,
+        lp_tokens: request.lp_to_burn,
+        miner_fee_nano: constants::TX_FEE_NANO,
+    };
+
+    Ok(LpBuildResult {
+        unsigned_tx,
+        summary,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1846,6 +2307,626 @@ mod tests {
             assert_eq!(change.ergo_tree, "user_ergo_tree");
             let change_erg: i64 = change.value.parse().unwrap();
             assert!(change_erg >= constants::MIN_BOX_VALUE_NANO);
+        }
+    }
+
+    mod lp_deposit_redeem_tests {
+        use super::*;
+        use crate::fetch::DexyLpTxContext;
+
+        const DEXY_TOKEN_ID: &str =
+            "6122f7289e7bb2df2de273e09d4b2756cda6aeb0f40438dc9d257688f45183ad";
+        const LP_NFT_ID: &str = "905ecdef97381b92c2f0ea9b516f312bfb18082c61b24b40affa6a55555c77c7";
+        const LP_TOKEN_ID: &str =
+            "cf74432b2d3ab8a1a934b6326a1004e1a19aec7b357c57209018c4aa35226246";
+        const LP_MINT_NFT_ID: &str =
+            "19b8281b141d19c5b3843a4a77e616d6df05f601e5908159b1eaf3d9da20e664";
+        const LP_REDEEM_NFT_ID: &str =
+            "08c47eef5e782f146cae5e8cfb5e9d26b18442f82f3c5808b1563b6e3b23f729";
+        const ORACLE_NFT_ID: &str =
+            "3c45f29a5165b030fdb5eaf5d81f8108f9d8f507b31487dd51f4ae08fe07cf4a";
+
+        const INITIAL_LP: i64 = 100_000_000_000; // Gold initial LP
+
+        fn create_dummy_ergo_box() -> ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox {
+            use ergo_lib::ergotree_ir::chain::ergo_box::{
+                box_value::BoxValue, ErgoBox, NonMandatoryRegisters,
+            };
+            use ergo_lib::ergotree_ir::chain::tx_id::TxId;
+            use ergo_lib::ergotree_ir::ergo_tree::ErgoTree;
+            use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
+
+            let ergo_tree_bytes = base16::decode(
+                "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            )
+            .unwrap();
+            let ergo_tree = ErgoTree::sigma_parse_bytes(&ergo_tree_bytes).unwrap();
+            let tx_id = TxId::zero();
+
+            ErgoBox::new(
+                BoxValue::new(1_000_000).unwrap(),
+                ergo_tree,
+                None,
+                NonMandatoryRegisters::empty(),
+                100000,
+                tx_id,
+                0,
+            )
+            .unwrap()
+        }
+
+        /// Create LP context for deposit (no oracle)
+        fn create_deposit_context(
+            lp_erg: i64,
+            lp_dexy: i64,
+            lp_token_reserves: i64,
+        ) -> DexyLpTxContext {
+            let lp_input = Eip12InputBox {
+                box_id: "lp_box_id".to_string(),
+                transaction_id: "lp_tx_id".to_string(),
+                index: 0,
+                value: lp_erg.to_string(),
+                ergo_tree: "lp_ergo_tree_hex".to_string(),
+                assets: vec![
+                    Eip12Asset::new(LP_NFT_ID, 1),
+                    Eip12Asset::new(LP_TOKEN_ID, lp_token_reserves),
+                    Eip12Asset::new(DEXY_TOKEN_ID, lp_dexy),
+                ],
+                creation_height: 100000,
+                additional_registers: HashMap::new(),
+                extension: HashMap::new(),
+            };
+
+            let action_input = Eip12InputBox {
+                box_id: "mint_box_id".to_string(),
+                transaction_id: "mint_tx_id".to_string(),
+                index: 0,
+                value: "1000000".to_string(),
+                ergo_tree: "mint_ergo_tree_hex".to_string(),
+                assets: vec![Eip12Asset::new(LP_MINT_NFT_ID, 1)],
+                creation_height: 100000,
+                additional_registers: HashMap::new(),
+                extension: HashMap::new(),
+            };
+
+            let dummy_box = create_dummy_ergo_box();
+
+            DexyLpTxContext {
+                lp_input,
+                lp_erg_reserves: lp_erg,
+                lp_dexy_reserves: lp_dexy,
+                lp_token_reserves,
+                lp_ergo_tree: "lp_ergo_tree_hex".to_string(),
+                lp_box: dummy_box.clone(),
+                lp_tokens: vec![
+                    (LP_NFT_ID.to_string(), 1),
+                    (LP_TOKEN_ID.to_string(), lp_token_reserves as u64),
+                    (DEXY_TOKEN_ID.to_string(), lp_dexy as u64),
+                ],
+                action_input,
+                action_erg_value: 1_000_000,
+                action_ergo_tree: "mint_ergo_tree_hex".to_string(),
+                action_box: dummy_box,
+                action_tokens: vec![(LP_MINT_NFT_ID.to_string(), 1)],
+                oracle_data_input: None,
+                oracle_rate_nano: None,
+            }
+        }
+
+        /// Create LP context for redeem (with oracle)
+        fn create_redeem_context(
+            lp_erg: i64,
+            lp_dexy: i64,
+            lp_token_reserves: i64,
+            oracle_rate_nano: i64,
+        ) -> DexyLpTxContext {
+            use ergo_tx::Eip12DataInputBox;
+
+            let lp_input = Eip12InputBox {
+                box_id: "lp_box_id".to_string(),
+                transaction_id: "lp_tx_id".to_string(),
+                index: 0,
+                value: lp_erg.to_string(),
+                ergo_tree: "lp_ergo_tree_hex".to_string(),
+                assets: vec![
+                    Eip12Asset::new(LP_NFT_ID, 1),
+                    Eip12Asset::new(LP_TOKEN_ID, lp_token_reserves),
+                    Eip12Asset::new(DEXY_TOKEN_ID, lp_dexy),
+                ],
+                creation_height: 100000,
+                additional_registers: HashMap::new(),
+                extension: HashMap::new(),
+            };
+
+            let action_input = Eip12InputBox {
+                box_id: "redeem_box_id".to_string(),
+                transaction_id: "redeem_tx_id".to_string(),
+                index: 0,
+                value: "1000000".to_string(),
+                ergo_tree: "redeem_ergo_tree_hex".to_string(),
+                assets: vec![Eip12Asset::new(LP_REDEEM_NFT_ID, 1)],
+                creation_height: 100000,
+                additional_registers: HashMap::new(),
+                extension: HashMap::new(),
+            };
+
+            let oracle_data_input = Eip12DataInputBox {
+                box_id: "oracle_box_id".to_string(),
+                transaction_id: "oracle_tx_id".to_string(),
+                index: 0,
+                value: "1000000".to_string(),
+                ergo_tree: "oracle_ergo_tree_hex".to_string(),
+                assets: vec![Eip12Asset::new(ORACLE_NFT_ID, 1)],
+                creation_height: 100000,
+                additional_registers: HashMap::new(),
+            };
+
+            let dummy_box = create_dummy_ergo_box();
+
+            DexyLpTxContext {
+                lp_input,
+                lp_erg_reserves: lp_erg,
+                lp_dexy_reserves: lp_dexy,
+                lp_token_reserves,
+                lp_ergo_tree: "lp_ergo_tree_hex".to_string(),
+                lp_box: dummy_box.clone(),
+                lp_tokens: vec![
+                    (LP_NFT_ID.to_string(), 1),
+                    (LP_TOKEN_ID.to_string(), lp_token_reserves as u64),
+                    (DEXY_TOKEN_ID.to_string(), lp_dexy as u64),
+                ],
+                action_input,
+                action_erg_value: 1_000_000,
+                action_ergo_tree: "redeem_ergo_tree_hex".to_string(),
+                action_box: dummy_box,
+                action_tokens: vec![(LP_REDEEM_NFT_ID.to_string(), 1)],
+                oracle_data_input: Some(oracle_data_input),
+                oracle_rate_nano: Some(oracle_rate_nano),
+            }
+        }
+
+        // --- LP Deposit Tests ---
+
+        #[test]
+        fn test_lp_deposit_rejects_zero_erg() {
+            let ctx = create_deposit_context(
+                1_000_000_000_000,
+                500_000,
+                99_900_000_000,
+            );
+            let request = LpDepositRequest {
+                variant: DexyVariant::Gold,
+                deposit_erg: 0,
+                deposit_dexy: 100,
+                user_address: "user_addr".to_string(),
+                user_ergo_tree: "user_ergo_tree".to_string(),
+                user_inputs: vec![create_test_input(100_000_000_000, vec![(DEXY_TOKEN_ID, 1000)])],
+                current_height: 100000,
+                recipient_ergo_tree: None,
+            };
+
+            let result = build_lp_deposit_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                TxError::BuildFailed { message } => {
+                    assert!(message.contains("ERG"), "Got: {}", message);
+                }
+                other => panic!("Expected BuildFailed, got {:?}", other),
+            }
+        }
+
+        #[test]
+        fn test_lp_deposit_rejects_zero_dexy() {
+            let ctx = create_deposit_context(
+                1_000_000_000_000,
+                500_000,
+                99_900_000_000,
+            );
+            let request = LpDepositRequest {
+                variant: DexyVariant::Gold,
+                deposit_erg: 10_000_000_000,
+                deposit_dexy: 0,
+                user_address: "user_addr".to_string(),
+                user_ergo_tree: "user_ergo_tree".to_string(),
+                user_inputs: vec![create_test_input(100_000_000_000, vec![(DEXY_TOKEN_ID, 1000)])],
+                current_height: 100000,
+                recipient_ergo_tree: None,
+            };
+
+            let result = build_lp_deposit_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                TxError::BuildFailed { message } => {
+                    assert!(message.contains("Dexy"), "Got: {}", message);
+                }
+                other => panic!("Expected BuildFailed, got {:?}", other),
+            }
+        }
+
+        #[test]
+        fn test_lp_deposit_builds_correctly() {
+            // Pool: 1000 ERG, 500K Dexy, 99.9B LP tokens reserved (100M circulating)
+            let ctx = create_deposit_context(
+                1_000_000_000_000, // 1000 ERG
+                500_000,           // 500K Dexy
+                99_900_000_000,    // 99.9B LP tokens reserved
+            );
+
+            // Deposit 10 ERG + 5000 Dexy (proportional to pool)
+            let request = LpDepositRequest {
+                variant: DexyVariant::Gold,
+                deposit_erg: 10_000_000_000,
+                deposit_dexy: 5_000,
+                user_address: "user_addr".to_string(),
+                user_ergo_tree: "user_ergo_tree".to_string(),
+                user_inputs: vec![create_test_input(
+                    100_000_000_000, // 100 ERG
+                    vec![(DEXY_TOKEN_ID, 10_000)],
+                )],
+                current_height: 100000,
+                recipient_ergo_tree: None,
+            };
+
+            let result = build_lp_deposit_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
+            assert!(result.is_ok(), "Build failed: {:?}", result.err());
+
+            let build = result.unwrap();
+            let tx = &build.unsigned_tx;
+
+            // Inputs: LP + Mint NFT + 1 user input
+            assert_eq!(tx.inputs.len(), 3);
+            assert_eq!(tx.inputs[0].box_id, "lp_box_id");
+            assert_eq!(tx.inputs[1].box_id, "mint_box_id");
+
+            // No data inputs for deposit
+            assert_eq!(tx.data_inputs.len(), 0);
+
+            // Outputs: LP + Mint NFT + User reward + Fee + Change
+            assert!(tx.outputs.len() >= 4, "Expected at least 4 outputs, got {}", tx.outputs.len());
+
+            // Output 0: Updated LP box
+            assert_eq!(tx.outputs[0].ergo_tree, "lp_ergo_tree_hex");
+            let lp_erg_out: i64 = tx.outputs[0].value.parse().unwrap();
+            assert!(
+                lp_erg_out > 1_000_000_000_000,
+                "LP ERG should increase after deposit"
+            );
+
+            // Token order preserved: LP NFT, LP Token, Dexy
+            assert_eq!(tx.outputs[0].assets.len(), 3);
+            assert_eq!(tx.outputs[0].assets[0].token_id, LP_NFT_ID);
+            assert_eq!(tx.outputs[0].assets[1].token_id, LP_TOKEN_ID);
+            assert_eq!(tx.outputs[0].assets[2].token_id, DEXY_TOKEN_ID);
+
+            // LP token reserves should decrease (tokens leave pool)
+            let new_lp_reserves: i64 = tx.outputs[0].assets[1].amount.parse().unwrap();
+            assert!(
+                new_lp_reserves < 99_900_000_000,
+                "LP token reserves should decrease"
+            );
+
+            // Output 1: Mint NFT box (preserved)
+            assert_eq!(tx.outputs[1].ergo_tree, "mint_ergo_tree_hex");
+            assert_eq!(tx.outputs[1].value, "1000000");
+            assert_eq!(tx.outputs[1].assets.len(), 1);
+            assert_eq!(tx.outputs[1].assets[0].token_id, LP_MINT_NFT_ID);
+
+            // Output 2: User receives LP tokens
+            let user_output = &tx.outputs[2];
+            assert_eq!(user_output.ergo_tree, "user_ergo_tree");
+            assert!(
+                user_output
+                    .assets
+                    .iter()
+                    .any(|a| a.token_id == LP_TOKEN_ID),
+                "User should receive LP tokens"
+            );
+            let lp_out: i64 = user_output
+                .assets
+                .iter()
+                .find(|a| a.token_id == LP_TOKEN_ID)
+                .unwrap()
+                .amount
+                .parse()
+                .unwrap();
+            assert!(lp_out > 0, "User should receive positive LP tokens");
+
+            // Summary checks
+            assert!(build.summary.action.starts_with("lp_deposit"));
+            assert!(build.summary.erg_amount > 0);
+            assert!(build.summary.dexy_amount > 0);
+            assert!(build.summary.lp_tokens > 0);
+        }
+
+        #[test]
+        fn test_lp_deposit_with_recipient() {
+            let ctx = create_deposit_context(
+                1_000_000_000_000,
+                500_000,
+                99_900_000_000,
+            );
+
+            let request = LpDepositRequest {
+                variant: DexyVariant::Gold,
+                deposit_erg: 10_000_000_000,
+                deposit_dexy: 5_000,
+                user_address: "user_addr".to_string(),
+                user_ergo_tree: "user_ergo_tree".to_string(),
+                user_inputs: vec![create_test_input(
+                    100_000_000_000,
+                    vec![(DEXY_TOKEN_ID, 10_000)],
+                )],
+                current_height: 100000,
+                recipient_ergo_tree: Some("recipient_ergo_tree".to_string()),
+            };
+
+            let result = build_lp_deposit_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
+            assert!(result.is_ok(), "Build failed: {:?}", result.err());
+
+            let tx = &result.unwrap().unsigned_tx;
+            // User reward goes to recipient
+            assert_eq!(tx.outputs[2].ergo_tree, "recipient_ergo_tree");
+        }
+
+        // --- LP Redeem Tests ---
+
+        #[test]
+        fn test_lp_redeem_rejects_zero_lp() {
+            // Oracle rate: 1,000,000,000,000 raw nanoERG/kg (for Gold, divisor = 1M -> 1,000,000 nanoERG/mg)
+            // LP rate: 1,000,000,000,000 / 500,000 = 2,000,000 nanoERG/token
+            // Oracle adjusted: 1,000,000 nanoERG/token
+            // can_redeem: lp_rate(2M) > oracle_adjusted(1M) * 98/100 -> true
+            let ctx = create_redeem_context(
+                1_000_000_000_000,
+                500_000,
+                99_900_000_000,
+                1_000_000_000_000, // raw oracle rate (nanoERG per kg)
+            );
+
+            let request = LpRedeemRequest {
+                variant: DexyVariant::Gold,
+                lp_to_burn: 0,
+                user_address: "user_addr".to_string(),
+                user_ergo_tree: "user_ergo_tree".to_string(),
+                user_inputs: vec![create_test_input(
+                    10_000_000_000,
+                    vec![(LP_TOKEN_ID, 1_000_000)],
+                )],
+                current_height: 100000,
+                recipient_ergo_tree: None,
+            };
+
+            let result = build_lp_redeem_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                TxError::BuildFailed { message } => {
+                    assert!(message.contains("positive"), "Got: {}", message);
+                }
+                other => panic!("Expected BuildFailed, got {:?}", other),
+            }
+        }
+
+        #[test]
+        fn test_lp_redeem_blocked_by_oracle_gate() {
+            // Set oracle rate very high so LP rate < 98% of oracle
+            // LP rate: 1,000,000,000,000 / 500,000 = 2,000,000 nanoERG/token
+            // Oracle raw: 3,000,000,000,000 -> adjusted: 3,000,000 nanoERG/token
+            // can_redeem: lp_rate(2M) > oracle_adjusted(3M) * 98/100 = 2.94M -> false
+            let ctx = create_redeem_context(
+                1_000_000_000_000,
+                500_000,
+                99_900_000_000,
+                3_000_000_000_000, // High oracle rate -> LP depeg -> blocked
+            );
+
+            let request = LpRedeemRequest {
+                variant: DexyVariant::Gold,
+                lp_to_burn: 1_000_000,
+                user_address: "user_addr".to_string(),
+                user_ergo_tree: "user_ergo_tree".to_string(),
+                user_inputs: vec![create_test_input(
+                    10_000_000_000,
+                    vec![(LP_TOKEN_ID, 1_000_000)],
+                )],
+                current_height: 100000,
+                recipient_ergo_tree: None,
+            };
+
+            let result = build_lp_redeem_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                TxError::BuildFailed { message } => {
+                    assert!(
+                        message.contains("depeg protection"),
+                        "Got: {}",
+                        message
+                    );
+                }
+                other => panic!("Expected BuildFailed, got {:?}", other),
+            }
+        }
+
+        #[test]
+        fn test_lp_redeem_builds_correctly() {
+            // Pool: 1000 ERG, 500K Dexy, 99.9B LP tokens reserved (100M circulating)
+            // Oracle rate (raw): 1T nanoERG/kg -> adjusted: 1M nanoERG/mg
+            // LP rate: 1T / 500K = 2M nanoERG/token
+            // can_redeem: 2M > 1M * 98/100 = 980K -> true
+            let ctx = create_redeem_context(
+                1_000_000_000_000,
+                500_000,
+                99_900_000_000,
+                1_000_000_000_000,
+            );
+
+            // Redeem 1M LP tokens
+            let request = LpRedeemRequest {
+                variant: DexyVariant::Gold,
+                lp_to_burn: 1_000_000,
+                user_address: "user_addr".to_string(),
+                user_ergo_tree: "user_ergo_tree".to_string(),
+                user_inputs: vec![create_test_input(
+                    10_000_000_000, // 10 ERG for fees
+                    vec![(LP_TOKEN_ID, 2_000_000)],
+                )],
+                current_height: 100000,
+                recipient_ergo_tree: None,
+            };
+
+            let result = build_lp_redeem_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
+            assert!(result.is_ok(), "Build failed: {:?}", result.err());
+
+            let build = result.unwrap();
+            let tx = &build.unsigned_tx;
+
+            // Inputs: LP + Redeem NFT + 1 user input
+            assert_eq!(tx.inputs.len(), 3);
+            assert_eq!(tx.inputs[0].box_id, "lp_box_id");
+            assert_eq!(tx.inputs[1].box_id, "redeem_box_id");
+
+            // Data inputs: Oracle box
+            assert_eq!(tx.data_inputs.len(), 1);
+            assert_eq!(tx.data_inputs[0].box_id, "oracle_box_id");
+
+            // Outputs: LP + Redeem NFT + User + Fee
+            assert!(tx.outputs.len() >= 4, "Expected at least 4 outputs, got {}", tx.outputs.len());
+
+            // Output 0: Updated LP box (ERG and Dexy decrease)
+            assert_eq!(tx.outputs[0].ergo_tree, "lp_ergo_tree_hex");
+            let lp_erg_out: i64 = tx.outputs[0].value.parse().unwrap();
+            assert!(
+                lp_erg_out < 1_000_000_000_000,
+                "LP ERG should decrease after redeem"
+            );
+
+            // LP token reserves should increase (tokens return to pool)
+            let new_lp_reserves: i64 = tx.outputs[0].assets[1].amount.parse().unwrap();
+            assert!(
+                new_lp_reserves > 99_900_000_000,
+                "LP token reserves should increase"
+            );
+
+            // Output 1: Redeem NFT box (preserved)
+            assert_eq!(tx.outputs[1].ergo_tree, "redeem_ergo_tree_hex");
+            assert_eq!(tx.outputs[1].value, "1000000");
+            assert_eq!(tx.outputs[1].assets.len(), 1);
+            assert_eq!(tx.outputs[1].assets[0].token_id, LP_REDEEM_NFT_ID);
+
+            // Output 2: User receives ERG + Dexy tokens
+            let user_output = &tx.outputs[2];
+            assert_eq!(user_output.ergo_tree, "user_ergo_tree");
+            let user_erg: i64 = user_output.value.parse().unwrap();
+            assert!(user_erg > 0, "User should receive ERG");
+            // User should get Dexy tokens back
+            let dexy_asset = user_output
+                .assets
+                .iter()
+                .find(|a| a.token_id == DEXY_TOKEN_ID);
+            assert!(dexy_asset.is_some(), "User should receive Dexy tokens");
+            let dexy_out: i64 = dexy_asset.unwrap().amount.parse().unwrap();
+            assert!(dexy_out > 0, "User should receive positive Dexy tokens");
+
+            // Summary checks
+            assert!(build.summary.action.starts_with("lp_redeem"));
+            assert!(build.summary.erg_amount > 0);
+            assert!(build.summary.dexy_amount > 0);
+            assert_eq!(build.summary.lp_tokens, 1_000_000);
+        }
+
+        #[test]
+        fn test_lp_redeem_no_oracle_fails() {
+            // Create deposit context (no oracle) and try to use it for redeem
+            let ctx = create_deposit_context(
+                1_000_000_000_000,
+                500_000,
+                99_900_000_000,
+            );
+
+            let request = LpRedeemRequest {
+                variant: DexyVariant::Gold,
+                lp_to_burn: 1_000_000,
+                user_address: "user_addr".to_string(),
+                user_ergo_tree: "user_ergo_tree".to_string(),
+                user_inputs: vec![create_test_input(
+                    10_000_000_000,
+                    vec![(LP_TOKEN_ID, 2_000_000)],
+                )],
+                current_height: 100000,
+                recipient_ergo_tree: None,
+            };
+
+            let result = build_lp_redeem_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                TxError::BuildFailed { message } => {
+                    assert!(message.contains("Oracle"), "Got: {}", message);
+                }
+                other => panic!("Expected BuildFailed, got {:?}", other),
+            }
+        }
+
+        #[test]
+        fn test_lp_deposit_summary_serialization() {
+            let summary = LpTxSummary {
+                action: "lp_deposit_gold".to_string(),
+                erg_amount: 10_000_000_000,
+                dexy_amount: 5_000,
+                lp_tokens: 1_000_000,
+                miner_fee_nano: 1_100_000,
+            };
+
+            let json = serde_json::to_string(&summary).unwrap();
+            assert!(json.contains("lp_deposit_gold"));
+
+            let parsed: LpTxSummary = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed.action, "lp_deposit_gold");
+            assert_eq!(parsed.lp_tokens, 1_000_000);
+        }
+
+        #[test]
+        fn test_lp_pool_output_preserves_token_order() {
+            let ctx = create_deposit_context(
+                1_000_000_000_000,
+                500_000,
+                99_900_000_000,
+            );
+
+            let output = build_lp_pool_output(
+                &ctx,
+                1_010_000_000_000, // new ERG
+                99_899_000_000,    // new LP token reserves
+                505_000,           // new Dexy
+                LP_TOKEN_ID,
+                DEXY_TOKEN_ID,
+                100001,
+            );
+
+            // Token order preserved: LP NFT, LP Token, Dexy
+            assert_eq!(output.assets.len(), 3);
+            assert_eq!(output.assets[0].token_id, LP_NFT_ID);
+            assert_eq!(output.assets[0].amount, "1");
+            assert_eq!(output.assets[1].token_id, LP_TOKEN_ID);
+            assert_eq!(output.assets[1].amount, "99899000000");
+            assert_eq!(output.assets[2].token_id, DEXY_TOKEN_ID);
+            assert_eq!(output.assets[2].amount, "505000");
+            assert_eq!(output.value, "1010000000000");
+        }
+
+        #[test]
+        fn test_action_nft_output_self_preservation() {
+            let ctx = create_deposit_context(
+                1_000_000_000_000,
+                500_000,
+                99_900_000_000,
+            );
+
+            let output = build_action_nft_output(&ctx, 100001);
+
+            assert_eq!(output.value, "1000000");
+            assert_eq!(output.ergo_tree, "mint_ergo_tree_hex");
+            assert_eq!(output.assets.len(), 1);
+            assert_eq!(output.assets[0].token_id, LP_MINT_NFT_ID);
+            assert_eq!(output.assets[0].amount, "1");
         }
     }
 }
