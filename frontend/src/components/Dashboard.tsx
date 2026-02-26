@@ -369,7 +369,15 @@ export function Dashboard({
               ) : (
                 <div className="activity-list">
                   {activity.map((item, idx) => {
-                    const isMint = item.operation === 'mint'
+                    const op = item.operation
+                    const opLabel = op === 'mint' ? 'Mint'
+                      : op === 'redeem' ? 'Redeem'
+                      : op === 'swap' ? 'Swap'
+                      : op === 'lp_deposit' ? 'Add Liquidity'
+                      : op === 'lp_redeem' ? 'Remove Liquidity'
+                      : item.operation
+                    const opClass = op === 'mint' || op === 'lp_deposit' ? 'mint'
+                      : op === 'swap' ? 'swap' : 'redeem'
                     const ergAbs = Math.abs(item.erg_change_nano) / 1e9
                     const icon = TOKEN_ICONS[item.token] || PROTOCOL_ICONS[item.protocol]
                     return (
@@ -380,18 +388,20 @@ export function Dashboard({
                         role="button"
                         tabIndex={0}
                       >
-                        <div className={`activity-op-icon ${isMint ? 'mint' : 'redeem'}`}>
+                        <div className={`activity-op-icon ${opClass}`}>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            {isMint
-                              ? <path d="M12 19V5M5 12l7-7 7 7" />
-                              : <path d="M12 5v14M5 12l7 7 7-7" />
+                            {op === 'swap'
+                              ? <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
+                              : op === 'mint' || op === 'lp_deposit'
+                                ? <path d="M12 19V5M5 12l7-7 7 7" />
+                                : <path d="M12 5v14M5 12l7 7 7-7" />
                             }
                           </svg>
                         </div>
                         <div className="activity-info">
                           <div className="activity-label">
                             {icon && <img src={icon} alt="" className="activity-token-icon" />}
-                            <span className="activity-op">{isMint ? 'Mint' : 'Redeem'}</span>
+                            <span className="activity-op">{opLabel}</span>
                             <span className="activity-token">{item.token}</span>
                           </div>
                           <span className="activity-protocol">{item.protocol}</span>
@@ -402,9 +412,10 @@ export function Dashboard({
                             const amt = decimals > 0
                               ? (item.token_amount_change / Math.pow(10, decimals)).toLocaleString(undefined, { maximumFractionDigits: decimals })
                               : item.token_amount_change.toLocaleString()
+                            const isPositive = op === 'mint' || op === 'lp_deposit'
                             return (
-                              <span className={`activity-token-amt ${isMint ? 'positive' : 'negative'}`}>
-                                {isMint ? '+' : '-'}{amt} {item.token}
+                              <span className={`activity-token-amt ${isPositive ? 'positive' : 'negative'}`}>
+                                {amt} {item.token}
                               </span>
                             )
                           })()}

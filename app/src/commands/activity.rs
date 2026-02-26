@@ -430,15 +430,67 @@ pub async fn get_protocol_activity(
         }
     };
 
+    // Trace Dexy LP pool NFTs for swap/deposit/redeem activity
+    let dexy_gold_lp_fut = async {
+        if let Some(ids) = &dexy_gold_ids {
+            let dexy_state = match fetch_dexy_state(&client, &capabilities, ids).await {
+                Ok(s) => s,
+                Err(_) => return Vec::new(),
+            };
+            trace_lp_pool(
+                &client,
+                &dexy_state.lp_box_id,
+                &ids.lp_nft,
+                &ids.lp_token_id,
+                &ids.dexy_token,
+                "DexyGold",
+                "DexyGold",
+                count,
+            )
+            .await
+        } else {
+            Vec::new()
+        }
+    };
+
+    let dexy_usd_lp_fut = async {
+        if let Some(ids) = &dexy_usd_ids {
+            let dexy_state = match fetch_dexy_state(&client, &capabilities, ids).await {
+                Ok(s) => s,
+                Err(_) => return Vec::new(),
+            };
+            trace_lp_pool(
+                &client,
+                &dexy_state.lp_box_id,
+                &ids.lp_nft,
+                &ids.lp_token_id,
+                &ids.dexy_token,
+                "DexyUSD",
+                "USE",
+                count,
+            )
+            .await
+        } else {
+            Vec::new()
+        }
+    };
+
     // Run all traces concurrently
-    let (sigma_activity, dexy_gold_activity, dexy_usd_activity) =
-        tokio::join!(sigma_fut, dexy_gold_fut, dexy_usd_fut);
+    let (sigma_activity, dexy_gold_activity, dexy_usd_activity, gold_lp, usd_lp) = tokio::join!(
+        sigma_fut,
+        dexy_gold_fut,
+        dexy_usd_fut,
+        dexy_gold_lp_fut,
+        dexy_usd_lp_fut
+    );
 
     // Merge and sort by height descending
     let mut all: Vec<ProtocolInteraction> = Vec::new();
     all.extend(sigma_activity);
     all.extend(dexy_gold_activity);
     all.extend(dexy_usd_activity);
+    all.extend(gold_lp);
+    all.extend(usd_lp);
     all.sort_by(|a, b| b.height.cmp(&a.height));
     all.truncate(count);
 
