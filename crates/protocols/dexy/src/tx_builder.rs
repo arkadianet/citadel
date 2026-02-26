@@ -1279,9 +1279,8 @@ fn build_action_nft_output(ctx: &DexyLpTxContext, height: i32) -> Eip12Output {
 /// **Outputs:**
 /// - 0: Updated LP box (more ERG, more Dexy, fewer reserved LP tokens)
 /// - 1: LP Mint box (exact self-preservation)
-/// - 2: User reward (LP tokens received + min box value)
+/// - 2: User output (LP tokens received + change ERG + remaining tokens)
 /// - 3: Miner fee
-/// - 4: Change output (remaining user tokens/ERG, if needed)
 pub fn build_lp_deposit_tx(
     request: &LpDepositRequest,
     ctx: &DexyLpTxContext,
@@ -1342,7 +1341,7 @@ pub fn build_lp_deposit_tx(
         calc.consumed_dexy
     );
 
-    // 3. Select user UTXOs: need consumed_erg + TX_FEE + MIN_BOX_VALUE, and consumed_dexy tokens
+    // 3. Select user UTXOs: need consumed_erg + TX_FEE + MIN_BOX_VALUE (for user output), and consumed_dexy tokens
     let min_erg = calc.consumed_erg + constants::TX_FEE_NANO + constants::MIN_BOX_VALUE_NANO;
     let selected = select_token_boxes(
         &request.user_inputs,
@@ -1379,11 +1378,20 @@ pub fn build_lp_deposit_tx(
     // Output 1: LP Mint box (exact self-preservation)
     outputs.push(build_action_nft_output(ctx, request.current_height));
 
-    // Output 2: User reward (LP tokens)
+    // Output 2: User output (LP tokens received + change ERG + remaining tokens)
+    let user_erg = selected.total_erg as i64 - calc.consumed_erg - constants::TX_FEE_NANO;
+
+    // Collect remaining tokens, subtracting consumed Dexy, and add received LP tokens
+    let mut user_tokens = vec![Eip12Asset::new(lp_token_id, calc.lp_tokens_out)];
+    user_tokens.extend(collect_change_tokens(
+        &selected.boxes,
+        Some((dexy_token_id, calc.consumed_dexy as u64)),
+    ));
+
     outputs.push(Eip12Output::change(
-        constants::MIN_BOX_VALUE_NANO,
+        user_erg.max(constants::MIN_BOX_VALUE_NANO),
         output_ergo_tree,
-        vec![Eip12Asset::new(lp_token_id, calc.lp_tokens_out)],
+        user_tokens,
         request.current_height,
     ));
 
@@ -1392,29 +1400,6 @@ pub fn build_lp_deposit_tx(
         constants::TX_FEE_NANO,
         request.current_height,
     ));
-
-    // Output 4: Change output (if needed)
-    // Remaining ERG = user total - consumed_erg - TX_FEE - MIN_BOX_VALUE (for reward output)
-    let change_erg = selected.total_erg as i64
-        - calc.consumed_erg
-        - constants::TX_FEE_NANO
-        - constants::MIN_BOX_VALUE_NANO;
-
-    // Collect remaining tokens, subtracting consumed Dexy
-    let change_tokens = collect_change_tokens(
-        &selected.boxes,
-        Some((dexy_token_id, calc.consumed_dexy as u64)),
-    );
-
-    if change_erg >= constants::MIN_BOX_VALUE_NANO || !change_tokens.is_empty() {
-        let change_value = change_erg.max(constants::MIN_BOX_VALUE_NANO);
-        outputs.push(Eip12Output::change(
-            change_value,
-            &request.user_ergo_tree,
-            change_tokens,
-            request.current_height,
-        ));
-    }
 
     // 6. Build unsigned transaction (no data inputs for deposit)
     let unsigned_tx = Eip12UnsignedTx {
@@ -2586,10 +2571,10 @@ mod tests {
             // No data inputs for deposit
             assert_eq!(tx.data_inputs.len(), 0);
 
-            // Outputs: LP + Mint NFT + User reward + Fee + Change
+            // Outputs: LP + Mint NFT + User (LP tokens + change) + Fee
             assert!(
-                tx.outputs.len() >= 4,
-                "Expected at least 4 outputs, got {}",
+                tx.outputs.len() >= 3,
+                "Expected at least 3 outputs, got {}",
                 tx.outputs.len()
             );
 
