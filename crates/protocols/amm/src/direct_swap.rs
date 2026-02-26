@@ -6,7 +6,10 @@
 //! # Transaction Structure
 //!
 //! Inputs:  [pool_box, user_utxos...]
-//! Outputs: [new_pool_box, user_swap_output, miner_fee, change?]
+//! Outputs: [new_pool_box, user_output, miner_fee]
+//!
+//! When a separate recipient is specified:
+//! Outputs: [new_pool_box, recipient_swap_output, miner_fee, change?]
 //!
 //! The pool box contract validates:
 //! 1. Same ErgoTree (propositionBytes preserved)
@@ -266,44 +269,76 @@ pub fn build_direct_swap_eip12(
     };
     let change_tokens = collect_change_tokens(&selected.boxes, spent_token);
 
-    if !change_tokens.is_empty() && change_erg < MIN_CHANGE_VALUE {
-        return Err(AmmError::TxBuildError(format!(
-            "Change tokens exist but not enough ERG for change box (need {}, have {})",
-            MIN_CHANGE_VALUE, change_erg
-        )));
-    }
+    // Build outputs: pool box is always outputs[0].
+    // When swap output and change go to the same address (no separate recipient),
+    // merge into a single user output to save a UTXO.
+    let mut outputs = vec![new_pool_output];
 
-    // If change ERG is too small for a separate change box and there are no change
-    // tokens, fold it into the user swap output to avoid losing ERG.
-    let user_swap_output = if change_erg > 0
-        && change_erg < MIN_CHANGE_VALUE
-        && change_tokens.is_empty()
-    {
-        let base_value: u64 = user_swap_output
-            .value
-            .parse()
-            .map_err(|_| AmmError::TxBuildError("Invalid swap output value".to_string()))?;
-        Eip12Output {
-            value: (base_value + change_erg).to_string(),
-            ..user_swap_output
-        }
-    } else {
-        user_swap_output
-    };
+    if recipient_ergo_tree.is_none() {
+        let user_erg = if is_erg_to_token {
+            MIN_BOX_VALUE + change_erg
+        } else {
+            output_amount + change_erg
+        };
 
-    // Build outputs list
-    let mut outputs = vec![new_pool_output, user_swap_output, fee_output];
+        let mut user_tokens = if is_erg_to_token {
+            vec![Eip12Asset {
+                token_id: pool.token_y.token_id.clone(),
+                amount: output_amount.to_string(),
+            }]
+        } else {
+            vec![]
+        };
+        user_tokens.extend(change_tokens);
 
-    if change_erg >= MIN_CHANGE_VALUE || !change_tokens.is_empty() {
-        let change_output = Eip12Output {
-            value: change_erg.to_string(),
+        outputs.push(Eip12Output {
+            value: user_erg.to_string(),
             ergo_tree: user_ergo_tree.to_string(),
-            assets: change_tokens,
+            assets: user_tokens,
             creation_height: current_height,
             additional_registers: HashMap::new(),
+        });
+    } else {
+        // Separate recipient: swap output goes to recipient, change to user.
+        if !change_tokens.is_empty() && change_erg < MIN_CHANGE_VALUE {
+            return Err(AmmError::TxBuildError(format!(
+                "Change tokens exist but not enough ERG for change box (need {}, have {})",
+                MIN_CHANGE_VALUE, change_erg
+            )));
+        }
+
+        // If change ERG is too small for a separate box and there are no change
+        // tokens, fold it into the swap output to avoid losing ERG.
+        let user_swap_output = if change_erg > 0
+            && change_erg < MIN_CHANGE_VALUE
+            && change_tokens.is_empty()
+        {
+            let base_value: u64 = user_swap_output
+                .value
+                .parse()
+                .map_err(|_| AmmError::TxBuildError("Invalid swap output value".to_string()))?;
+            Eip12Output {
+                value: (base_value + change_erg).to_string(),
+                ..user_swap_output
+            }
+        } else {
+            user_swap_output
         };
-        outputs.push(change_output);
+
+        outputs.push(user_swap_output);
+
+        if change_erg >= MIN_CHANGE_VALUE || !change_tokens.is_empty() {
+            outputs.push(Eip12Output {
+                value: change_erg.to_string(),
+                ergo_tree: user_ergo_tree.to_string(),
+                assets: change_tokens,
+                creation_height: current_height,
+                additional_registers: HashMap::new(),
+            });
+        }
     }
+
+    outputs.push(fee_output);
 
     // Build transaction: pool box MUST be inputs[0]
     let mut inputs = vec![pool_box.clone()];
@@ -493,18 +528,16 @@ mod tests {
             .unwrap();
         assert_eq!(new_token_y, 1_000_000 - output);
 
-        // outputs[1] = user swap output (receives tokens)
+        // outputs[1] = merged user output (swap tokens + change ERG)
         assert_eq!(build.unsigned_tx.outputs[1].assets.len(), 1);
         let user_token_received: u64 = build.unsigned_tx.outputs[1].assets[0]
             .amount
             .parse()
             .unwrap();
         assert_eq!(user_token_received, output);
-        // User output box has MIN_BOX_VALUE ERG
-        assert_eq!(
-            build.unsigned_tx.outputs[1].value,
-            MIN_BOX_VALUE.to_string()
-        );
+        // User output includes change ERG (no separate change box)
+        let user_out_erg: u64 = build.unsigned_tx.outputs[1].value.parse().unwrap();
+        assert!(user_out_erg > MIN_BOX_VALUE, "Change ERG should be folded in");
 
         // outputs[2] = miner fee
         assert_eq!(build.unsigned_tx.outputs[2].value, TX_FEE.to_string());
@@ -565,14 +598,13 @@ mod tests {
             .unwrap();
         assert_eq!(new_token_y, 1_000_000 + 10000);
 
-        // User receives ERG
-        let user_erg_received: u64 = build.unsigned_tx.outputs[1].value.parse().unwrap();
-        assert_eq!(user_erg_received, output);
-        assert!(build.unsigned_tx.outputs[1].assets.is_empty());
+        // User receives ERG + remaining tokens in single merged output
+        let user_out = &build.unsigned_tx.outputs[1];
+        let user_erg_received: u64 = user_out.value.parse().unwrap();
+        assert!(user_erg_received > output, "Change ERG should be folded in");
 
-        // Change should have remaining tokens
-        let change = &build.unsigned_tx.outputs[3]; // pool, swap_output, fee, change
-        let change_token: &Eip12Asset = change
+        // Merged output includes remaining tokens
+        let change_token: &Eip12Asset = user_out
             .assets
             .iter()
             .find(|a| a.token_id == token_id)
