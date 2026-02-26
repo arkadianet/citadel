@@ -990,7 +990,22 @@ export function DexyTab({
                     <input
                       type="number"
                       value={depositErg}
-                      onChange={e => setDepositErg(e.target.value)}
+                      onChange={e => {
+                        const val = e.target.value
+                        setDepositErg(val)
+                        if (state && state.lp_erg_reserves > 0 && state.lp_dexy_reserves > 0) {
+                          const ergVal = parseFloat(val || '0')
+                          if (ergVal > 0) {
+                            const ergNano = ergVal * 1e9
+                            const dexyRaw = ergNano * state.lp_dexy_reserves / state.lp_erg_reserves
+                            setDepositDexy(tokenDecimals > 0
+                              ? (dexyRaw / Math.pow(10, tokenDecimals)).toFixed(tokenDecimals)
+                              : Math.floor(dexyRaw).toString())
+                          } else {
+                            setDepositDexy('')
+                          }
+                        }
+                      }}
                       placeholder="0.0"
                       min="0"
                       step="0.1"
@@ -1001,7 +1016,20 @@ export function DexyTab({
                     <input
                       type="number"
                       value={depositDexy}
-                      onChange={e => setDepositDexy(e.target.value)}
+                      onChange={e => {
+                        const val = e.target.value
+                        setDepositDexy(val)
+                        if (state && state.lp_erg_reserves > 0 && state.lp_dexy_reserves > 0) {
+                          const dexyVal = parseFloat(val || '0')
+                          if (dexyVal > 0) {
+                            const dexyRaw = dexyVal * Math.pow(10, tokenDecimals)
+                            const ergNano = dexyRaw * state.lp_erg_reserves / state.lp_dexy_reserves
+                            setDepositErg((ergNano / 1e9).toFixed(4))
+                          } else {
+                            setDepositErg('')
+                          }
+                        }
+                      }}
                       placeholder="0.0"
                       min="0"
                       step={tokenDecimals === 0 ? '1' : '0.001'}
