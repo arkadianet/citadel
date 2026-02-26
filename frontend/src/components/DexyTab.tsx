@@ -79,11 +79,6 @@ const LP_TOKEN_IDS: Record<DexyVariant, string> = {
   usd: '804a66426283b8281240df8f9de783651986f20ad6391a71b26b9e7d6faad099',
 }
 
-const INITIAL_LP: Record<DexyVariant, number> = {
-  gold: 100_000_000_000,
-  usd: 9_223_372_036_854_775_000,
-}
-
 const TROY_OZ_IN_MG = 31103.5
 
 interface TokenChange {
@@ -782,7 +777,7 @@ export function DexyTab({
         const lpTokenId = LP_TOKEN_IDS[selectedVariant]
         const userLpToken = walletBalance?.tokens.find(t => t.token_id === lpTokenId)
         const userLpBalance = userLpToken?.amount ?? 0
-        const circulatingLp = state ? (INITIAL_LP[selectedVariant] - state.lp_token_reserves) : 0
+        const circulatingLp = state?.lp_circulating ?? 0
         const poolSharePct = circulatingLp > 0 ? (userLpBalance / circulatingLp) * 100 : 0
         // Value after 2% redemption fee
         const ergValue = circulatingLp > 0 && state ? Math.floor(userLpBalance * state.lp_erg_reserves / circulatingLp * 0.98) : 0
