@@ -299,7 +299,7 @@ async fn trace_lp_pool(
                 ("lp_deposit", erg_change, dexy_change)
             } else if lp_change > 0 && erg_change < 0 && dexy_change < 0 {
                 // LP tokens returned to pool + both reserves decreased = redeem
-                ("lp_redeem", erg_change, dexy_change)
+                ("lp_redeem", erg_change, dexy_change.abs())
             } else if erg_change > 0 && dexy_change < 0 {
                 // ERG in, Dexy out = someone bought Dexy (swap)
                 ("swap", erg_change, dexy_change.abs())
