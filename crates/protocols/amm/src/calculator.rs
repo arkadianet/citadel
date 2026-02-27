@@ -121,6 +121,71 @@ pub fn calculate_pool_share(lp_amount: u64, lp_supply: u64) -> f64 {
     (lp_amount as f64 / lp_supply as f64) * 100.0
 }
 
+/// Calculate LP token reward for a deposit.
+///
+/// reward = min(input_x * supply_lp / reserves_x, input_y * supply_lp / reserves_y)
+///
+/// Uses BigInt to prevent overflow (reserves and supply can be up to i64::MAX).
+pub fn calculate_lp_reward(
+    reserves_x: u64,
+    reserves_y: u64,
+    supply_lp: u64,
+    input_x: u64,
+    input_y: u64,
+) -> u64 {
+    if reserves_x == 0 || reserves_y == 0 || supply_lp == 0 {
+        return 0;
+    }
+    let reward_x = BigInt::from(input_x) * BigInt::from(supply_lp) / BigInt::from(reserves_x);
+    let reward_y = BigInt::from(input_y) * BigInt::from(supply_lp) / BigInt::from(reserves_y);
+    let reward = reward_x.min(reward_y);
+    reward.try_into().unwrap_or(0)
+}
+
+/// Calculate proportional token needed to match a given ERG input for deposit.
+///
+/// token_needed = input_erg * reserves_y / reserves_x
+pub fn calculate_deposit_token_needed(reserves_x: u64, reserves_y: u64, input_x: u64) -> u64 {
+    if reserves_x == 0 {
+        return 0;
+    }
+    let result = BigInt::from(input_x) * BigInt::from(reserves_y) / BigInt::from(reserves_x);
+    result.try_into().unwrap_or(0)
+}
+
+/// Calculate proportional ERG needed to match a given token input for deposit.
+///
+/// erg_needed = input_token * reserves_x / reserves_y
+pub fn calculate_deposit_erg_needed(reserves_x: u64, reserves_y: u64, input_y: u64) -> u64 {
+    if reserves_y == 0 {
+        return 0;
+    }
+    let result = BigInt::from(input_y) * BigInt::from(reserves_x) / BigInt::from(reserves_y);
+    result.try_into().unwrap_or(0)
+}
+
+/// Calculate user's share of pool reserves when redeeming LP tokens.
+///
+/// Returns (erg_out, token_out).
+/// erg_out = lp_input * reserves_x / supply_lp
+/// token_out = lp_input * reserves_y / supply_lp
+pub fn calculate_redeem_shares(
+    reserves_x: u64,
+    reserves_y: u64,
+    supply_lp: u64,
+    lp_input: u64,
+) -> (u64, u64) {
+    if supply_lp == 0 {
+        return (0, 0);
+    }
+    let erg_out = BigInt::from(lp_input) * BigInt::from(reserves_x) / BigInt::from(supply_lp);
+    let token_out = BigInt::from(lp_input) * BigInt::from(reserves_y) / BigInt::from(supply_lp);
+    (
+        erg_out.try_into().unwrap_or(0),
+        token_out.try_into().unwrap_or(0),
+    )
+}
+
 use crate::state::{AmmPool, PoolType, SwapInput, SwapQuote, TokenAmount};
 
 /// Calculate a swap quote for the given pool and input
@@ -305,5 +370,57 @@ mod tests {
         assert!(quote.output.amount > 0);
         assert!(quote.price_impact > 0.0);
         assert!(quote.min_output_suggested < quote.output.amount);
+    }
+
+    #[test]
+    fn test_calculate_lp_reward() {
+        let reward = calculate_lp_reward(
+            100_000_000_000,
+            10_000_000,
+            5000,
+            10_000_000_000,
+            1_000_000,
+        );
+        assert_eq!(reward, 500);
+    }
+
+    #[test]
+    fn test_calculate_lp_reward_takes_minimum() {
+        let reward = calculate_lp_reward(
+            100_000_000_000,
+            10_000_000,
+            5000,
+            20_000_000_000,
+            1_000_000,
+        );
+        assert_eq!(reward, 500);
+    }
+
+    #[test]
+    fn test_calculate_deposit_token_needed() {
+        let needed =
+            calculate_deposit_token_needed(100_000_000_000, 10_000_000, 10_000_000_000);
+        assert_eq!(needed, 1_000_000);
+    }
+
+    #[test]
+    fn test_calculate_deposit_erg_needed() {
+        let needed = calculate_deposit_erg_needed(100_000_000_000, 10_000_000, 1_000_000);
+        assert_eq!(needed, 10_000_000_000);
+    }
+
+    #[test]
+    fn test_calculate_redeem_shares() {
+        let (erg_out, token_out) =
+            calculate_redeem_shares(100_000_000_000, 10_000_000, 5000, 500);
+        assert_eq!(erg_out, 10_000_000_000);
+        assert_eq!(token_out, 1_000_000);
+    }
+
+    #[test]
+    fn test_calculate_redeem_shares_zero_supply() {
+        let (erg, tok) = calculate_redeem_shares(100, 200, 0, 50);
+        assert_eq!(erg, 0);
+        assert_eq!(tok, 0);
     }
 }

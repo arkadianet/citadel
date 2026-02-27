@@ -764,3 +764,395 @@ pub async fn get_refund_tx_status(
 ) -> Result<MintTxStatusResponse, String> {
     super::get_mint_tx_status(state, request_id).await
 }
+
+// =============================================================================
+// AMM LP Deposit/Redeem Commands
+// =============================================================================
+
+/// Preview response for LP deposit
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AmmLpDepositPreviewResponse {
+    pub lp_reward: u64,
+    pub erg_amount: u64,
+    pub token_amount: u64,
+    pub token_name: Option<String>,
+    pub token_decimals: Option<u8>,
+    pub pool_share_percent: f64,
+    pub miner_fee_nano: u64,
+    pub total_erg_cost_nano: u64,
+}
+
+/// Preview response for LP redeem
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AmmLpRedeemPreviewResponse {
+    pub erg_output: u64,
+    pub token_output: u64,
+    pub token_name: Option<String>,
+    pub token_decimals: Option<u8>,
+    pub lp_amount: u64,
+    pub miner_fee_nano: u64,
+    pub total_erg_cost_nano: u64,
+}
+
+/// Build response for LP transactions (both direct and proxy)
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AmmLpBuildResponse {
+    pub unsigned_tx: serde_json::Value,
+    pub summary: serde_json::Value,
+}
+
+/// Preview an LP deposit: calculate proportional amounts and LP reward.
+///
+/// Given a pool and one side of the deposit (ERG or token amount), calculates
+/// the proportional other side and the LP tokens the user would receive.
+#[tauri::command]
+pub async fn preview_amm_lp_deposit(
+    state: State<'_, AppState>,
+    pool_id: String,
+    input_type: String,
+    amount: u64,
+) -> Result<AmmLpDepositPreviewResponse, String> {
+    if amount == 0 {
+        return Err("Amount must be greater than 0".to_string());
+    }
+
+    let client = state.node_client().await.ok_or("Node not connected")?;
+
+    let pools = amm::discover_pools(&client)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let pool = pools
+        .into_iter()
+        .find(|p| p.pool_id == pool_id)
+        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+
+    let erg_reserves = pool
+        .erg_reserves
+        .ok_or("Only N2T pools supported for LP operations")?;
+
+    let (erg_amount, token_amount) = match input_type.as_str() {
+        "erg" => {
+            let token_needed = amm::calculator::calculate_deposit_token_needed(
+                erg_reserves,
+                pool.token_y.amount,
+                amount,
+            );
+            (amount, token_needed)
+        }
+        "token" => {
+            let erg_needed = amm::calculator::calculate_deposit_erg_needed(
+                erg_reserves,
+                pool.token_y.amount,
+                amount,
+            );
+            (erg_needed, amount)
+        }
+        _ => return Err("Invalid input_type. Use 'erg' or 'token'".to_string()),
+    };
+
+    let lp_reward = amm::calculator::calculate_lp_reward(
+        erg_reserves,
+        pool.token_y.amount,
+        pool.lp_circulating,
+        erg_amount,
+        token_amount,
+    );
+
+    let pool_share_percent = if pool.lp_circulating + lp_reward > 0 {
+        (lp_reward as f64) / ((pool.lp_circulating + lp_reward) as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    let miner_fee_nano: u64 = 1_100_000;
+    let total_erg_cost_nano = erg_amount + miner_fee_nano;
+
+    Ok(AmmLpDepositPreviewResponse {
+        lp_reward,
+        erg_amount,
+        token_amount,
+        token_name: pool.token_y.name.clone(),
+        token_decimals: pool.token_y.decimals,
+        pool_share_percent,
+        miner_fee_nano,
+        total_erg_cost_nano,
+    })
+}
+
+/// Build a direct LP deposit transaction (spends pool box directly).
+///
+/// Fetches the pool box and builds an EIP-12 unsigned transaction that deposits
+/// ERG and tokens into the pool, receiving LP tokens in return.
+#[tauri::command]
+pub async fn build_amm_lp_deposit_tx(
+    state: State<'_, AppState>,
+    pool_id: String,
+    erg_amount: u64,
+    token_amount: u64,
+    _user_address: String,
+    user_utxos: Vec<serde_json::Value>,
+    current_height: i32,
+) -> Result<AmmLpBuildResponse, String> {
+    let client = state.node_client().await.ok_or("Node not connected")?;
+
+    let pools = amm::discover_pools(&client)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let pool = pools
+        .into_iter()
+        .find(|p| p.pool_id == pool_id)
+        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+
+    let pool_box = client
+        .get_eip12_box_by_id(&pool.box_id)
+        .await
+        .map_err(|e| format!("Failed to fetch pool box: {}", e))?;
+
+    let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
+    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
+
+    let result = amm::build_lp_deposit_eip12(
+        &pool_box,
+        &pool,
+        erg_amount,
+        token_amount,
+        &parsed_utxos,
+        &user_ergo_tree,
+        current_height,
+    )
+    .map_err(|e| e.to_string())?;
+
+    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
+        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
+    let summary_json = serde_json::to_value(&result.summary)
+        .map_err(|e| format!("Failed to serialize summary: {}", e))?;
+
+    Ok(AmmLpBuildResponse {
+        unsigned_tx: unsigned_tx_json,
+        summary: summary_json,
+    })
+}
+
+/// Build an LP deposit proxy order (creates proxy box for Spectrum bot execution).
+///
+/// Creates a proxy box containing the deposit contract. Off-chain Spectrum bots
+/// detect and execute the deposit against the pool.
+#[tauri::command]
+pub async fn build_amm_lp_deposit_order(
+    state: State<'_, AppState>,
+    pool_id: String,
+    erg_amount: u64,
+    token_amount: u64,
+    _user_address: String,
+    user_utxos: Vec<serde_json::Value>,
+    current_height: i32,
+) -> Result<AmmLpBuildResponse, String> {
+    let client = state.node_client().await.ok_or("Node not connected")?;
+
+    let pools = amm::discover_pools(&client)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let pool = pools
+        .into_iter()
+        .find(|p| p.pool_id == pool_id)
+        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+
+    let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
+    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
+
+    let user_pk = if user_ergo_tree.starts_with("0008cd") && user_ergo_tree.len() >= 72 {
+        user_ergo_tree[6..72].to_string()
+    } else {
+        return Err(format!(
+            "Cannot extract public key from ErgoTree: expected P2PK tree starting with '0008cd', got '{}'",
+            &user_ergo_tree[..std::cmp::min(12, user_ergo_tree.len())]
+        ));
+    };
+
+    let result = amm::build_lp_deposit_order_eip12(
+        &pool,
+        erg_amount,
+        token_amount,
+        &parsed_utxos,
+        &user_ergo_tree,
+        &user_pk,
+        current_height,
+        None,
+    )
+    .map_err(|e| e.to_string())?;
+
+    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
+        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
+    let summary_json = serde_json::to_value(&result.summary)
+        .map_err(|e| format!("Failed to serialize summary: {}", e))?;
+
+    Ok(AmmLpBuildResponse {
+        unsigned_tx: unsigned_tx_json,
+        summary: summary_json,
+    })
+}
+
+/// Preview an LP redeem: calculate the ERG and token output for a given LP amount.
+#[tauri::command]
+pub async fn preview_amm_lp_redeem(
+    state: State<'_, AppState>,
+    pool_id: String,
+    lp_amount: u64,
+) -> Result<AmmLpRedeemPreviewResponse, String> {
+    if lp_amount == 0 {
+        return Err("LP amount must be greater than 0".to_string());
+    }
+
+    let client = state.node_client().await.ok_or("Node not connected")?;
+
+    let pools = amm::discover_pools(&client)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let pool = pools
+        .into_iter()
+        .find(|p| p.pool_id == pool_id)
+        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+
+    let erg_reserves = pool
+        .erg_reserves
+        .ok_or("Only N2T pools supported for LP operations")?;
+
+    let (erg_output, token_output) = amm::calculator::calculate_redeem_shares(
+        erg_reserves,
+        pool.token_y.amount,
+        pool.lp_circulating,
+        lp_amount,
+    );
+
+    let miner_fee_nano: u64 = 1_100_000;
+    // User only needs ERG for miner fee; redeemed ERG comes from the pool
+    let total_erg_cost_nano = miner_fee_nano;
+
+    Ok(AmmLpRedeemPreviewResponse {
+        erg_output,
+        token_output,
+        token_name: pool.token_y.name.clone(),
+        token_decimals: pool.token_y.decimals,
+        lp_amount,
+        miner_fee_nano,
+        total_erg_cost_nano,
+    })
+}
+
+/// Build a direct LP redeem transaction (spends pool box directly).
+///
+/// Fetches the pool box and builds an EIP-12 unsigned transaction that returns
+/// LP tokens to the pool, receiving proportional ERG and tokens in return.
+#[tauri::command]
+pub async fn build_amm_lp_redeem_tx(
+    state: State<'_, AppState>,
+    pool_id: String,
+    lp_amount: u64,
+    _user_address: String,
+    user_utxos: Vec<serde_json::Value>,
+    current_height: i32,
+) -> Result<AmmLpBuildResponse, String> {
+    let client = state.node_client().await.ok_or("Node not connected")?;
+
+    let pools = amm::discover_pools(&client)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let pool = pools
+        .into_iter()
+        .find(|p| p.pool_id == pool_id)
+        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+
+    let pool_box = client
+        .get_eip12_box_by_id(&pool.box_id)
+        .await
+        .map_err(|e| format!("Failed to fetch pool box: {}", e))?;
+
+    let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
+    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
+
+    let result = amm::build_lp_redeem_eip12(
+        &pool_box,
+        &pool,
+        lp_amount,
+        &parsed_utxos,
+        &user_ergo_tree,
+        current_height,
+    )
+    .map_err(|e| e.to_string())?;
+
+    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
+        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
+    let summary_json = serde_json::to_value(&result.summary)
+        .map_err(|e| format!("Failed to serialize summary: {}", e))?;
+
+    Ok(AmmLpBuildResponse {
+        unsigned_tx: unsigned_tx_json,
+        summary: summary_json,
+    })
+}
+
+/// Build an LP redeem proxy order (creates proxy box for Spectrum bot execution).
+///
+/// Creates a proxy box containing the redeem contract and LP tokens. Off-chain
+/// Spectrum bots detect and execute the redemption, sending ERG and tokens to the user.
+#[tauri::command]
+pub async fn build_amm_lp_redeem_order(
+    state: State<'_, AppState>,
+    pool_id: String,
+    lp_amount: u64,
+    _user_address: String,
+    user_utxos: Vec<serde_json::Value>,
+    current_height: i32,
+) -> Result<AmmLpBuildResponse, String> {
+    let client = state.node_client().await.ok_or("Node not connected")?;
+
+    let pools = amm::discover_pools(&client)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let pool = pools
+        .into_iter()
+        .find(|p| p.pool_id == pool_id)
+        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+
+    let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
+    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
+
+    let user_pk = if user_ergo_tree.starts_with("0008cd") && user_ergo_tree.len() >= 72 {
+        user_ergo_tree[6..72].to_string()
+    } else {
+        return Err(format!(
+            "Cannot extract public key from ErgoTree: expected P2PK tree starting with '0008cd', got '{}'",
+            &user_ergo_tree[..std::cmp::min(12, user_ergo_tree.len())]
+        ));
+    };
+
+    let result = amm::build_lp_redeem_order_eip12(
+        &pool,
+        lp_amount,
+        &parsed_utxos,
+        &user_ergo_tree,
+        &user_pk,
+        current_height,
+        None,
+    )
+    .map_err(|e| e.to_string())?;
+
+    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
+        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
+    let summary_json = serde_json::to_value(&result.summary)
+        .map_err(|e| format!("Failed to serialize summary: {}", e))?;
+
+    Ok(AmmLpBuildResponse {
+        unsigned_tx: unsigned_tx_json,
+        summary: summary_json,
+    })
+}

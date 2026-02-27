@@ -1,8 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { QRCodeSVG } from 'qrcode.react'
 import {
   getAmmPools, getAmmQuote, getPoolDisplayName, formatTokenAmount, formatErg,
-  type AmmPool, type SwapQuote,
+  buildAmmLpDepositTx, buildAmmLpDepositOrder,
+  buildAmmLpRedeemTx, buildAmmLpRedeemOrder,
+  startSwapSign, getSwapTxStatus,
+  type AmmPool, type SwapQuote, type AmmLpBuildResponse,
 } from '../api/amm'
+import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import { SwapModal } from './SwapModal'
 import { OrderHistory } from './OrderHistory'
 
@@ -202,6 +208,21 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
   const [poolsError, setPoolsError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Liquidity view state
+  const [view, setView] = useState<'swap' | 'liquidity'>('swap')
+  const [lpMode, setLpMode] = useState<'deposit' | 'redeem'>('deposit')
+  const [lpPool, setLpPool] = useState<AmmPool | null>(null)
+  const [depositErgInput, setDepositErgInput] = useState('')
+  const [depositTokenInput, setDepositTokenInput] = useState('')
+  const [depositLpOutput, setDepositLpOutput] = useState('')
+  const [redeemLpInput, setRedeemLpInput] = useState('')
+  const [redeemErgOutput, setRedeemErgOutput] = useState('')
+  const [redeemTokenOutput, setRedeemTokenOutput] = useState('')
+  const [lpSwapMode, setLpSwapMode] = useState<'proxy' | 'direct'>('proxy')
+  const [lpTxStep, setLpTxStep] = useState<'idle' | 'building' | 'signing' | 'success' | 'error'>('idle')
+  const [lpTxLoading, setLpTxLoading] = useState(false)
+  const [lpTxError, setLpTxError] = useState<string | null>(null)
+
   // Fetch pools
   const fetchPools = useCallback(async () => {
     if (!isConnected) return
@@ -345,6 +366,176 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
 
   const canSwap = selectedPool && quote && walletAddress && !quoteLoading && !quoteError
 
+  // =========================================================================
+  // Liquidity: useTransactionFlow hook
+  // =========================================================================
+
+  const lpFlow = useTransactionFlow({
+    pollStatus: getSwapTxStatus,
+    isOpen: lpTxStep === 'signing',
+    onSuccess: (txId) => {
+      void txId
+      setLpTxStep('success')
+    },
+    onError: (err) => {
+      setLpTxError(err)
+      setLpTxStep('error')
+    },
+    watchParams: { protocol: 'amm', operation: lpMode === 'deposit' ? 'lp_deposit' : 'lp_redeem', description: 'LP operation' },
+  })
+
+  // =========================================================================
+  // Liquidity: helper functions
+  // =========================================================================
+
+  const getUserLpBalance = useCallback((pool: AmmPool): number => {
+    if (!walletBalance) return 0
+    const lpToken = walletBalance.tokens.find(t => t.token_id === pool.lp_token_id)
+    return lpToken?.amount ?? 0
+  }, [walletBalance])
+
+  const handleDepositErgChange = useCallback((val: string) => {
+    setDepositErgInput(val)
+    if (!lpPool || !lpPool.erg_reserves || lpPool.token_y.amount === 0) return
+    const ergVal = parseFloat(val || '0')
+    if (ergVal > 0) {
+      const ergNano = Math.floor(ergVal * 1e9)
+      const tokenNeeded = Math.floor(ergNano * lpPool.token_y.amount / lpPool.erg_reserves!)
+      const lpReward = Math.floor(ergNano * lpPool.lp_circulating / lpPool.erg_reserves!)
+      const tokenDecimals = lpPool.token_y.decimals ?? 0
+      setDepositTokenInput(tokenDecimals > 0
+        ? (tokenNeeded / Math.pow(10, tokenDecimals)).toFixed(tokenDecimals)
+        : tokenNeeded.toString())
+      setDepositLpOutput(lpReward.toLocaleString())
+    } else {
+      setDepositTokenInput('')
+      setDepositLpOutput('')
+    }
+  }, [lpPool])
+
+  const handleDepositTokenChange = useCallback((val: string) => {
+    setDepositTokenInput(val)
+    if (!lpPool || !lpPool.erg_reserves || lpPool.erg_reserves === 0) return
+    const tokenDecimals = lpPool.token_y.decimals ?? 0
+    const tokenVal = parseFloat(val || '0')
+    if (tokenVal > 0) {
+      const tokenRaw = Math.floor(tokenVal * Math.pow(10, tokenDecimals))
+      const ergNeeded = Math.floor(tokenRaw * lpPool.erg_reserves! / lpPool.token_y.amount)
+      const lpReward = Math.floor(tokenRaw * lpPool.lp_circulating / lpPool.token_y.amount)
+      setDepositErgInput((ergNeeded / 1e9).toFixed(4))
+      setDepositLpOutput(lpReward.toLocaleString())
+    } else {
+      setDepositErgInput('')
+      setDepositLpOutput('')
+    }
+  }, [lpPool])
+
+  const handleRedeemLpChange = useCallback((val: string) => {
+    setRedeemLpInput(val)
+    if (!lpPool || !lpPool.erg_reserves || lpPool.lp_circulating === 0) return
+    const lpVal = parseFloat(val || '0')
+    if (lpVal > 0) {
+      const lpAmount = Math.floor(lpVal)
+      const ergOut = Math.floor(lpAmount * lpPool.erg_reserves! / lpPool.lp_circulating)
+      const tokenOut = Math.floor(lpAmount * lpPool.token_y.amount / lpPool.lp_circulating)
+      const tokenDecimals = lpPool.token_y.decimals ?? 0
+      setRedeemErgOutput((ergOut / 1e9).toFixed(4))
+      setRedeemTokenOutput(tokenDecimals > 0
+        ? (tokenOut / Math.pow(10, tokenDecimals)).toFixed(tokenDecimals)
+        : tokenOut.toString())
+    } else {
+      setRedeemErgOutput('')
+      setRedeemTokenOutput('')
+    }
+  }, [lpPool])
+
+  const handleLpPoolSelect = useCallback((pool: AmmPool) => {
+    setLpPool(pool)
+    setDepositErgInput('')
+    setDepositTokenInput('')
+    setDepositLpOutput('')
+    setRedeemLpInput('')
+    setRedeemErgOutput('')
+    setRedeemTokenOutput('')
+    setLpTxStep('idle')
+    setLpTxError(null)
+  }, [])
+
+  const handleLpDeposit = useCallback(async () => {
+    if (!lpPool || !walletAddress) return
+    const ergNano = Math.floor(parseFloat(depositErgInput || '0') * 1e9)
+    const tokenDecimals = lpPool.token_y.decimals ?? 0
+    const tokenRaw = Math.floor(parseFloat(depositTokenInput || '0') * Math.pow(10, tokenDecimals))
+    if (ergNano <= 0 || tokenRaw <= 0) return
+
+    setLpTxLoading(true)
+    setLpTxError(null)
+    try {
+      const utxos = await invoke<unknown[]>('get_user_utxos')
+      const nodeStatus = await invoke<{ chain_height: number }>('get_node_status')
+
+      let buildResult: AmmLpBuildResponse
+      if (lpSwapMode === 'direct') {
+        buildResult = await buildAmmLpDepositTx(
+          lpPool.pool_id, ergNano, tokenRaw, walletAddress, utxos as object[], nodeStatus.chain_height
+        )
+      } else {
+        buildResult = await buildAmmLpDepositOrder(
+          lpPool.pool_id, ergNano, tokenRaw, walletAddress, utxos as object[], nodeStatus.chain_height
+        )
+      }
+
+      const tokenName = lpPool.token_y.name || 'Token'
+      const signResult = await startSwapSign(
+        buildResult.unsignedTx,
+        `Add liquidity: ${depositErgInput} ERG + ${depositTokenInput} ${tokenName}`
+      )
+      lpFlow.startSigning(signResult.request_id, signResult.ergopay_url, signResult.nautilus_url)
+      setLpTxStep('signing')
+    } catch (e) {
+      setLpTxError(String(e))
+      setLpTxStep('error')
+    } finally {
+      setLpTxLoading(false)
+    }
+  }, [lpPool, walletAddress, depositErgInput, depositTokenInput, lpSwapMode, lpFlow])
+
+  const handleLpRedeem = useCallback(async () => {
+    if (!lpPool || !walletAddress) return
+    const lpRaw = Math.floor(parseFloat(redeemLpInput || '0'))
+    if (lpRaw <= 0) return
+
+    setLpTxLoading(true)
+    setLpTxError(null)
+    try {
+      const utxos = await invoke<unknown[]>('get_user_utxos')
+      const nodeStatus = await invoke<{ chain_height: number }>('get_node_status')
+
+      let buildResult: AmmLpBuildResponse
+      if (lpSwapMode === 'direct') {
+        buildResult = await buildAmmLpRedeemTx(
+          lpPool.pool_id, lpRaw, walletAddress, utxos as object[], nodeStatus.chain_height
+        )
+      } else {
+        buildResult = await buildAmmLpRedeemOrder(
+          lpPool.pool_id, lpRaw, walletAddress, utxos as object[], nodeStatus.chain_height
+        )
+      }
+
+      const signResult = await startSwapSign(
+        buildResult.unsignedTx,
+        `Remove liquidity: ${redeemLpInput} LP tokens`
+      )
+      lpFlow.startSigning(signResult.request_id, signResult.ergopay_url, signResult.nautilus_url)
+      setLpTxStep('signing')
+    } catch (e) {
+      setLpTxError(String(e))
+      setLpTxStep('error')
+    } finally {
+      setLpTxLoading(false)
+    }
+  }, [lpPool, walletAddress, redeemLpInput, lpSwapMode, lpFlow])
+
   if (!isConnected) {
     return (
       <div className="swap-tab">
@@ -395,6 +586,25 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
         </div>
       </div>
 
+      {/* View Toggle */}
+      <div className="slippage-row" style={{ justifyContent: 'center' }}>
+        <div className="slippage-options">
+          <button
+            className={`slippage-btn ${view === 'swap' ? 'active' : ''}`}
+            onClick={() => setView('swap')}
+          >
+            Swap
+          </button>
+          <button
+            className={`slippage-btn ${view === 'liquidity' ? 'active' : ''}`}
+            onClick={() => setView('liquidity')}
+          >
+            Liquidity
+          </button>
+        </div>
+      </div>
+
+      {view === 'swap' ? (<>
       {/* Main Layout */}
       <div className="swap-layout">
         {/* Pool List Panel */}
@@ -696,6 +906,300 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
           explorerUrl={explorerUrl}
           onSuccess={() => { setShowSwapModal(false); fetchPools() }}
         />
+      )}
+      </>) : (
+      /* ================================================================= */
+      /* Liquidity UI                                                      */
+      /* ================================================================= */
+      <div className="swap-layout">
+        {/* Pool List Panel (N2T only) */}
+        <div className="pool-list-panel">
+          <div className="pool-search">
+            <input
+              type="text"
+              placeholder="Search pools..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pool-search-input"
+            />
+          </div>
+          <div className="pool-list">
+            {poolsLoading && pools.length === 0 && (
+              <div className="pool-list-empty">
+                <div className="spinner-small" />
+                <span>Loading pools...</span>
+              </div>
+            )}
+            {filteredPools.filter(p => p.pool_type === 'N2T').map(pool => (
+              <button
+                key={pool.pool_id}
+                className={`pool-list-item ${lpPool?.pool_id === pool.pool_id ? 'selected' : ''}`}
+                onClick={() => handleLpPoolSelect(pool)}
+              >
+                <div className="pool-item-info">
+                  {getUserLpBalance(pool) > 0 && <span className="wallet-dot" title="You hold LP tokens" />}
+                  <PoolPairIcons pool={pool} />
+                  <span className="pool-name">{getPoolDisplayName(pool)}</span>
+                </div>
+                <div className="pool-item-meta">
+                  {getUserLpBalance(pool) > 0 && (
+                    <span className="pool-fee">LP: {getUserLpBalance(pool).toLocaleString()}</span>
+                  )}
+                </div>
+              </button>
+            ))}
+            {filteredPools.filter(p => p.pool_type === 'N2T').length === 0 && pools.length > 0 && (
+              <div className="pool-list-empty">
+                <span>No N2T pools match your search</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* LP Form Panel */}
+        <div className="swap-form-panel">
+          {lpPool ? (
+            <>
+              <div className="swap-form-header">
+                <div className="swap-form-header-left">
+                  <PoolPairIcons pool={lpPool} />
+                  <h3>{getPoolDisplayName(lpPool)}</h3>
+                </div>
+                <span className="pool-type-badge">N2T</span>
+              </div>
+
+              {/* Pool Reserves */}
+              <div className="swap-reserves">
+                <div className="reserve-item">
+                  <span className="reserve-label"><TokenIcon name="ERG" size={14} /> ERG Reserves</span>
+                  <span className="reserve-value">{formatErg(lpPool.erg_reserves ?? 0)}</span>
+                </div>
+                <div className="reserve-item">
+                  <span className="reserve-label"><TokenIcon name={lpPool.token_y.name || 'Token'} size={14} /> {lpPool.token_y.name || 'Token'} Reserves</span>
+                  <span className="reserve-value">{formatTokenAmount(lpPool.token_y.amount, lpPool.token_y.decimals ?? 0)}</span>
+                </div>
+                <div className="reserve-item">
+                  <span className="reserve-label">LP Circulating</span>
+                  <span className="reserve-value">{lpPool.lp_circulating.toLocaleString()}</span>
+                </div>
+                {getUserLpBalance(lpPool) > 0 && (
+                  <div className="reserve-item">
+                    <span className="reserve-label">Your LP Balance</span>
+                    <span className="reserve-value">{getUserLpBalance(lpPool).toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* LP signing flow */}
+              {lpTxStep === 'signing' && (
+                <div className="swap-input-section">
+                  <div style={{ textAlign: 'center', padding: 'var(--space-md)' }}>
+                    {lpFlow.signMethod === 'choose' && (
+                      <div>
+                        <p style={{ color: 'var(--slate-400)', marginBottom: 'var(--space-sm)' }}>Choose signing method:</p>
+                        <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'center' }}>
+                          <button className="btn btn-primary" onClick={lpFlow.handleNautilusSign}>Nautilus</button>
+                          <button className="btn btn-secondary" onClick={lpFlow.handleMobileSign}>Mobile (QR)</button>
+                        </div>
+                      </div>
+                    )}
+                    {lpFlow.signMethod === 'nautilus' && (
+                      <div>
+                        <div className="spinner-small" style={{ margin: '0 auto var(--space-sm)' }} />
+                        <p style={{ color: 'var(--slate-400)' }}>Waiting for Nautilus...</p>
+                        <button className="btn btn-secondary" onClick={lpFlow.handleBackToChoice} style={{ marginTop: 'var(--space-sm)' }}>Back</button>
+                      </div>
+                    )}
+                    {lpFlow.signMethod === 'mobile' && lpFlow.qrUrl && (
+                      <div>
+                        <p style={{ color: 'var(--slate-400)', marginBottom: 'var(--space-sm)' }}>Scan QR code with Ergo Mobile Wallet:</p>
+                        <div style={{ background: 'white', display: 'inline-block', padding: 8, borderRadius: 8 }}>
+                          <QRCodeSVG value={lpFlow.qrUrl} size={200} level="M" includeMargin bgColor="white" fgColor="black" />
+                        </div>
+                        <button className="btn btn-secondary" onClick={lpFlow.handleBackToChoice} style={{ marginTop: 'var(--space-sm)', display: 'block', margin: 'var(--space-sm) auto 0' }}>Back</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {lpTxStep === 'success' && (
+                <div className="swap-input-section" style={{ textAlign: 'center', padding: 'var(--space-md)' }}>
+                  <p style={{ color: 'var(--emerald-400)', fontWeight: 600, fontSize: 'var(--text-lg)' }}>Transaction Submitted!</p>
+                  {lpFlow.txId && (
+                    <a href={`${explorerUrl}/en/transactions/${lpFlow.txId}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--slate-400)', fontSize: 'var(--text-xs)' }}>
+                      View on Explorer
+                    </a>
+                  )}
+                  <button className="btn btn-primary" onClick={() => { setLpTxStep('idle'); fetchPools() }} style={{ marginTop: 'var(--space-sm)' }}>Done</button>
+                </div>
+              )}
+
+              {lpTxStep === 'error' && (
+                <div className="swap-input-section" style={{ textAlign: 'center', padding: 'var(--space-md)' }}>
+                  <p style={{ color: 'var(--red-400)', fontWeight: 600 }}>Transaction Failed</p>
+                  <p style={{ color: 'var(--slate-500)', fontSize: 'var(--text-xs)', marginTop: 4 }}>{lpTxError}</p>
+                  <button className="btn btn-primary" onClick={() => setLpTxStep('idle')} style={{ marginTop: 'var(--space-sm)' }}>Try Again</button>
+                </div>
+              )}
+
+              {lpTxStep === 'idle' && (<>
+                {/* Deposit/Redeem Toggle */}
+                <div className="slippage-row">
+                  <span className="slippage-label">Operation</span>
+                  <div className="slippage-options">
+                    <button className={`slippage-btn ${lpMode === 'deposit' ? 'active' : ''}`} onClick={() => setLpMode('deposit')}>Deposit</button>
+                    <button className={`slippage-btn ${lpMode === 'redeem' ? 'active' : ''}`} onClick={() => setLpMode('redeem')}>Redeem</button>
+                  </div>
+                </div>
+
+                {lpMode === 'deposit' ? (
+                  <>
+                    {/* Deposit Form */}
+                    <div className="swap-input-section">
+                      <div className="swap-field">
+                        <div className="swap-field-header">
+                          <span className="swap-field-label">ERG Amount</span>
+                          <span className="swap-field-balance">
+                            {walletBalance && <>Balance: {formatErg(walletBalance.erg_nano)}</>}
+                          </span>
+                        </div>
+                        <div className="swap-field-input">
+                          <input type="number" value={depositErgInput} onChange={e => handleDepositErgChange(e.target.value)} placeholder="0.0" min="0" step="0.1" />
+                          <button className="max-btn" onClick={() => {
+                            if (!walletBalance) return
+                            const available = Math.max(0, walletBalance.erg_nano - 10_000_000)
+                            handleDepositErgChange((available / 1e9).toFixed(4))
+                          }} disabled={!walletBalance}>MAX</button>
+                          <span className="swap-field-token"><TokenIcon name="ERG" size={16} /> ERG</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="swap-input-section">
+                      <div className="swap-field">
+                        <div className="swap-field-header">
+                          <span className="swap-field-label">{lpPool.token_y.name || 'Token'} Amount</span>
+                          <span className="swap-field-balance">
+                            {walletBalance && (() => {
+                              const token = walletBalance.tokens.find(t => t.token_id === lpPool.token_y.token_id)
+                              return token ? <>Balance: {formatTokenAmount(token.amount, token.decimals)}</> : null
+                            })()}
+                          </span>
+                        </div>
+                        <div className="swap-field-input">
+                          <input type="number" value={depositTokenInput} onChange={e => handleDepositTokenChange(e.target.value)} placeholder="0.0" min="0" step={lpPool.token_y.decimals === 0 ? '1' : '0.001'} />
+                          <button className="max-btn" onClick={() => {
+                            if (!walletBalance) return
+                            const token = walletBalance.tokens.find(t => t.token_id === lpPool.token_y.token_id)
+                            if (token) {
+                              const tokenDecimals = lpPool.token_y.decimals ?? 0
+                              handleDepositTokenChange(tokenDecimals > 0 ? (token.amount / Math.pow(10, tokenDecimals)).toFixed(tokenDecimals) : token.amount.toString())
+                            }
+                          }} disabled={!walletBalance}>MAX</button>
+                          <span className="swap-field-token"><TokenIcon name={lpPool.token_y.name || 'Token'} size={16} /> {lpPool.token_y.name || 'Token'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* LP Output (read-only) */}
+                    <div className="output-display">
+                      <div className="output-header">
+                        <span className="swap-field-label">LP Tokens to Receive</span>
+                      </div>
+                      <div className="output-amount">
+                        {depositLpOutput || <span className="quote-placeholder">---</span>}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Redeem Form */}
+                    <div className="swap-input-section">
+                      <div className="swap-field">
+                        <div className="swap-field-header">
+                          <span className="swap-field-label">LP Tokens to Redeem</span>
+                          <span className="swap-field-balance">
+                            {getUserLpBalance(lpPool) > 0 && <>Balance: {getUserLpBalance(lpPool).toLocaleString()}</>}
+                          </span>
+                        </div>
+                        <div className="swap-field-input">
+                          <input type="number" value={redeemLpInput} onChange={e => handleRedeemLpChange(e.target.value)} placeholder="0" min="0" step="1" />
+                          <button className="max-btn" onClick={() => {
+                            const balance = getUserLpBalance(lpPool)
+                            if (balance > 0) handleRedeemLpChange(String(balance))
+                          }} disabled={getUserLpBalance(lpPool) === 0}>MAX</button>
+                          <span className="swap-field-token">LP</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ERG Output (read-only) */}
+                    <div className="output-display">
+                      <div className="output-header">
+                        <span className="swap-field-label">ERG to Receive</span>
+                        <span className="swap-field-token"><TokenIcon name="ERG" size={16} /> ERG</span>
+                      </div>
+                      <div className="output-amount">
+                        {redeemErgOutput ? `${redeemErgOutput} ERG` : <span className="quote-placeholder">---</span>}
+                      </div>
+                    </div>
+
+                    <div className="output-display">
+                      <div className="output-header">
+                        <span className="swap-field-label">{lpPool.token_y.name || 'Token'} to Receive</span>
+                        <span className="swap-field-token"><TokenIcon name={lpPool.token_y.name || 'Token'} size={16} /> {lpPool.token_y.name || 'Token'}</span>
+                      </div>
+                      <div className="output-amount">
+                        {redeemTokenOutput ? `${redeemTokenOutput} ${lpPool.token_y.name || 'Token'}` : <span className="quote-placeholder">---</span>}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Direct vs Proxy Toggle */}
+                <div className="slippage-row">
+                  <span className="slippage-label">Execution Mode</span>
+                  <div className="slippage-options">
+                    <button
+                      className={`slippage-btn ${lpSwapMode === 'proxy' ? 'active' : ''}`}
+                      onClick={() => setLpSwapMode('proxy')}
+                      title="Creates a proxy box for bot execution. More reliable under contention."
+                    >Proxy</button>
+                    <button
+                      className={`slippage-btn ${lpSwapMode === 'direct' ? 'active' : ''}`}
+                      onClick={() => setLpSwapMode('direct')}
+                      title="Spends pool box directly. No bot fee, but may fail if pool state changes."
+                    >Direct</button>
+                  </div>
+                </div>
+
+                {/* Action Button */}
+                <button
+                  className="btn btn-primary swap-confirm-btn"
+                  disabled={
+                    !walletAddress || lpTxLoading ||
+                    (lpMode === 'deposit' ? (!depositErgInput || !depositTokenInput || parseFloat(depositErgInput) <= 0 || parseFloat(depositTokenInput) <= 0) : (!redeemLpInput || parseFloat(redeemLpInput) <= 0))
+                  }
+                  onClick={lpMode === 'deposit' ? handleLpDeposit : handleLpRedeem}
+                >
+                  {!walletAddress
+                    ? 'Connect Wallet'
+                    : lpTxLoading
+                      ? 'Building...'
+                      : lpMode === 'deposit'
+                        ? (lpSwapMode === 'direct' ? 'Direct Deposit' : 'Deposit Liquidity')
+                        : (lpSwapMode === 'direct' ? 'Direct Redeem' : 'Redeem Liquidity')}
+                </button>
+              </>)}
+            </>
+          ) : (
+            <div className="swap-form-empty">
+              <p>Select a pool to manage liquidity</p>
+            </div>
+          )}
+        </div>
+      </div>
       )}
     </div>
   )

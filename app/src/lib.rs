@@ -95,6 +95,13 @@ pub fn run() {
             commands::build_swap_refund_tx,
             commands::start_refund_sign,
             commands::get_refund_tx_status,
+            // AMM LP Operations
+            commands::preview_amm_lp_deposit,
+            commands::build_amm_lp_deposit_tx,
+            commands::build_amm_lp_deposit_order,
+            commands::preview_amm_lp_redeem,
+            commands::build_amm_lp_redeem_tx,
+            commands::build_amm_lp_redeem_order,
             // Explorer
             commands::explorer_node_info,
             commands::explorer_get_transaction,

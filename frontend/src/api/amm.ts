@@ -311,3 +311,127 @@ export async function getSwapTxStatus(requestId: string): Promise<SwapTxStatusRe
     requestId,
   })
 }
+
+// =============================================================================
+// LP Deposit/Redeem Types
+// =============================================================================
+
+export interface AmmLpDepositPreviewResponse {
+  lpReward: number
+  ergAmount: number
+  tokenAmount: number
+  tokenName: string | null
+  tokenDecimals: number | null
+  poolSharePercent: number
+  minerFeeNano: number
+  totalErgCostNano: number
+}
+
+export interface AmmLpRedeemPreviewResponse {
+  ergOutput: number
+  tokenOutput: number
+  tokenName: string | null
+  tokenDecimals: number | null
+  lpAmount: number
+  minerFeeNano: number
+  totalErgCostNano: number
+}
+
+export interface AmmLpBuildResponse {
+  unsignedTx: object
+  summary: object
+}
+
+// =============================================================================
+// LP Deposit/Redeem API Functions
+// =============================================================================
+
+export async function previewAmmLpDeposit(
+  poolId: string,
+  inputType: 'erg' | 'token',
+  amount: number,
+): Promise<AmmLpDepositPreviewResponse> {
+  return await invoke<AmmLpDepositPreviewResponse>('preview_amm_lp_deposit', {
+    poolId,
+    inputType,
+    amount,
+  })
+}
+
+export async function buildAmmLpDepositTx(
+  poolId: string,
+  ergAmount: number,
+  tokenAmount: number,
+  userAddress: string,
+  userUtxos: object[],
+  currentHeight: number,
+): Promise<AmmLpBuildResponse> {
+  return await invoke<AmmLpBuildResponse>('build_amm_lp_deposit_tx', {
+    poolId,
+    ergAmount,
+    tokenAmount,
+    userAddress,
+    userUtxos,
+    currentHeight,
+  })
+}
+
+export async function buildAmmLpDepositOrder(
+  poolId: string,
+  ergAmount: number,
+  tokenAmount: number,
+  userAddress: string,
+  userUtxos: object[],
+  currentHeight: number,
+): Promise<AmmLpBuildResponse> {
+  return await invoke<AmmLpBuildResponse>('build_amm_lp_deposit_order', {
+    poolId,
+    ergAmount,
+    tokenAmount,
+    userAddress,
+    userUtxos,
+    currentHeight,
+  })
+}
+
+export async function previewAmmLpRedeem(
+  poolId: string,
+  lpAmount: number,
+): Promise<AmmLpRedeemPreviewResponse> {
+  return await invoke<AmmLpRedeemPreviewResponse>('preview_amm_lp_redeem', {
+    poolId,
+    lpAmount,
+  })
+}
+
+export async function buildAmmLpRedeemTx(
+  poolId: string,
+  lpAmount: number,
+  userAddress: string,
+  userUtxos: object[],
+  currentHeight: number,
+): Promise<AmmLpBuildResponse> {
+  return await invoke<AmmLpBuildResponse>('build_amm_lp_redeem_tx', {
+    poolId,
+    lpAmount,
+    userAddress,
+    userUtxos,
+    currentHeight,
+  })
+}
+
+export async function buildAmmLpRedeemOrder(
+  poolId: string,
+  lpAmount: number,
+  userAddress: string,
+  userUtxos: object[],
+  currentHeight: number,
+): Promise<AmmLpBuildResponse> {
+  return await invoke<AmmLpBuildResponse>('build_amm_lp_redeem_order', {
+    poolId,
+    lpAmount,
+    userAddress,
+    userUtxos,
+    currentHeight,
+  })
+}
