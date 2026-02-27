@@ -449,6 +449,9 @@ function App() {
               walletAddress={walletAddress}
               walletBalance={walletBalance}
               explorerUrl={explorerUrl}
+              ergUsdPrice={oraclePrice?.erg_usd ?? 0}
+              canMintSigusd={sigmaUsdState?.can_mint_sigusd ?? false}
+              reserveRatioPct={sigmaUsdState?.reserve_ratio_pct ?? 0}
             />
           )}
 

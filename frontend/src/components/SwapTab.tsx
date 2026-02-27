@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { QRCodeSVG } from 'qrcode.react'
 import {
@@ -22,6 +22,9 @@ interface SwapTabProps {
     tokens: Array<{ token_id: string; amount: number; name: string | null; decimals: number }>
   } | null
   explorerUrl: string
+  ergUsdPrice?: number
+  canMintSigusd?: boolean
+  reserveRatioPct?: number
 }
 
 // =============================================================================
@@ -192,7 +195,7 @@ function formatForInput(amount: number, decimals: number): string {
 // SwapTab Component
 // =============================================================================
 
-export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl }: SwapTabProps) {
+export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl, ergUsdPrice, canMintSigusd, reserveRatioPct }: SwapTabProps) {
   const [pools, setPools] = useState<AmmPool[]>([])
   const [filteredPools, setFilteredPools] = useState<AmmPool[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -237,6 +240,23 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
   const [createLoading, setCreateLoading] = useState(false)
   const [createError, setCreateError] = useState('')
   const [createTxStep, setCreateTxStep] = useState<'idle' | 'signing_bootstrap' | 'signing_create' | 'done'>('idle')
+
+  // SigUSD divergence
+  const SIGUSD_TOKEN_ID = '03faf2cb329f2e90d6d23b58d91bbb6c046aa143261cc21f52fbe2824bfcbf04'
+
+  const sigusdDivergence = useMemo(() => {
+    if (!ergUsdPrice || ergUsdPrice <= 0) return null
+    const sigusdPool = pools
+      .filter(p => p.pool_type === 'N2T' && p.token_y.token_id === SIGUSD_TOKEN_ID)
+      .sort((a, b) => (b.erg_reserves ?? 0) - (a.erg_reserves ?? 0))[0]
+    if (!sigusdPool || !sigusdPool.erg_reserves) return null
+
+    const dexErgUsd = (sigusdPool.token_y.amount / 100) / (sigusdPool.erg_reserves / 1e9)
+    const pct = ((dexErgUsd - ergUsdPrice) / ergUsdPrice) * 100
+    if (Math.abs(pct) < 3) return null
+
+    return { pool: sigusdPool, dexPrice: dexErgUsd, oraclePrice: ergUsdPrice, pct }
+  }, [pools, ergUsdPrice])
 
   // Fetch pools
   const fetchPools = useCallback(async () => {
@@ -808,6 +828,18 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                 <div className="pool-item-meta">
                   <span className="pool-fee">{pool.fee_percent}% fee</span>
                 </div>
+                {sigusdDivergence && pool.pool_id === sigusdDivergence.pool.pool_id && (
+                  <span style={{
+                    fontSize: 'var(--text-xxs, 10px)',
+                    padding: '1px 5px',
+                    borderRadius: 4,
+                    background: Math.abs(sigusdDivergence.pct) > 10 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                    color: Math.abs(sigusdDivergence.pct) > 10 ? 'var(--red-400)' : 'var(--amber-400)',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {sigusdDivergence.pct > 0 ? '+' : ''}{sigusdDivergence.pct.toFixed(1)}%
+                  </span>
+                )}
               </button>
             ))}
             {filteredPools.length === 0 && pools.length > 0 && (
@@ -853,6 +885,25 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                   </span>
                 </div>
               </div>
+
+              {sigusdDivergence && selectedPool?.pool_id === sigusdDivergence.pool.pool_id && (
+                <div style={{
+                  padding: '6px 10px',
+                  marginBottom: 'var(--space-sm)',
+                  borderRadius: 6,
+                  fontSize: 'var(--text-xs)',
+                  background: Math.abs(sigusdDivergence.pct) > 10 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                  color: Math.abs(sigusdDivergence.pct) > 10 ? 'var(--red-400)' : 'var(--amber-400)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                }}>
+                  <span>Oracle: ${sigusdDivergence.oraclePrice.toFixed(2)} | DEX: ${sigusdDivergence.dexPrice.toFixed(2)} ({sigusdDivergence.pct > 0 ? '+' : ''}{sigusdDivergence.pct.toFixed(1)}%)</span>
+                  <span style={{ fontWeight: 500 }}>
+                    {canMintSigusd ? 'Arb available' : `Arb blocked (RR ${Math.round(reserveRatioPct ?? 0)}%)`}
+                  </span>
+                </div>
+              )}
 
               {/* Input Field */}
               <div className="swap-input-section">

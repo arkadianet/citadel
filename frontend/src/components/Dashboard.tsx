@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
 import { getProtocolActivity, type ProtocolInteraction } from '../api/protocolActivity'
+import { getAmmPools, type AmmPool } from '../api/amm'
 import './Dashboard.css'
 
 interface DexyState {
@@ -125,6 +126,12 @@ export function Dashboard({
   const [dexyUsd, setDexyUsd] = useState<DexyState | null>(null)
   const [activity, setActivity] = useState<ProtocolInteraction[]>([])
   const [activityLoading, setActivityLoading] = useState(false)
+  const [ammPools, setAmmPools] = useState<AmmPool[]>([])
+
+  useEffect(() => {
+    if (!isConnected) return
+    getAmmPools().then(r => setAmmPools(r.pools)).catch(() => {})
+  }, [isConnected])
 
   useEffect(() => {
     if (!isConnected) {
@@ -204,6 +211,48 @@ export function Dashboard({
   const sigrsvPrice = sigmaUsdState ? sigmaUsdState.sigrsv_price_nano / 1e9 : 0
   const sigrsvValue = sigrsvBalance * sigrsvPrice * ergUsd
   const totalValue = ergValue + sigusdValue + sigrsvValue
+
+  // SigUSD DEX price divergence
+  const SIGUSD_TOKEN_ID = '03faf2cb329f2e90d6d23b58d91bbb6c046aa143261cc21f52fbe2824bfcbf04'
+  const sigusdPool = ammPools
+    .filter(p => p.pool_type === 'N2T' && p.token_y.token_id === SIGUSD_TOKEN_ID)
+    .sort((a, b) => (b.erg_reserves ?? 0) - (a.erg_reserves ?? 0))[0] || null
+
+  const dexErgUsd = sigusdPool && sigusdPool.erg_reserves
+    ? (sigusdPool.token_y.amount / 100) / (sigusdPool.erg_reserves / 1e9)
+    : null
+
+  const divergencePct = dexErgUsd && ergUsd > 0
+    ? ((dexErgUsd - ergUsd) / ergUsd) * 100
+    : null
+
+  const showDivergence = divergencePct !== null && Math.abs(divergencePct) > 3
+
+  // RR recovery calculations (when RR < 400%)
+  const rrRecovery = sigmaUsdState && sigmaUsdState.reserve_ratio_pct < 400 ? (() => {
+    const rr = sigmaUsdState.reserve_ratio_pct
+    const bankErg = sigmaUsdState.bank_erg_nano / 1e9
+    const liabilities = sigmaUsdState.liabilities_nano / 1e9
+    // Path 1: Mint SigRSV — each SigRSV minted adds ERG to the bank
+    const ergNeeded = 4 * liabilities - bankErg
+    const sigrsvPriceErg = sigmaUsdState.sigrsv_price_nano / 1e9
+    const sigrsvNeeded = sigrsvPriceErg > 0 ? Math.ceil(ergNeeded / sigrsvPriceErg) : 0
+    // Path 2: ERG price increase — if ERG price rises, bank value rises (liabilities stay same in USD)
+    const priceIncreasePct = (400 / rr - 1) * 100
+    // Path 3: SigUSD redemption — each SigUSD redeemed removes ~$1 liability and ~$1 ERG
+    // After redeeming fraction f: new_rr = bank*(1-f) / (liab*(1-f)) ... actually more complex
+    // Simplified: fraction = (4 - rr/100) / (4 - 1) = (4 - rr/100) / 3
+    const redeemFraction = Math.min(1, Math.max(0, (4 - rr / 100) / 3))
+    const sigusdToRedeem = Math.ceil((sigmaUsdState.sigusd_circulating / 100) * redeemFraction)
+    return {
+      ergNeeded: Math.max(0, ergNeeded),
+      sigrsvNeeded: Math.max(0, sigrsvNeeded),
+      sigrsvPriceErg,
+      priceIncreasePct,
+      redeemFraction,
+      sigusdToRedeem,
+    }
+  })() : null
 
   return (
     <div className="dashboard">
@@ -324,6 +373,49 @@ export function Dashboard({
                       <span className="protocol-op-stat">{sigmaUsdState.sigrsv_circulating.toLocaleString()} circulating</span>
                     </div>
                   </div>
+                  {showDivergence && dexErgUsd && divergencePct !== null && (
+                    <div style={{
+                      padding: '6px 10px',
+                      marginTop: 6,
+                      borderRadius: 6,
+                      fontSize: 'var(--text-xs)',
+                      background: Math.abs(divergencePct) > 10 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                      color: Math.abs(divergencePct) > 10 ? 'var(--red-400)' : 'var(--amber-400)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 4,
+                    }}>
+                      <span>
+                        DEX ${dexErgUsd.toFixed(2)} vs Oracle ${ergUsd.toFixed(2)}
+                        {' '}({divergencePct > 0 ? '+' : ''}{divergencePct.toFixed(1)}%)
+                      </span>
+                      <span style={{ fontWeight: 500 }}>
+                        {sigmaUsdState.can_mint_sigusd
+                          ? 'Arb available'
+                          : `Arb blocked (RR ${Math.round(sigmaUsdState.reserve_ratio_pct)}%)`
+                        }
+                      </span>
+                    </div>
+                  )}
+                  {rrRecovery && (
+                    <div style={{
+                      padding: '8px 10px',
+                      marginTop: 6,
+                      borderRadius: 6,
+                      fontSize: 'var(--text-xs)',
+                      background: 'rgba(99, 102, 241, 0.1)',
+                      color: 'var(--indigo-300, #a5b4fc)',
+                    }}>
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>RR Recovery to 400%</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, opacity: 0.9 }}>
+                        <span>Mint ~{rrRecovery.sigrsvNeeded.toLocaleString()} SigRSV ({rrRecovery.ergNeeded.toLocaleString(undefined, { maximumFractionDigits: 1 })} ERG)</span>
+                        <span>ERG price +{rrRecovery.priceIncreasePct.toFixed(1)}% (${(ergUsd * (1 + rrRecovery.priceIncreasePct / 100)).toFixed(2)})</span>
+                        <span>Redeem ~{rrRecovery.sigusdToRedeem.toLocaleString()} SigUSD ({(rrRecovery.redeemFraction * 100).toFixed(1)}% of supply)</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {dexyGold && dexyUsd && (
