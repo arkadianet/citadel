@@ -11,11 +11,20 @@
 //! When a separate recipient is specified:
 //! Outputs: [new_pool_box, recipient_swap_output, miner_fee, change?]
 //!
+//! ## N2T Pool
 //! The pool box contract validates:
 //! 1. Same ErgoTree (propositionBytes preserved)
 //! 2. Same R4 register (fee config preserved)
 //! 3. Same 3 tokens: [pool_nft(1), lp_token(same), token_y(updated)]
 //! 4. Updated ERG value
+//! 5. Constant product invariant holds
+//!
+//! ## T2T Pool
+//! The pool box contract validates:
+//! 1. Same ErgoTree (propositionBytes preserved)
+//! 2. Same R4 register (fee config preserved)
+//! 3. Same 4 tokens: [pool_nft(1), lp_token(same), token_x(updated), token_y(updated)]
+//! 4. ERG value unchanged (storage rent only)
 //! 5. Constant product invariant holds
 
 use std::collections::HashMap;
@@ -64,6 +73,8 @@ pub struct DirectSwapSummary {
 /// This transaction spends the pool box directly (no proxy/bot pattern).
 /// The pool box must be inputs[0] and the new pool box must be outputs[0].
 ///
+/// Supports both N2T (ERG <-> Token) and T2T (Token <-> Token) pools.
+///
 /// # Arguments
 ///
 /// * `pool_box` - The current pool UTXO (fetched via get_eip12_box_by_id)
@@ -85,14 +96,41 @@ pub fn build_direct_swap_eip12(
     recipient_ergo_tree: Option<&str>,
 ) -> Result<DirectSwapBuildResult, AmmError> {
     match pool.pool_type {
-        PoolType::N2T => {}
-        PoolType::T2T => {
-            return Err(AmmError::TxBuildError(
-                "Direct swap not yet supported for T2T pools".to_string(),
-            ));
-        }
+        PoolType::N2T => build_n2t_direct_swap(
+            pool_box,
+            pool,
+            input,
+            min_output,
+            user_utxos,
+            user_ergo_tree,
+            current_height,
+            recipient_ergo_tree,
+        ),
+        PoolType::T2T => build_t2t_direct_swap(
+            pool_box,
+            pool,
+            input,
+            min_output,
+            user_utxos,
+            user_ergo_tree,
+            current_height,
+            recipient_ergo_tree,
+        ),
     }
+}
 
+/// Build a direct swap for an N2T (ERG <-> Token) pool.
+#[allow(clippy::too_many_arguments)]
+fn build_n2t_direct_swap(
+    pool_box: &Eip12InputBox,
+    pool: &AmmPool,
+    input: &SwapInput,
+    min_output: u64,
+    user_utxos: &[Eip12InputBox],
+    user_ergo_tree: &str,
+    current_height: i32,
+    recipient_ergo_tree: Option<&str>,
+) -> Result<DirectSwapBuildResult, AmmError> {
     // Parse pool box values directly (ground truth for the contract)
     let pool_erg: u64 = pool_box
         .value
@@ -366,6 +404,306 @@ pub fn build_direct_swap_eip12(
                 .unwrap_or_else(|| pool.token_y.token_id[..8].to_string()),
             "ERG".to_string(),
         ),
+    };
+
+    let summary = DirectSwapSummary {
+        input_amount,
+        input_token: input_token_name,
+        output_amount,
+        min_output,
+        output_token: output_token_name,
+        miner_fee: TX_FEE,
+        total_erg_cost: user_erg_needed,
+    };
+
+    Ok(DirectSwapBuildResult {
+        unsigned_tx,
+        summary,
+    })
+}
+
+/// Build a direct swap for a T2T (Token <-> Token) pool.
+///
+/// T2T pools have 4 tokens: [NFT, LP, Token_X, Token_Y].
+/// ERG is NOT a trading reserve -- it stays unchanged (storage rent only).
+/// Both reserves are tokens at index 2 and 3.
+#[allow(clippy::too_many_arguments)]
+fn build_t2t_direct_swap(
+    pool_box: &Eip12InputBox,
+    pool: &AmmPool,
+    input: &SwapInput,
+    min_output: u64,
+    user_utxos: &[Eip12InputBox],
+    user_ergo_tree: &str,
+    current_height: i32,
+    recipient_ergo_tree: Option<&str>,
+) -> Result<DirectSwapBuildResult, AmmError> {
+    // T2T pools only accept token inputs, never ERG
+    let (input_token_id, input_amount) = match input {
+        SwapInput::Erg { .. } => {
+            return Err(AmmError::InvalidToken(
+                "ERG input is not valid for T2T pools -- use a token".to_string(),
+            ));
+        }
+        SwapInput::Token { token_id, amount } => (token_id.as_str(), *amount),
+    };
+
+    // Parse pool box ERG (stays unchanged for T2T)
+    let pool_erg: u64 = pool_box
+        .value
+        .parse()
+        .map_err(|_| AmmError::TxBuildError("Invalid pool box ERG value".to_string()))?;
+
+    // Validate 4 tokens in pool box: [NFT, LP, Token_X, Token_Y]
+    if pool_box.assets.len() < 4 {
+        return Err(AmmError::TxBuildError(format!(
+            "T2T pool box has {} tokens, expected at least 4",
+            pool_box.assets.len()
+        )));
+    }
+
+    let pool_nft = &pool_box.assets[0];
+    let pool_lp = &pool_box.assets[1];
+    let pool_token_x_asset = &pool_box.assets[2];
+    let pool_token_y_asset = &pool_box.assets[3];
+
+    let pool_token_x_amount: u64 = pool_token_x_asset
+        .amount
+        .parse()
+        .map_err(|_| AmmError::TxBuildError("Invalid pool token X amount".to_string()))?;
+    let pool_token_y_amount: u64 = pool_token_y_asset
+        .amount
+        .parse()
+        .map_err(|_| AmmError::TxBuildError("Invalid pool token Y amount".to_string()))?;
+
+    // Get pool.token_x (must be Some for T2T)
+    let token_x_meta = pool.token_x.as_ref().ok_or_else(|| {
+        AmmError::TxBuildError("T2T pool missing token_x metadata".to_string())
+    })?;
+
+    // Parse fee_num from pool box R4 register
+    let fee_num = parse_fee_num_from_r4(&pool_box.additional_registers)?;
+    let fee_denom = fees::DEFAULT_FEE_DENOM;
+
+    // Determine swap direction based on input token_id
+    // is_x_to_y: user sends token_x, receives token_y
+    let is_x_to_y = if input_token_id == token_x_meta.token_id {
+        true
+    } else if input_token_id == pool.token_y.token_id {
+        false
+    } else {
+        return Err(AmmError::InvalidToken(format!(
+            "Token {} does not match pool token_x ({}) or token_y ({})",
+            input_token_id,
+            &token_x_meta.token_id[..8],
+            &pool.token_y.token_id[..8],
+        )));
+    };
+
+    // Calculate output amount
+    let (reserves_in, reserves_out) = if is_x_to_y {
+        (pool_token_x_amount, pool_token_y_amount)
+    } else {
+        (pool_token_y_amount, pool_token_x_amount)
+    };
+
+    let output_amount = calculator::calculate_output(
+        reserves_in,
+        reserves_out,
+        input_amount,
+        fee_num,
+        fee_denom,
+    );
+    if output_amount == 0 {
+        return Err(AmmError::InsufficientLiquidity);
+    }
+
+    // Validate min_output (slippage protection)
+    if output_amount < min_output {
+        return Err(AmmError::SlippageExceeded {
+            got: output_amount,
+            min: min_output,
+        });
+    }
+
+    // Build new pool box: ERG unchanged, 4 tokens with updated amounts
+    let (new_token_x_amount, new_token_y_amount) = if is_x_to_y {
+        // X -> Y: pool gains X, loses Y
+        let new_x = pool_token_x_amount
+            .checked_add(input_amount)
+            .ok_or_else(|| AmmError::TxBuildError("Pool token X overflow".to_string()))?;
+        let new_y = pool_token_y_amount
+            .checked_sub(output_amount)
+            .ok_or_else(|| AmmError::TxBuildError("Pool token Y underflow".to_string()))?;
+        (new_x, new_y)
+    } else {
+        // Y -> X: pool gains Y, loses X
+        let new_x = pool_token_x_amount
+            .checked_sub(output_amount)
+            .ok_or_else(|| AmmError::TxBuildError("Pool token X underflow".to_string()))?;
+        let new_y = pool_token_y_amount
+            .checked_add(input_amount)
+            .ok_or_else(|| AmmError::TxBuildError("Pool token Y overflow".to_string()))?;
+        (new_x, new_y)
+    };
+
+    let new_pool_output = Eip12Output {
+        value: pool_erg.to_string(), // ERG unchanged for T2T
+        ergo_tree: pool_box.ergo_tree.clone(),
+        assets: vec![
+            Eip12Asset {
+                token_id: pool_nft.token_id.clone(),
+                amount: pool_nft.amount.clone(),
+            },
+            Eip12Asset {
+                token_id: pool_lp.token_id.clone(),
+                amount: pool_lp.amount.clone(),
+            },
+            Eip12Asset {
+                token_id: pool_token_x_asset.token_id.clone(),
+                amount: new_token_x_amount.to_string(),
+            },
+            Eip12Asset {
+                token_id: pool_token_y_asset.token_id.clone(),
+                amount: new_token_y_amount.to_string(),
+            },
+        ],
+        creation_height: current_height,
+        additional_registers: pool_box.additional_registers.clone(),
+    };
+
+    // User output: receives token with MIN_BOX_VALUE ERG
+    let output_token_id = if is_x_to_y {
+        &pool.token_y.token_id
+    } else {
+        &token_x_meta.token_id
+    };
+
+    let output_tree = recipient_ergo_tree.unwrap_or(user_ergo_tree);
+    let user_swap_output = Eip12Output {
+        value: MIN_BOX_VALUE.to_string(),
+        ergo_tree: output_tree.to_string(),
+        assets: vec![Eip12Asset {
+            token_id: output_token_id.clone(),
+            amount: output_amount.to_string(),
+        }],
+        creation_height: current_height,
+        additional_registers: HashMap::new(),
+    };
+
+    // Miner fee output
+    let fee_output = Eip12Output::fee(TX_FEE as i64, current_height);
+
+    // User needs: MIN_BOX_VALUE (for output box) + TX_FEE
+    // Pool ERG is unchanged, so user just needs ERG for the output box + fee
+    let user_erg_needed = MIN_BOX_VALUE
+        .checked_add(TX_FEE)
+        .ok_or_else(|| AmmError::TxBuildError("ERG cost overflow".to_string()))?;
+
+    // Select UTXOs with the input token
+    let selected = select_token_boxes(user_utxos, input_token_id, input_amount, user_erg_needed)
+        .map_err(|e| AmmError::TxBuildError(e.to_string()))?;
+
+    // Change calculation
+    let change_erg = selected.total_erg - user_erg_needed;
+    let spent_token = Some((input_token_id, input_amount));
+    let change_tokens = collect_change_tokens(&selected.boxes, spent_token);
+
+    // Build outputs
+    let mut outputs = vec![new_pool_output];
+
+    if recipient_ergo_tree.is_none() {
+        // No separate recipient: merge swap output + change into single box
+        let user_erg = MIN_BOX_VALUE + change_erg;
+
+        let mut user_tokens = vec![Eip12Asset {
+            token_id: output_token_id.clone(),
+            amount: output_amount.to_string(),
+        }];
+        user_tokens.extend(change_tokens);
+
+        outputs.push(Eip12Output {
+            value: user_erg.to_string(),
+            ergo_tree: user_ergo_tree.to_string(),
+            assets: user_tokens,
+            creation_height: current_height,
+            additional_registers: HashMap::new(),
+        });
+    } else {
+        // Separate recipient: swap output to recipient, change to user
+        if !change_tokens.is_empty() && change_erg < MIN_CHANGE_VALUE {
+            return Err(AmmError::TxBuildError(format!(
+                "Change tokens exist but not enough ERG for change box (need {}, have {})",
+                MIN_CHANGE_VALUE, change_erg
+            )));
+        }
+
+        // If change ERG is too small for a separate box and there are no change
+        // tokens, fold it into the swap output to avoid losing ERG.
+        let user_swap_output = if change_erg > 0
+            && change_erg < MIN_CHANGE_VALUE
+            && change_tokens.is_empty()
+        {
+            let base_value: u64 = user_swap_output
+                .value
+                .parse()
+                .map_err(|_| AmmError::TxBuildError("Invalid swap output value".to_string()))?;
+            Eip12Output {
+                value: (base_value + change_erg).to_string(),
+                ..user_swap_output
+            }
+        } else {
+            user_swap_output
+        };
+
+        outputs.push(user_swap_output);
+
+        if change_erg >= MIN_CHANGE_VALUE || !change_tokens.is_empty() {
+            outputs.push(Eip12Output {
+                value: change_erg.to_string(),
+                ergo_tree: user_ergo_tree.to_string(),
+                assets: change_tokens,
+                creation_height: current_height,
+                additional_registers: HashMap::new(),
+            });
+        }
+    }
+
+    outputs.push(fee_output);
+
+    // Build transaction: pool box MUST be inputs[0]
+    let mut inputs = vec![pool_box.clone()];
+    inputs.extend(selected.boxes);
+
+    let unsigned_tx = Eip12UnsignedTx {
+        inputs,
+        data_inputs: vec![],
+        outputs,
+    };
+
+    // Build summary with token names (not "ERG")
+    let (input_token_name, output_token_name) = if is_x_to_y {
+        (
+            token_x_meta
+                .name
+                .clone()
+                .unwrap_or_else(|| token_x_meta.token_id[..8].to_string()),
+            pool.token_y
+                .name
+                .clone()
+                .unwrap_or_else(|| pool.token_y.token_id[..8].to_string()),
+        )
+    } else {
+        (
+            pool.token_y
+                .name
+                .clone()
+                .unwrap_or_else(|| pool.token_y.token_id[..8].to_string()),
+            token_x_meta
+                .name
+                .clone()
+                .unwrap_or_else(|| token_x_meta.token_id[..8].to_string()),
+        )
     };
 
     let summary = DirectSwapSummary {
@@ -697,24 +1035,336 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_direct_swap_t2t_not_supported() {
-        let pool = AmmPool {
-            pool_type: PoolType::T2T,
-            token_x: Some(TokenAmount {
-                token_id: "token_x".to_string(),
-                amount: 1000,
-                decimals: None,
-                name: None,
-            }),
-            ..test_n2t_pool()
-        };
-        let pool_box = test_pool_box();
-        let user_utxo = test_user_utxo();
+    // =========================================================================
+    // T2T test fixtures
+    // =========================================================================
 
-        let input = SwapInput::Erg {
-            amount: 1_000_000_000,
+    fn test_t2t_pool() -> AmmPool {
+        AmmPool {
+            pool_id: "t2t_pool_nft_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            pool_type: PoolType::T2T,
+            box_id: "t2t_pool_box_1".to_string(),
+            erg_reserves: None,
+            token_x: Some(TokenAmount {
+                token_id:
+                    "token_x_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        .to_string(),
+                amount: 10_000_000,
+                decimals: Some(6),
+                name: Some("TokenX".to_string()),
+            }),
+            token_y: TokenAmount {
+                token_id:
+                    "token_y_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        .to_string(),
+                amount: 5_000_000,
+                decimals: Some(6),
+                name: Some("TokenY".to_string()),
+            },
+            lp_token_id: "t2t_lp_token".to_string(),
+            lp_circulating: 1000,
+            fee_num: 997,
+            fee_denom: 1000,
+        }
+    }
+
+    fn test_t2t_pool_box() -> Eip12InputBox {
+        Eip12InputBox {
+            box_id: "t2t_pool_box_1".to_string(),
+            transaction_id: "t2t_pool_tx_1".to_string(),
+            index: 0,
+            value: "10000000".to_string(), // 0.01 ERG (storage rent only)
+            ergo_tree: "t2t_pool_ergo_tree_hex".to_string(),
+            assets: vec![
+                Eip12Asset {
+                    token_id:
+                        "t2t_pool_nft_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                            .to_string(),
+                    amount: "1".to_string(),
+                },
+                Eip12Asset {
+                    token_id: "t2t_lp_token".to_string(),
+                    amount: "9223372036854774807".to_string(),
+                },
+                Eip12Asset {
+                    token_id:
+                        "token_x_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                            .to_string(),
+                    amount: "10000000".to_string(),
+                },
+                Eip12Asset {
+                    token_id:
+                        "token_y_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                            .to_string(),
+                    amount: "5000000".to_string(),
+                },
+            ],
+            creation_height: 999_000,
+            additional_registers: {
+                let mut m = HashMap::new();
+                m.insert("R4".to_string(), "04ca0f".to_string()); // fee_num=997
+                m
+            },
+            extension: HashMap::new(),
+        }
+    }
+
+    fn test_user_utxo_with_token_x() -> Eip12InputBox {
+        Eip12InputBox {
+            box_id: "user_utxo_token_x".to_string(),
+            transaction_id: "user_tx_2".to_string(),
+            index: 0,
+            value: "5000000000".to_string(), // 5 ERG
+            ergo_tree:
+                "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+                    .to_string(),
+            assets: vec![Eip12Asset {
+                token_id:
+                    "token_x_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        .to_string(),
+                amount: "500000".to_string(),
+            }],
+            creation_height: 999_000,
+            additional_registers: HashMap::new(),
+            extension: HashMap::new(),
+        }
+    }
+
+    fn test_user_utxo_with_token_y() -> Eip12InputBox {
+        Eip12InputBox {
+            box_id: "user_utxo_token_y".to_string(),
+            transaction_id: "user_tx_3".to_string(),
+            index: 0,
+            value: "5000000000".to_string(), // 5 ERG
+            ergo_tree:
+                "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+                    .to_string(),
+            assets: vec![Eip12Asset {
+                token_id:
+                    "token_y_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        .to_string(),
+                amount: "500000".to_string(),
+            }],
+            creation_height: 999_000,
+            additional_registers: HashMap::new(),
+            extension: HashMap::new(),
+        }
+    }
+
+    // =========================================================================
+    // T2T direct swap tests
+    // =========================================================================
+
+    #[test]
+    fn test_direct_swap_t2t_x_to_y() {
+        let pool = test_t2t_pool();
+        let pool_box = test_t2t_pool_box();
+        let user_utxo = test_user_utxo_with_token_x();
+
+        let input_amount = 100_000u64;
+        let input = SwapInput::Token {
+            token_id: "token_x_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            amount: input_amount,
         };
+        // X -> Y: reserves_in = 10_000_000 (X), reserves_out = 5_000_000 (Y)
+        let output =
+            calculator::calculate_output(10_000_000, 5_000_000, input_amount, 997, 1000);
+        let min_output = calculator::apply_slippage(output, 0.5);
+
+        let result = build_direct_swap_eip12(
+            &pool_box,
+            &pool,
+            &input,
+            min_output,
+            &[user_utxo],
+            "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            1_000_000,
+            None,
+        );
+
+        assert!(result.is_ok(), "Should build T2T X->Y swap: {:?}", result.err());
+        let build = result.unwrap();
+
+        // inputs[0] = pool box
+        assert_eq!(build.unsigned_tx.inputs[0].box_id, "t2t_pool_box_1");
+
+        // outputs[0] = new pool box
+        let new_pool = &build.unsigned_tx.outputs[0];
+        assert_eq!(new_pool.ergo_tree, "t2t_pool_ergo_tree_hex");
+
+        // Pool ERG must be unchanged (T2T: ERG is storage rent only)
+        assert_eq!(new_pool.value, "10000000");
+
+        // Pool must have 4 tokens
+        assert_eq!(new_pool.assets.len(), 4);
+
+        // Token X increased (pool received input)
+        let new_x: u64 = new_pool.assets[2].amount.parse().unwrap();
+        assert_eq!(new_x, 10_000_000 + input_amount);
+
+        // Token Y decreased (pool sent output)
+        let new_y: u64 = new_pool.assets[3].amount.parse().unwrap();
+        assert_eq!(new_y, 5_000_000 - output);
+
+        // User output (outputs[1]) receives token_y
+        let user_out = &build.unsigned_tx.outputs[1];
+        let received_token = user_out
+            .assets
+            .iter()
+            .find(|a| {
+                a.token_id
+                    == "token_y_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            })
+            .expect("User should receive token_y");
+        assert_eq!(received_token.amount, output.to_string());
+
+        // Summary
+        assert_eq!(build.summary.input_amount, input_amount);
+        assert_eq!(build.summary.input_token, "TokenX");
+        assert_eq!(build.summary.output_amount, output);
+        assert_eq!(build.summary.output_token, "TokenY");
+    }
+
+    #[test]
+    fn test_direct_swap_t2t_y_to_x() {
+        let pool = test_t2t_pool();
+        let pool_box = test_t2t_pool_box();
+        let user_utxo = test_user_utxo_with_token_y();
+
+        let input_amount = 100_000u64;
+        let input = SwapInput::Token {
+            token_id: "token_y_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            amount: input_amount,
+        };
+        // Y -> X: reserves_in = 5_000_000 (Y), reserves_out = 10_000_000 (X)
+        let output =
+            calculator::calculate_output(5_000_000, 10_000_000, input_amount, 997, 1000);
+        let min_output = calculator::apply_slippage(output, 0.5);
+
+        let result = build_direct_swap_eip12(
+            &pool_box,
+            &pool,
+            &input,
+            min_output,
+            &[user_utxo],
+            "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            1_000_000,
+            None,
+        );
+
+        assert!(result.is_ok(), "Should build T2T Y->X swap: {:?}", result.err());
+        let build = result.unwrap();
+
+        // Pool ERG unchanged
+        assert_eq!(build.unsigned_tx.outputs[0].value, "10000000");
+
+        // Pool must have 4 tokens
+        assert_eq!(build.unsigned_tx.outputs[0].assets.len(), 4);
+
+        // Token X decreased (pool sent output)
+        let new_x: u64 = build.unsigned_tx.outputs[0].assets[2].amount.parse().unwrap();
+        assert_eq!(new_x, 10_000_000 - output);
+
+        // Token Y increased (pool received input)
+        let new_y: u64 = build.unsigned_tx.outputs[0].assets[3].amount.parse().unwrap();
+        assert_eq!(new_y, 5_000_000 + input_amount);
+
+        // User receives token_x
+        let user_out = &build.unsigned_tx.outputs[1];
+        let received_token = user_out
+            .assets
+            .iter()
+            .find(|a| {
+                a.token_id
+                    == "token_x_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            })
+            .expect("User should receive token_x");
+        assert_eq!(received_token.amount, output.to_string());
+
+        // Summary: input is Y, output is X
+        assert_eq!(build.summary.input_token, "TokenY");
+        assert_eq!(build.summary.output_token, "TokenX");
+    }
+
+    #[test]
+    fn test_direct_swap_t2t_pool_erg_unchanged() {
+        let pool = test_t2t_pool();
+        let pool_box = test_t2t_pool_box();
+        let user_utxo = test_user_utxo_with_token_x();
+
+        let input = SwapInput::Token {
+            token_id: "token_x_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            amount: 50_000,
+        };
+
+        let result = build_direct_swap_eip12(
+            &pool_box,
+            &pool,
+            &input,
+            1, // any output is fine
+            &[user_utxo],
+            "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            1_000_000,
+            None,
+        )
+        .unwrap();
+
+        // Pool ERG must be exactly the same as input (storage rent only)
+        let pool_erg_in: u64 = pool_box.value.parse().unwrap();
+        let pool_erg_out: u64 = result.unsigned_tx.outputs[0].value.parse().unwrap();
+        assert_eq!(pool_erg_in, pool_erg_out, "T2T pool ERG must be unchanged");
+
+        // R4 register must be preserved
+        assert_eq!(
+            result.unsigned_tx.outputs[0].additional_registers.get("R4"),
+            Some(&"04ca0f".to_string()),
+            "R4 fee register must be preserved"
+        );
+
+        // ErgoTree must be preserved
+        assert_eq!(
+            result.unsigned_tx.outputs[0].ergo_tree,
+            pool_box.ergo_tree,
+            "Pool ErgoTree must be preserved"
+        );
+
+        // NFT and LP amounts unchanged
+        assert_eq!(
+            result.unsigned_tx.outputs[0].assets[0].amount,
+            pool_box.assets[0].amount,
+            "NFT amount must be unchanged"
+        );
+        assert_eq!(
+            result.unsigned_tx.outputs[0].assets[1].amount,
+            pool_box.assets[1].amount,
+            "LP amount must be unchanged"
+        );
+    }
+
+    #[test]
+    fn test_direct_swap_t2t_wrong_token() {
+        let pool = test_t2t_pool();
+        let pool_box = test_t2t_pool_box();
+        // User has a token that doesn't match either pool token
+        let user_utxo = Eip12InputBox {
+            assets: vec![Eip12Asset {
+                token_id: "wrong_token_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    .to_string(),
+                amount: "500000".to_string(),
+            }],
+            ..test_user_utxo_with_token_x()
+        };
+
+        let input = SwapInput::Token {
+            token_id: "wrong_token_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            amount: 100_000,
+        };
+
         let result = build_direct_swap_eip12(
             &pool_box,
             &pool,
@@ -727,7 +1377,42 @@ mod tests {
         );
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("T2T"));
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("does not match") || err.contains("Invalid token"),
+            "Expected token mismatch error, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_direct_swap_t2t_erg_input_rejected() {
+        let pool = test_t2t_pool();
+        let pool_box = test_t2t_pool_box();
+        let user_utxo = test_user_utxo(); // plain ERG utxo
+
+        let input = SwapInput::Erg {
+            amount: 1_000_000_000,
+        };
+
+        let result = build_direct_swap_eip12(
+            &pool_box,
+            &pool,
+            &input,
+            1,
+            &[user_utxo],
+            "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            1_000_000,
+            None,
+        );
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("ERG input") || err.contains("not valid for T2T"),
+            "Expected ERG rejection error, got: {}",
+            err
+        );
     }
 
     #[test]
