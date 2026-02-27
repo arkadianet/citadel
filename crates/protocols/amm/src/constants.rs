@@ -50,6 +50,9 @@ pub mod fees {
 pub mod lp {
     /// Total LP token emission (max i64 value)
     pub const TOTAL_EMISSION: i64 = 0x7fffffffffffffff; // 9,223,372,036,854,775,807
+
+    /// LP tokens permanently burned (locked in bootstrap box)
+    pub const BURN_LP: i64 = 1000;
 }
 
 /// Swap order contract templates (ErgoTree hex)

@@ -102,6 +102,10 @@ pub fn run() {
             commands::preview_amm_lp_redeem,
             commands::build_amm_lp_redeem_tx,
             commands::build_amm_lp_redeem_order,
+            // AMM Pool Creation
+            commands::preview_pool_create,
+            commands::build_pool_bootstrap_tx,
+            commands::build_pool_create_tx,
             // Explorer
             commands::explorer_node_info,
             commands::explorer_get_transaction,

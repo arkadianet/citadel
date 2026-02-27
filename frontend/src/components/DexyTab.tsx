@@ -458,7 +458,20 @@ export function DexyTab({
     : 0
   const useUsd = useBalance * useUsdPerUnit
 
-  const totalHoldingsUsd = ergUsd + goldUsd + useUsd
+  // LP token balances and estimated values
+  const goldLpBalance = walletBalance ? walletBalance.tokens.find(t => t.token_id === LP_TOKEN_IDS['gold'])?.amount ?? 0 : 0
+  const useLpBalance = walletBalance ? walletBalance.tokens.find(t => t.token_id === LP_TOKEN_IDS['usd'])?.amount ?? 0 : 0
+
+  const goldLpErgValue = goldState && goldState.lp_circulating > 0
+    ? goldLpBalance * goldState.lp_erg_reserves / goldState.lp_circulating * 0.98 / 1e9
+    : 0
+  const useLpErgValue = usdState && usdState.lp_circulating > 0
+    ? useLpBalance * usdState.lp_erg_reserves / usdState.lp_circulating * 0.98 / 1e9
+    : 0
+  const lpTotalErgValue = goldLpErgValue + useLpErgValue
+  const lpTotalUsd = lpTotalErgValue * (ergUsdPrice || 0)
+
+  const totalHoldingsUsd = ergUsd + goldUsd + useUsd + lpTotalUsd
 
   if (!isConnected) {
     return (
@@ -616,6 +629,38 @@ export function DexyTab({
               <div className="dexy-holding-amount">{useBalance.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</div>
               {ergUsdPrice && <div className="dexy-holding-usd">${useUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>}
             </div>
+            {(goldLpBalance > 0 || useLpBalance > 0) && (<>
+              {goldLpBalance > 0 && (
+                <div className="dexy-holding-card amber">
+                  <div className="dexy-holding-header">
+                    <div className="dexy-holding-icon-wrap gold">
+                      <img src="/icons/dexygold.svg" alt="DexyGold LP" />
+                    </div>
+                    <span className="dexy-holding-name">Gold LP</span>
+                  </div>
+                  <div className="dexy-holding-amount">{goldLpBalance.toLocaleString()} LP</div>
+                  <div className="dexy-holding-usd" style={{ color: 'var(--slate-400)' }}>
+                    ~{goldLpErgValue.toFixed(2)} ERG
+                    {ergUsdPrice ? ` ($${(goldLpErgValue * ergUsdPrice).toFixed(2)})` : ''}
+                  </div>
+                </div>
+              )}
+              {useLpBalance > 0 && (
+                <div className="dexy-holding-card emerald">
+                  <div className="dexy-holding-header">
+                    <div className="dexy-holding-icon-wrap usd">
+                      <img src="/icons/use.svg" alt="USE LP" />
+                    </div>
+                    <span className="dexy-holding-name">USE LP</span>
+                  </div>
+                  <div className="dexy-holding-amount">{useLpBalance.toLocaleString()} LP</div>
+                  <div className="dexy-holding-usd" style={{ color: 'var(--slate-400)' }}>
+                    ~{useLpErgValue.toFixed(2)} ERG
+                    {ergUsdPrice ? ` ($${(useLpErgValue * ergUsdPrice).toFixed(2)})` : ''}
+                  </div>
+                </div>
+              )}
+            </>)}
           </div>
         </div>
       ) : !walletAddress && (
@@ -990,7 +1035,7 @@ export function DexyTab({
                 <h3>Add Liquidity</h3>
                 <div className="dexy-lp-form">
                   <div className="dexy-lp-input-group">
-                    <label>ERG Amount</label>
+                    <label>ERG Amount {walletBalance ? <span style={{ color: 'var(--slate-500)', fontWeight: 400 }}>[available: {(walletBalance.erg_nano / 1e9).toFixed(4)}]</span> : null}</label>
                     <input
                       type="number"
                       value={depositErg}
@@ -1016,7 +1061,12 @@ export function DexyTab({
                     />
                   </div>
                   <div className="dexy-lp-input-group">
-                    <label>{tokenName} Amount</label>
+                    <label>{tokenName} Amount {(() => {
+                      const tok = walletBalance?.tokens.find(t => t.token_id === (selectedVariant === 'gold' ? DEXY_TOKEN_IDS['gold'] : DEXY_TOKEN_IDS['usd']))
+                      if (!tok) return null
+                      const display = tokenDecimals > 0 ? (tok.amount / Math.pow(10, tokenDecimals)).toFixed(tokenDecimals) : tok.amount.toLocaleString()
+                      return <span style={{ color: 'var(--slate-500)', fontWeight: 400 }}>[available: {display}]</span>
+                    })()}</label>
                     <input
                       type="number"
                       value={depositDexy}
@@ -1078,7 +1128,7 @@ export function DexyTab({
                 )}
                 <div className="dexy-lp-form">
                   <div className="dexy-lp-input-group">
-                    <label>LP Tokens to redeem</label>
+                    <label>LP Tokens to redeem {userLpBalance > 0 ? <span style={{ color: 'var(--slate-500)', fontWeight: 400 }}>[available: {userLpBalance.toLocaleString()}]</span> : null}</label>
                     <input
                       type="number"
                       value={redeemLp}

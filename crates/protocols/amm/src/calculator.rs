@@ -3,6 +3,7 @@
 //! Swap math using constant product formula (x * y = k).
 
 use num_bigint::BigInt;
+use num_traits::ToPrimitive;
 
 /// Calculate swap output using constant product formula
 ///
@@ -313,6 +314,23 @@ pub fn quote_swap(pool: &AmmPool, input: &SwapInput) -> Option<SwapQuote> {
     }
 }
 
+/// Calculate initial LP share for pool creation using geometric mean.
+///
+/// Formula: sqrt(x_amount * y_amount)
+/// Uses BigInt to prevent overflow since x_amount * y_amount can exceed u64::MAX.
+///
+/// Returns 0 if either amount is 0.
+pub fn calculate_initial_lp_share(x_amount: u64, y_amount: u64) -> u64 {
+    if x_amount == 0 || y_amount == 0 {
+        return 0;
+    }
+    let x = BigInt::from(x_amount);
+    let y = BigInt::from(y_amount);
+    let product = x * y;
+    let root = product.sqrt();
+    root.to_u64().unwrap_or(u64::MAX)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -422,5 +440,38 @@ mod tests {
         let (erg, tok) = calculate_redeem_shares(100, 200, 0, 50);
         assert_eq!(erg, 0);
         assert_eq!(tok, 0);
+    }
+
+    #[test]
+    fn test_initial_lp_share_basic() {
+        assert_eq!(calculate_initial_lp_share(100, 400), 200);
+    }
+
+    #[test]
+    fn test_initial_lp_share_equal_amounts() {
+        assert_eq!(calculate_initial_lp_share(1000, 1000), 1000);
+    }
+
+    #[test]
+    fn test_initial_lp_share_large_values() {
+        // 1 ERG (1e9 nanoERG) * 1000 tokens (1e6 with 3 decimals)
+        assert_eq!(
+            calculate_initial_lp_share(1_000_000_000, 1_000_000),
+            31_622_776
+        );
+    }
+
+    #[test]
+    fn test_initial_lp_share_zero() {
+        assert_eq!(calculate_initial_lp_share(0, 1000), 0);
+        assert_eq!(calculate_initial_lp_share(1000, 0), 0);
+    }
+
+    #[test]
+    fn test_initial_lp_share_overflow_safe() {
+        let x = u64::MAX / 2;
+        let y = u64::MAX / 2;
+        let result = calculate_initial_lp_share(x, y);
+        assert!(result > 0);
     }
 }

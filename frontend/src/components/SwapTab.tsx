@@ -6,7 +6,9 @@ import {
   buildAmmLpDepositTx, buildAmmLpDepositOrder,
   buildAmmLpRedeemTx, buildAmmLpRedeemOrder,
   startSwapSign, getSwapTxStatus,
+  previewPoolCreate, buildPoolBootstrapTx, buildPoolCreateTx,
   type AmmPool, type SwapQuote, type AmmLpBuildResponse,
+  type PoolCreatePreviewResponse,
 } from '../api/amm'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import { SwapModal } from './SwapModal'
@@ -222,6 +224,19 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
   const [lpTxStep, setLpTxStep] = useState<'idle' | 'building' | 'signing' | 'success' | 'error'>('idle')
   const [lpTxLoading, setLpTxLoading] = useState(false)
   const [lpTxError, setLpTxError] = useState<string | null>(null)
+
+  // Pool creation state
+  const [showCreatePool, setShowCreatePool] = useState(false)
+  const [createPoolType, setCreatePoolType] = useState<'N2T' | 'T2T'>('N2T')
+  const [createXTokenId, setCreateXTokenId] = useState('')
+  const [createXAmount, setCreateXAmount] = useState('')
+  const [createYTokenId, setCreateYTokenId] = useState('')
+  const [createYAmount, setCreateYAmount] = useState('')
+  const [createFeePercent, setCreateFeePercent] = useState('0.3')
+  const [createPreview, setCreatePreview] = useState<PoolCreatePreviewResponse | null>(null)
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [createTxStep, setCreateTxStep] = useState<'idle' | 'signing_bootstrap' | 'signing_create' | 'done'>('idle')
 
   // Fetch pools
   const fetchPools = useCallback(async () => {
@@ -535,6 +550,154 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
       setLpTxLoading(false)
     }
   }, [lpPool, walletAddress, redeemLpInput, lpSwapMode, lpFlow])
+
+  // =========================================================================
+  // Pool Creation: Preview effect
+  // =========================================================================
+
+  useEffect(() => {
+    if (!showCreatePool) return
+    const xAmt = parseFloat(createXAmount)
+    const yAmt = parseFloat(createYAmount)
+    const fee = parseFloat(createFeePercent)
+    if (!xAmt || !yAmt || isNaN(fee) || fee <= 0 || fee >= 100) {
+      setCreatePreview(null)
+      return
+    }
+    if (createPoolType === 'T2T' && !createXTokenId) {
+      setCreatePreview(null)
+      return
+    }
+    if (!createYTokenId) {
+      setCreatePreview(null)
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const xRaw = createPoolType === 'N2T'
+          ? Math.round(xAmt * 1e9)  // ERG -> nanoERG
+          : Math.round(xAmt)
+        const yRaw = Math.round(yAmt)
+
+        const preview = await previewPoolCreate(
+          createPoolType,
+          createPoolType === 'T2T' ? createXTokenId : undefined,
+          xRaw, createYTokenId, yRaw, fee,
+        )
+        setCreatePreview(preview)
+        setCreateError('')
+      } catch (e: unknown) {
+        setCreateError(String(e))
+        setCreatePreview(null)
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [showCreatePool, createPoolType, createXAmount, createYAmount, createXTokenId, createYTokenId, createFeePercent])
+
+  // =========================================================================
+  // Pool Creation: Handler (two-step signing flow)
+  // =========================================================================
+
+  const handleCreatePool = async () => {
+    if (!createPreview || !walletAddress || !walletBalance) return
+    setCreateLoading(true)
+    setCreateError('')
+    setCreateTxStep('signing_bootstrap')
+
+    try {
+      const xRaw = createPoolType === 'N2T'
+        ? Math.round(parseFloat(createXAmount) * 1e9)
+        : Math.round(parseFloat(createXAmount))
+      const yRaw = Math.round(parseFloat(createYAmount))
+      const fee = parseFloat(createFeePercent)
+
+      // Get UTXOs and height
+      const utxosResult = await invoke<object[]>('get_user_utxos')
+      const nodeStatus = await invoke<{ chain_height: number }>('get_node_status')
+
+      // Build TX0 (bootstrap)
+      const tx0 = await buildPoolBootstrapTx(
+        createPoolType,
+        createPoolType === 'T2T' ? createXTokenId : undefined,
+        xRaw, createYTokenId, yRaw, fee,
+        utxosResult, nodeStatus.chain_height,
+      )
+
+      // Sign TX0
+      const sign0 = await startSwapSign(tx0.unsignedTx, 'Create pool: mint LP tokens')
+      let status0 = await getSwapTxStatus(sign0.request_id)
+      while (status0.status === 'pending') {
+        await new Promise(r => setTimeout(r, 1500))
+        status0 = await getSwapTxStatus(sign0.request_id)
+      }
+      if (status0.status !== 'success') {
+        throw new Error(status0.error || 'Bootstrap signing failed')
+      }
+
+      setCreateTxStep('signing_create')
+
+      // Construct bootstrap box for TX1
+      // The bootstrap box is TX0's first output, with box_id = LP token ID
+      const tx0Output = tx0.unsignedTx as Record<string, unknown>
+      const outputs = tx0Output.outputs as Array<Record<string, unknown>>
+      const tx0Summary = tx0.summary as Record<string, unknown>
+      const bootstrapBox = {
+        boxId: tx0Summary.lp_token_id as string,
+        transactionId: status0.tx_id,
+        index: 0,
+        value: outputs[0].value,
+        ergoTree: outputs[0].ergoTree,
+        assets: outputs[0].assets,
+        creationHeight: outputs[0].creationHeight,
+        additionalRegisters: outputs[0].additionalRegisters || {},
+        extension: {},
+      }
+
+      // Build TX1 (pool creation)
+      const tx1 = await buildPoolCreateTx(
+        bootstrapBox,
+        createPoolType,
+        createPoolType === 'T2T' ? createXTokenId : undefined,
+        xRaw, createYTokenId, yRaw,
+        createPreview.fee_num,
+        tx0Summary.lp_token_id as string,
+        createPreview.lp_share,
+        nodeStatus.chain_height,
+      )
+
+      // Sign TX1
+      const sign1 = await startSwapSign(tx1.unsignedTx, 'Create pool: deploy pool')
+      let status1 = await getSwapTxStatus(sign1.request_id)
+      while (status1.status === 'pending') {
+        await new Promise(r => setTimeout(r, 1500))
+        status1 = await getSwapTxStatus(sign1.request_id)
+      }
+      if (status1.status !== 'success') {
+        throw new Error(status1.error || 'Pool creation signing failed')
+      }
+
+      setCreateTxStep('done')
+    } catch (e: unknown) {
+      setCreateError(String(e))
+      setCreateTxStep('idle')
+    } finally {
+      setCreateLoading(false)
+    }
+  }
+
+  const resetCreatePoolForm = () => {
+    setShowCreatePool(false)
+    setCreateXAmount('')
+    setCreateYAmount('')
+    setCreateXTokenId('')
+    setCreateYTokenId('')
+    setCreateFeePercent('0.3')
+    setCreatePreview(null)
+    setCreateError('')
+    setCreateTxStep('idle')
+    setCreateLoading(false)
+  }
 
   if (!isConnected) {
     return (
@@ -911,7 +1074,209 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
       /* ================================================================= */
       /* Liquidity UI                                                      */
       /* ================================================================= */
-      <div className="swap-layout">
+      <>
+      {showCreatePool ? (
+        <div className="swap-form-panel" style={{ maxWidth: 520, margin: '0 auto' }}>
+          <div className="swap-form-header">
+            <h3>Create New Pool</h3>
+            <button className="btn btn-secondary" style={{ fontSize: 'var(--text-xs)' }} onClick={resetCreatePoolForm}>
+              Back to Liquidity
+            </button>
+          </div>
+
+          {/* Pool Type Toggle */}
+          <div className="slippage-row">
+            <span className="slippage-label">Pool Type</span>
+            <div className="slippage-options">
+              <button
+                className={`slippage-btn ${createPoolType === 'N2T' ? 'active' : ''}`}
+                onClick={() => setCreatePoolType('N2T')}
+              >
+                ERG / Token
+              </button>
+              <button
+                className={`slippage-btn ${createPoolType === 'T2T' ? 'active' : ''}`}
+                onClick={() => setCreatePoolType('T2T')}
+              >
+                Token / Token
+              </button>
+            </div>
+          </div>
+
+          {/* Token X */}
+          <div className="swap-input-section">
+            <div className="swap-field">
+              <div className="swap-field-header">
+                <span className="swap-field-label">{createPoolType === 'N2T' ? 'ERG Amount' : 'Token X'}</span>
+                {createPoolType === 'N2T' && walletBalance && (
+                  <span className="swap-field-balance">Balance: {formatErg(walletBalance.erg_nano)}</span>
+                )}
+              </div>
+              {createPoolType === 'T2T' && (
+                <select
+                  value={createXTokenId}
+                  onChange={e => setCreateXTokenId(e.target.value)}
+                  className="pool-search-input"
+                  style={{ marginBottom: 'var(--space-xs)' }}
+                >
+                  <option value="">Select token X...</option>
+                  {walletBalance?.tokens.map(t => (
+                    <option key={t.token_id} value={t.token_id}>
+                      {t.name || t.token_id.slice(0, 8)} ({t.amount})
+                    </option>
+                  ))}
+                </select>
+              )}
+              <div className="swap-field-input">
+                <input
+                  type="number"
+                  value={createXAmount}
+                  onChange={e => setCreateXAmount(e.target.value)}
+                  placeholder={createPoolType === 'N2T' ? '0.0' : '0'}
+                  min="0"
+                />
+                <span className="swap-field-token">
+                  {createPoolType === 'N2T' ? (
+                    <><TokenIcon name="ERG" size={16} /> ERG</>
+                  ) : (
+                    (() => {
+                      const t = walletBalance?.tokens.find(tok => tok.token_id === createXTokenId)
+                      const name = t?.name || (createXTokenId ? createXTokenId.slice(0, 8) : 'Token X')
+                      return <><TokenIcon name={name} size={16} /> {name}</>
+                    })()
+                  )}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Token Y */}
+          <div className="swap-input-section">
+            <div className="swap-field">
+              <div className="swap-field-header">
+                <span className="swap-field-label">Token Y</span>
+              </div>
+              <select
+                value={createYTokenId}
+                onChange={e => setCreateYTokenId(e.target.value)}
+                className="pool-search-input"
+                style={{ marginBottom: 'var(--space-xs)' }}
+              >
+                <option value="">Select token Y...</option>
+                {walletBalance?.tokens.map(t => (
+                  <option key={t.token_id} value={t.token_id}>
+                    {t.name || t.token_id.slice(0, 8)} ({t.amount})
+                  </option>
+                ))}
+              </select>
+              <div className="swap-field-input">
+                <input
+                  type="number"
+                  value={createYAmount}
+                  onChange={e => setCreateYAmount(e.target.value)}
+                  placeholder="0"
+                  min="0"
+                />
+                <span className="swap-field-token">
+                  {(() => {
+                    const t = walletBalance?.tokens.find(tok => tok.token_id === createYTokenId)
+                    const name = t?.name || (createYTokenId ? createYTokenId.slice(0, 8) : 'Token Y')
+                    return <><TokenIcon name={name} size={16} /> {name}</>
+                  })()}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Fee Selector */}
+          <div className="slippage-row">
+            <span className="slippage-label">Fee</span>
+            <div className="slippage-options">
+              {['0.3', '1', '2', '3'].map(f => (
+                <button
+                  key={f}
+                  className={`slippage-btn ${createFeePercent === f ? 'active' : ''}`}
+                  onClick={() => setCreateFeePercent(f)}
+                >
+                  {f}%
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              value={createFeePercent}
+              onChange={e => setCreateFeePercent(e.target.value)}
+              style={{ width: 60, marginLeft: 8 }}
+              className="pool-search-input"
+              min="0.01"
+              max="99"
+              step="0.1"
+            />
+            <span style={{ color: 'var(--slate-400)', marginLeft: 4 }}>%</span>
+          </div>
+
+          {/* Preview */}
+          {createPreview && (
+            <div className="swap-reserves">
+              <div className="reserve-item">
+                <span className="reserve-label">LP Tokens</span>
+                <span className="reserve-value">{createPreview.lp_share.toLocaleString()}</span>
+              </div>
+              <div className="reserve-item">
+                <span className="reserve-label">Pool Share</span>
+                <span className="reserve-value">100%</span>
+              </div>
+              <div className="reserve-item">
+                <span className="reserve-label">Total ERG Cost</span>
+                <span className="reserve-value">{(createPreview.total_erg_cost_nano / 1e9).toFixed(4)} ERG</span>
+              </div>
+            </div>
+          )}
+
+          {/* Error display */}
+          {createError && (
+            <div className="message error" style={{ marginTop: 8, padding: '8px 12px', fontSize: '0.8rem' }}>
+              {createError}
+            </div>
+          )}
+
+          {/* Progress during signing */}
+          {createTxStep === 'signing_bootstrap' && (
+            <p style={{ color: 'var(--slate-400)', textAlign: 'center', marginTop: 'var(--space-sm)' }}>
+              Step 1/2: Signing bootstrap transaction...
+            </p>
+          )}
+          {createTxStep === 'signing_create' && (
+            <p style={{ color: 'var(--slate-400)', textAlign: 'center', marginTop: 'var(--space-sm)' }}>
+              Step 2/2: Signing pool creation...
+            </p>
+          )}
+          {createTxStep === 'done' && (
+            <p style={{ color: 'var(--emerald-400)', textAlign: 'center', marginTop: 'var(--space-sm)', fontWeight: 600 }}>
+              Pool created successfully!
+            </p>
+          )}
+
+          {/* Create button */}
+          <button
+            className="btn btn-primary swap-confirm-btn"
+            disabled={!walletAddress || createLoading || !createPreview || createTxStep !== 'idle'}
+            onClick={handleCreatePool}
+          >
+            {createLoading
+              ? (createTxStep === 'signing_bootstrap' ? 'Step 1/2: Bootstrap...' : 'Step 2/2: Creating...')
+              : createTxStep === 'done'
+                ? 'Done'
+                : 'Create Pool'}
+          </button>
+        </div>
+      ) : (<>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-sm)' }}>
+          <button className="btn btn-secondary" onClick={() => setShowCreatePool(true)}>
+            + Create Pool
+          </button>
+        </div>
+        <div className="swap-layout">
         {/* Pool List Panel (N2T only) */}
         <div className="pool-list-panel">
           <div className="pool-search">
@@ -1200,6 +1565,8 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
           )}
         </div>
       </div>
+      </>)}
+      </>
       )}
     </div>
   )

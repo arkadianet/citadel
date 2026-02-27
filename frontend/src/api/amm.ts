@@ -435,3 +435,86 @@ export async function buildAmmLpRedeemOrder(
     currentHeight,
   })
 }
+
+// =============================================================================
+// Pool Creation Types
+// =============================================================================
+
+export interface PoolCreatePreviewResponse {
+  pool_type: string
+  lp_share: number
+  fee_percent: number
+  fee_num: number
+  miner_fee_nano: number
+  total_erg_cost_nano: number
+}
+
+// =============================================================================
+// Pool Creation API Functions
+// =============================================================================
+
+export async function previewPoolCreate(
+  poolType: string,
+  xTokenId: string | undefined,
+  xAmount: number,
+  yTokenId: string,
+  yAmount: number,
+  feePercent: number,
+): Promise<PoolCreatePreviewResponse> {
+  return await invoke<PoolCreatePreviewResponse>('preview_pool_create', {
+    poolType,
+    xTokenId: xTokenId || null,
+    xAmount,
+    yTokenId,
+    yAmount,
+    feePercent,
+  })
+}
+
+export async function buildPoolBootstrapTx(
+  poolType: string,
+  xTokenId: string | undefined,
+  xAmount: number,
+  yTokenId: string,
+  yAmount: number,
+  feePercent: number,
+  userUtxos: object[],
+  currentHeight: number,
+): Promise<AmmLpBuildResponse> {
+  return await invoke<AmmLpBuildResponse>('build_pool_bootstrap_tx', {
+    poolType,
+    xTokenId: xTokenId || null,
+    xAmount,
+    yTokenId,
+    yAmount,
+    feePercent,
+    userUtxos,
+    currentHeight,
+  })
+}
+
+export async function buildPoolCreateTx(
+  bootstrapBox: object,
+  poolType: string,
+  xTokenId: string | undefined,
+  xAmount: number,
+  yTokenId: string,
+  yAmount: number,
+  feeNum: number,
+  lpTokenId: string,
+  userLpShare: number,
+  currentHeight: number,
+): Promise<AmmLpBuildResponse> {
+  return await invoke<AmmLpBuildResponse>('build_pool_create_tx', {
+    bootstrapBox,
+    poolType,
+    xTokenId: xTokenId || null,
+    xAmount,
+    yTokenId,
+    yAmount,
+    feeNum,
+    lpTokenId,
+    userLpShare,
+    currentHeight,
+  })
+}

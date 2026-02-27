@@ -1156,3 +1156,182 @@ pub async fn build_amm_lp_redeem_order(
         summary: summary_json,
     })
 }
+
+// =============================================================================
+// AMM Pool Creation Commands
+// =============================================================================
+
+/// Preview response for pool creation
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PoolCreatePreviewResponse {
+    pub pool_type: String,
+    pub lp_share: u64,
+    pub fee_percent: f64,
+    pub fee_num: i32,
+    pub miner_fee_nano: u64,
+    pub total_erg_cost_nano: u64,
+}
+
+/// Preview a new pool creation: calculate LP share and cost without building a transaction.
+///
+/// Pure calculation — no node state or wallet needed.
+#[tauri::command]
+pub async fn preview_pool_create(
+    pool_type: String,
+    x_token_id: Option<String>,
+    x_amount: u64,
+    y_token_id: String,
+    y_amount: u64,
+    fee_percent: f64,
+) -> Result<PoolCreatePreviewResponse, String> {
+    // Suppress unused variable warnings for args needed by Tauri's macro
+    let _ = (&x_token_id, &y_token_id);
+
+    let fee_num = ((1.0 - fee_percent / 100.0) * amm::constants::fees::DEFAULT_FEE_DENOM as f64)
+        .round() as i32;
+    if fee_num <= 0 || fee_num >= amm::constants::fees::DEFAULT_FEE_DENOM {
+        return Err("Fee must be between 0% and 100% (exclusive)".to_string());
+    }
+
+    let lp_share = amm::calculator::calculate_initial_lp_share(x_amount, y_amount);
+    if lp_share == 0 {
+        return Err("Initial LP share would be 0. Increase deposit amounts.".to_string());
+    }
+
+    let tx_fee = 1_100_000u64;
+    let min_box_value = 1_000_000u64;
+
+    let pool_type_enum = match pool_type.as_str() {
+        "N2T" => amm::state::PoolType::N2T,
+        "T2T" => amm::state::PoolType::T2T,
+        _ => return Err(format!("Invalid pool type: {}", pool_type)),
+    };
+
+    let total_erg_cost = match pool_type_enum {
+        amm::state::PoolType::N2T => x_amount + tx_fee * 2 + min_box_value,
+        amm::state::PoolType::T2T => min_box_value * 2 + tx_fee * 2,
+    };
+
+    Ok(PoolCreatePreviewResponse {
+        pool_type,
+        lp_share,
+        fee_percent,
+        fee_num,
+        miner_fee_nano: tx_fee * 2,
+        total_erg_cost_nano: total_erg_cost,
+    })
+}
+
+/// Build the bootstrap transaction (TX0) for a new pool.
+///
+/// Mints LP tokens and creates a bootstrap box at the user's address.
+/// The LP token ID equals the first input box_id (Ergo minting rule).
+#[tauri::command]
+pub async fn build_pool_bootstrap_tx(
+    pool_type: String,
+    x_token_id: Option<String>,
+    x_amount: u64,
+    y_token_id: String,
+    y_amount: u64,
+    fee_percent: f64,
+    user_utxos: Vec<serde_json::Value>,
+    current_height: i32,
+) -> Result<AmmLpBuildResponse, String> {
+    let pool_type_enum = match pool_type.as_str() {
+        "N2T" => amm::state::PoolType::N2T,
+        "T2T" => amm::state::PoolType::T2T,
+        _ => return Err(format!("Invalid pool type: {}", pool_type)),
+    };
+
+    let fee_num = ((1.0 - fee_percent / 100.0) * amm::constants::fees::DEFAULT_FEE_DENOM as f64)
+        .round() as i32;
+
+    let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
+    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
+
+    let params = amm::pool_setup::PoolSetupParams {
+        pool_type: pool_type_enum,
+        x_token_id,
+        x_amount,
+        y_token_id,
+        y_amount,
+        fee_num,
+    };
+
+    let result = amm::pool_setup::build_pool_bootstrap_eip12(
+        &params,
+        &parsed_utxos,
+        &user_ergo_tree,
+        current_height,
+    )
+    .map_err(|e| e.to_string())?;
+
+    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
+        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
+    let summary_json = serde_json::to_value(&result.summary)
+        .map_err(|e| format!("Failed to serialize summary: {}", e))?;
+
+    Ok(AmmLpBuildResponse {
+        unsigned_tx: unsigned_tx_json,
+        summary: summary_json,
+    })
+}
+
+/// Build the pool create transaction (TX1) that creates the on-chain pool box.
+///
+/// Takes the bootstrap box (TX0 output) as JSON. Mints a pool NFT and creates
+/// the pool box under the appropriate pool contract ErgoTree.
+#[tauri::command]
+pub async fn build_pool_create_tx(
+    bootstrap_box: serde_json::Value,
+    pool_type: String,
+    x_token_id: Option<String>,
+    x_amount: u64,
+    y_token_id: String,
+    y_amount: u64,
+    fee_num: i32,
+    lp_token_id: String,
+    user_lp_share: u64,
+    current_height: i32,
+) -> Result<AmmLpBuildResponse, String> {
+    let pool_type_enum = match pool_type.as_str() {
+        "N2T" => amm::state::PoolType::N2T,
+        "T2T" => amm::state::PoolType::T2T,
+        _ => return Err(format!("Invalid pool type: {}", pool_type)),
+    };
+
+    let bootstrap: ergo_tx::Eip12InputBox = serde_json::from_value(bootstrap_box)
+        .map_err(|e| format!("Failed to parse bootstrap box: {}", e))?;
+
+    let user_ergo_tree = bootstrap.ergo_tree.clone();
+
+    let params = amm::pool_setup::PoolSetupParams {
+        pool_type: pool_type_enum,
+        x_token_id,
+        x_amount,
+        y_token_id,
+        y_amount,
+        fee_num,
+    };
+
+    let result = amm::pool_setup::build_pool_create_eip12(
+        &bootstrap,
+        &params,
+        &lp_token_id,
+        user_lp_share,
+        &user_ergo_tree,
+        current_height,
+    )
+    .map_err(|e| e.to_string())?;
+
+    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
+        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
+    let summary_json = serde_json::to_value(&result.summary)
+        .map_err(|e| format!("Failed to serialize summary: {}", e))?;
+
+    Ok(AmmLpBuildResponse {
+        unsigned_tx: unsigned_tx_json,
+        summary: summary_json,
+    })
+}
