@@ -11,7 +11,7 @@ interface ArbScannerTabProps {
 function formatErg(nano: number): string {
   return (nano / 1e9).toLocaleString(undefined, {
     minimumFractionDigits: 4,
-    maximumFractionDigits: 4,
+    maximumFractionDigits: 9,
   })
 }
 
@@ -24,7 +24,7 @@ function formatTokenAmount(raw: number, decimals: number): string {
   const value = raw / Math.pow(10, decimals)
   return value.toLocaleString(undefined, {
     minimumFractionDigits: Math.min(decimals, 4),
-    maximumFractionDigits: Math.min(decimals, 4),
+    maximumFractionDigits: decimals,
   })
 }
 
