@@ -1168,6 +1168,7 @@ pub struct CircularArb {
     pub net_profit_nano: i64,
     pub profit_pct: f64,
     pub price_impact: f64,
+    pub route: Route,
 }
 
 /// Snapshot of all circular arb opportunities.
@@ -1322,6 +1323,7 @@ pub fn find_circular_arbs(
             net_profit_nano: net_profit,
             profit_pct,
             price_impact: route.total_price_impact,
+            route,
         });
     }
 

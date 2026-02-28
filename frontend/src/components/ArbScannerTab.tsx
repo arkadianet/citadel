@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { scanCircularArbs } from '../api/arb'
 import type { CircularArbSnapshot, CircularArb } from '../api/arb'
+import type { RouteHop } from '../api/router'
 import './ArbScannerTab.css'
 
 interface ArbScannerTabProps {
@@ -17,6 +18,19 @@ function formatErg(nano: number): string {
 function formatErgSigned(nano: number): string {
   const prefix = nano >= 0 ? '+' : ''
   return prefix + formatErg(Math.abs(nano))
+}
+
+function formatTokenAmount(raw: number, decimals: number): string {
+  const value = raw / Math.pow(10, decimals)
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: Math.min(decimals, 4),
+    maximumFractionDigits: Math.min(decimals, 4),
+  })
+}
+
+function tokenName(hop: RouteHop, which: 'in' | 'out'): string {
+  if (which === 'in') return hop.token_in_name || hop.token_in.slice(0, 8)
+  return hop.token_out_name || hop.token_out.slice(0, 8)
 }
 
 function impactClass(impact: number): string {
@@ -133,25 +147,47 @@ function ArbCard({ arb }: { arb: CircularArb }) {
         </div>
       </div>
 
+      {/* Per-hop breakdown */}
+      <div className="arb-card-hops-detail">
+        {arb.route.hops.map((hop, idx) => (
+          <div key={idx} className="arb-hop">
+            <div className="arb-hop-header">
+              <span className="arb-hop-index">Hop {idx + 1}</span>
+              <span className="arb-hop-pool" title={hop.pool_id}>
+                {hop.pool_display_name || `${tokenName(hop, 'in')}/${tokenName(hop, 'out')}`}
+              </span>
+              <span className="arb-hop-pool-id">{hop.pool_id.slice(0, 8)}</span>
+              <span className={`arb-hop-impact ${impactClass(hop.price_impact)}`}>
+                {hop.price_impact.toFixed(1)}%
+              </span>
+            </div>
+            <div className="arb-hop-swap">
+              <span className="arb-hop-amount">
+                {formatTokenAmount(hop.input_amount, hop.token_in_decimals)} {tokenName(hop, 'in')}
+              </span>
+              <span className="arb-hop-arrow">&rarr;</span>
+              <span className="arb-hop-amount">
+                {formatTokenAmount(hop.output_amount, hop.token_out_decimals)} {tokenName(hop, 'out')}
+              </span>
+              <span className="arb-hop-fee">fee: {hop.fee_num}/{hop.fee_denom}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div className="arb-card-breakdown">
         <div className="arb-card-detail">
           <span className="arb-card-label">Gross</span>
           <span className="arb-card-value profit">{formatErgSigned(arb.gross_profit_nano)} ERG</span>
         </div>
         <div className="arb-card-detail">
-          <span className="arb-card-label">Fees</span>
+          <span className="arb-card-label">Fees ({arb.hops} tx)</span>
           <span className="arb-card-value fee">-{formatErg(arb.tx_fee_nano)} ERG</span>
         </div>
         <div className="arb-card-detail">
           <span className="arb-card-label">Net</span>
           <span className="arb-card-value net">{formatErgSigned(arb.net_profit_nano)} ERG</span>
         </div>
-      </div>
-
-      <div className="arb-card-footer">
-        <span className={`arb-card-impact ${impactClass(arb.price_impact)}`}>
-          Impact: {arb.price_impact.toFixed(1)}%
-        </span>
       </div>
     </div>
   )

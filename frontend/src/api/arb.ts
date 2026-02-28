@@ -5,6 +5,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core'
+import type { Route } from './router'
 
 export interface CircularArb {
   path_label: string
@@ -17,6 +18,7 @@ export interface CircularArb {
   net_profit_nano: number
   profit_pct: number
   price_impact: number
+  route: Route
 }
 
 export interface CircularArbSnapshot {

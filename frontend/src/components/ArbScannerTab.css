@@ -146,6 +146,85 @@
   color: var(--slate-200);
 }
 
+/* Per-hop detail */
+.arb-card-hops-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.arb-hop {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+}
+
+.arb-hop-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.arb-hop-index {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--slate-400);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.arb-hop-pool {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--slate-200);
+}
+
+.arb-hop-pool-id {
+  font-size: 0.7rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--slate-500);
+}
+
+.arb-hop-impact {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.arb-hop-impact.impact-low { color: var(--emerald-400); }
+.arb-hop-impact.impact-medium { color: var(--amber-400, #fbbf24); }
+.arb-hop-impact.impact-high { color: var(--red-400, #f87171); }
+
+.arb-hop-swap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.arb-hop-amount {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--slate-200);
+}
+
+.arb-hop-arrow {
+  color: var(--slate-500);
+  font-size: 0.85rem;
+}
+
+.arb-hop-fee {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--slate-500);
+}
+
 /* Breakdown row */
 .arb-card-breakdown {
   display: grid;
