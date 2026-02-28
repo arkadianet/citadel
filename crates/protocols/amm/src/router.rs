@@ -1285,18 +1285,27 @@ pub fn find_circular_arbs(
             None => continue,
         };
 
-        let output = forward_route.total_output;
+        let forward_output = forward_route.total_output;
 
         // Reverse-tighten: walk backwards from the final output to find the
-        // exact minimum input per hop, eliminating waste from integer truncation
-        // in the forward calculation.
+        // exact minimum input per hop, then re-quote forward with that tighter
+        // input so per-hop amounts chain correctly (each output = next input).
         let (optimal_input, route) =
-            if let Some(tight) = quote_route_reverse(cycle, output) {
-                (tight.total_input, tight)
+            if let Some(tight) = quote_route_reverse(cycle, forward_output) {
+                if tight.total_input < forward_input {
+                    // Re-quote forward with tightened input for consistent hop chain
+                    match quote_route(cycle, tight.total_input) {
+                        Some(r) => (tight.total_input, r),
+                        None => (forward_input, forward_route),
+                    }
+                } else {
+                    (forward_input, forward_route)
+                }
             } else {
                 (forward_input, forward_route)
             };
 
+        let output = route.total_output;
         let gross_profit = output as i64 - optimal_input as i64;
         let hops = cycle.len();
         let tx_fee = tx_fee_per_hop * hops as u64;
