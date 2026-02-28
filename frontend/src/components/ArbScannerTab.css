@@ -1,0 +1,191 @@
+/* ============================================================
+   Arb Scanner Tab
+   ============================================================ */
+
+.arb-scanner-tab {
+  padding: 1.5rem;
+  max-width: 900px;
+}
+
+.arb-scanner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.arb-scanner-header h2 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.25rem;
+}
+
+.arb-scanner-desc {
+  margin: 0;
+  color: var(--slate-400);
+  font-size: 0.85rem;
+}
+
+.arb-scanner-refresh {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--slate-200);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: border-color 0.15s;
+}
+
+.arb-scanner-refresh:hover:not(:disabled) {
+  border-color: var(--emerald-400);
+}
+
+.arb-scanner-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Summary bar */
+.arb-scanner-summary {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+
+.arb-scanner-count {
+  color: var(--emerald-400);
+  font-weight: 600;
+}
+
+.arb-scanner-total {
+  color: var(--slate-200);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.arb-scanner-time {
+  color: var(--slate-500);
+  margin-left: auto;
+}
+
+/* Cards */
+.arb-scanner-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.arb-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.arb-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.arb-card-path {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--slate-100);
+}
+
+.arb-card-hops {
+  font-size: 0.75rem;
+  color: var(--slate-500);
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.arb-card-profit-badge {
+  margin-left: auto;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--emerald-400);
+  background: rgba(52, 211, 153, 0.1);
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+}
+
+/* Amounts row */
+.arb-card-amounts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.arb-card-amount,
+.arb-card-detail {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.arb-card-label {
+  font-size: 0.8rem;
+  color: var(--slate-400);
+}
+
+.arb-card-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--slate-200);
+}
+
+/* Breakdown row */
+.arb-card-breakdown {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.arb-card-value.profit { color: var(--emerald-400); }
+.arb-card-value.fee { color: var(--slate-500); }
+.arb-card-value.net { color: var(--emerald-300); font-weight: 600; }
+
+/* Footer */
+.arb-card-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.arb-card-impact {
+  font-size: 0.8rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.arb-card-impact.impact-low { color: var(--emerald-400); }
+.arb-card-impact.impact-medium { color: var(--amber-400, #fbbf24); }
+.arb-card-impact.impact-high { color: var(--red-400, #f87171); }
+
+/* Empty state */
+.arb-scanner-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--slate-400);
+}
+
+.arb-scanner-empty p:first-child {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.arb-scanner-empty-hint {
+  font-size: 0.85rem;
+  color: var(--slate-500);
+}
