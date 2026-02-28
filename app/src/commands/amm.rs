@@ -1335,3 +1335,274 @@ pub async fn build_pool_create_tx(
         summary: summary_json,
     })
 }
+
+// =============================================================================
+// Smart Router Commands
+// =============================================================================
+
+/// Find best swap routes across all pools.
+///
+/// Returns routes, per-hop depth tiers, and an optimal split suggestion.
+#[tauri::command]
+pub async fn find_swap_routes(
+    state: State<'_, AppState>,
+    source_token: String,
+    target_token: String,
+    input_amount: u64,
+    max_hops: Option<usize>,
+    max_routes: Option<usize>,
+    slippage: Option<f64>,
+    min_rate: Option<f64>,
+) -> Result<serde_json::Value, String> {
+    if input_amount == 0 {
+        return Err("Amount must be greater than 0".to_string());
+    }
+
+    let client = state.node_client().await.ok_or("Node not connected")?;
+    let pools = amm::discover_pools(&client)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    let max_hops = max_hops.unwrap_or(3);
+    let max_routes = max_routes.unwrap_or(5);
+    let slippage_pct = slippage.unwrap_or(0.5);
+
+    let routes = amm::find_best_routes(
+        &graph,
+        &source_token,
+        &target_token,
+        input_amount,
+        max_hops,
+        max_routes,
+    );
+
+    let route_quotes: Vec<amm::RouteQuote> = routes
+        .into_iter()
+        .map(|r| amm::make_route_quote(r, slippage_pct))
+        .collect();
+
+    let depth_tiers = amm::calculate_all_depth_tiers(&graph, &source_token);
+
+    // Compute optimal split (only returned if it improves > 0.5%).
+    // min_rate excludes routes below a price floor (e.g. oracle rate) from the split.
+    let min_rate_filter = min_rate.map(|r| (r, 2u8)); // SigUSD decimals = 2
+    let split = amm::optimize_split_detailed(
+        &graph,
+        &source_token,
+        &target_token,
+        input_amount,
+        max_hops,
+        3,
+        min_rate_filter,
+    );
+
+    let response = serde_json::json!({
+        "routes": route_quotes,
+        "depth_tiers": depth_tiers,
+        "split": split,
+    });
+
+    Ok(response)
+}
+
+/// Find optimal split across multiple routes.
+#[tauri::command]
+pub async fn find_split_route(
+    state: State<'_, AppState>,
+    source_token: String,
+    target_token: String,
+    input_amount: u64,
+    max_splits: Option<usize>,
+    slippage: Option<f64>,
+) -> Result<serde_json::Value, String> {
+    if input_amount == 0 {
+        return Err("Amount must be greater than 0".to_string());
+    }
+
+    let client = state.node_client().await.ok_or("Node not connected")?;
+    let pools = amm::discover_pools(&client)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    let max_hops = 3;
+    let max_splits = max_splits.unwrap_or(2);
+    let _slippage_pct = slippage.unwrap_or(0.5);
+
+    let paths = amm::find_paths(&graph, &source_token, &target_token, max_hops);
+
+    // Quote each path to rank them, then pass top ones to optimizer
+    let mut quoted: Vec<(usize, u64)> = paths
+        .iter()
+        .enumerate()
+        .filter_map(|(i, p)| amm::quote_route(p, input_amount).map(|r| (i, r.total_output)))
+        .collect();
+    quoted.sort_by(|a, b| b.1.cmp(&a.1));
+    quoted.truncate(max_splits);
+
+    let top_paths: Vec<Vec<amm::PoolEdge>> = quoted
+        .iter()
+        .map(|(i, _)| paths[*i].clone())
+        .collect();
+
+    let split = amm::optimize_split(&top_paths, input_amount, max_splits);
+
+    serde_json::to_value(&split).map_err(|e| e.to_string())
+}
+
+/// Compare SigUSD acquisition options across DEX and protocol.
+#[tauri::command]
+pub async fn compare_sigusd_options(
+    state: State<'_, AppState>,
+    input_erg_nano: u64,
+) -> Result<serde_json::Value, String> {
+    if input_erg_nano == 0 {
+        return Err("Amount must be greater than 0".to_string());
+    }
+
+    let client = state.node_client().await.ok_or("Node not connected")?;
+
+    // Fetch pools and build graph
+    let pools = amm::discover_pools(&client)
+        .await
+        .map_err(|e| e.to_string())?;
+    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+
+    // Fetch SigmaUSD state (None if unavailable on this network)
+    let sigmausd_params = fetch_sigmausd_params(&state).await.ok();
+
+    let sigusd_token_id = sigmausd::constants::mainnet::SIGUSD_TOKEN_ID;
+
+    let comparison = amm::compare_acquisition(
+        &graph,
+        sigusd_token_id,
+        "SigUSD",
+        input_erg_nano,
+        sigmausd_params.as_ref(),
+    );
+
+    serde_json::to_value(&comparison).map_err(|e| e.to_string())
+}
+
+/// Get liquidity depth analysis for pools from a given token.
+#[tauri::command]
+pub async fn get_liquidity_depth(
+    state: State<'_, AppState>,
+    source_token: String,
+) -> Result<Vec<amm::DepthTiers>, String> {
+    let client = state.node_client().await.ok_or("Node not connected")?;
+    let pools = amm::discover_pools(&client)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    Ok(amm::calculate_all_depth_tiers(&graph, &source_token))
+}
+
+/// Get below-oracle SigUSD opportunity snapshot.
+///
+/// Returns per-pool arbitrage windows where SigUSD is cheaper than oracle,
+/// plus totals. No input amount needed — designed for page-load display.
+#[tauri::command]
+pub async fn get_sigusd_arb_snapshot(
+    state: State<'_, AppState>,
+    oracle_rate_usd_per_erg: f64,
+) -> Result<amm::OracleArbSnapshot, String> {
+    if oracle_rate_usd_per_erg <= 0.0 {
+        return Err("Oracle rate must be positive".to_string());
+    }
+
+    let client = state.node_client().await.ok_or("Node not connected")?;
+    let pools = amm::discover_pools(&client)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Use lower liquidity threshold (1 ERG) and higher per-pair limit (10)
+    // for arb snapshot to include small pools that offer above-oracle rates.
+    // The regular router uses 10 ERG minimum and 3 per pair for performance.
+    let graph = amm::build_pool_graph_with_limit(&pools, 1_000_000_000, 10);
+    let sigusd_token_id = sigmausd::constants::mainnet::SIGUSD_TOKEN_ID;
+
+    Ok(amm::calculate_oracle_arb_snapshot(
+        &graph,
+        sigusd_token_id,
+        oracle_rate_usd_per_erg,
+        2, // SigUSD decimals
+    ))
+}
+
+/// Find best routes for a desired output amount (reverse routing).
+///
+/// Returns routes ranked by lowest ERG input needed.
+#[tauri::command]
+pub async fn find_swap_routes_by_output(
+    state: State<'_, AppState>,
+    source_token: String,
+    target_token: String,
+    desired_output: u64,
+    max_hops: Option<usize>,
+    max_routes: Option<usize>,
+    slippage: Option<f64>,
+) -> Result<serde_json::Value, String> {
+    if desired_output == 0 {
+        return Err("Amount must be greater than 0".to_string());
+    }
+
+    let client = state.node_client().await.ok_or("Node not connected")?;
+    let pools = amm::discover_pools(&client)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    let max_hops = max_hops.unwrap_or(3);
+    let max_routes = max_routes.unwrap_or(5);
+    let slippage_pct = slippage.unwrap_or(0.5);
+
+    let routes = amm::find_best_routes_by_output(
+        &graph,
+        &source_token,
+        &target_token,
+        desired_output,
+        max_hops,
+        max_routes,
+    );
+
+    let route_quotes: Vec<amm::RouteQuote> = routes
+        .into_iter()
+        .map(|r| amm::make_route_quote(r, slippage_pct))
+        .collect();
+
+    let depth_tiers = amm::calculate_all_depth_tiers(&graph, &source_token);
+
+    let response = serde_json::json!({
+        "routes": route_quotes,
+        "depth_tiers": depth_tiers,
+    });
+
+    Ok(response)
+}
+
+/// Helper to fetch SigmaUSD params for cross-protocol comparison.
+async fn fetch_sigmausd_params(
+    state: &State<'_, AppState>,
+) -> Result<amm::SigmaUsdParams, String> {
+    let client = state.node_client().await.ok_or("Node not connected")?;
+    let capabilities = client
+        .capabilities()
+        .await
+        .ok_or("Node capabilities not available")?;
+    let config = state.config().await;
+    let nft_ids = sigmausd::constants::NftIds::for_network(config.network)
+        .ok_or("SigmaUSD not available on this network")?;
+
+    let sigmausd_state = sigmausd::fetch_sigmausd_state(&client, &capabilities, &nft_ids)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(amm::SigmaUsdParams {
+        sigusd_price_nano: sigmausd_state.sigusd_price_nano,
+        can_mint: sigmausd_state.can_mint_sigusd,
+        reserve_ratio_pct: sigmausd_state.reserve_ratio_pct,
+    })
+}

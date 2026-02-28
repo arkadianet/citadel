@@ -18,6 +18,7 @@ import { HodlCoinTab } from './components/HodlCoinTab'
 import { BridgeTab } from './components/BridgeTab'
 import { SigmaFiTab } from './components/SigmaFiTab'
 import { TimelockTab } from './components/TimelockTab'
+import { RouterTab } from './components/RouterTab'
 import { ExplorerNavProvider, type ExplorerTarget } from './contexts/ExplorerNavContext'
 import './App.css'
 
@@ -74,7 +75,7 @@ interface WalletBalance {
   }>
 }
 
-type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bridge' | 'bonds' | 'timelocks' | 'explorer' | 'burn' | 'utxo-management'
+type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bridge' | 'bonds' | 'timelocks' | 'router' | 'explorer' | 'burn' | 'utxo-management'
 
 function App() {
   const [view, setView] = useState<View>('home')
@@ -490,6 +491,17 @@ function App() {
               capabilityTier={nodeStatus?.capability_tier}
               walletAddress={walletAddress}
               walletBalance={walletBalance}
+              explorerUrl={explorerUrl}
+            />
+          )}
+
+          {view === 'router' && (
+            <RouterTab
+              walletBalance={walletBalance}
+              ergUsdPrice={oraclePrice?.erg_usd}
+              canMintSigusd={sigmaUsdState?.can_mint_sigusd ?? false}
+              reserveRatioPct={sigmaUsdState?.reserve_ratio_pct ?? 0}
+              walletAddress={walletAddress}
               explorerUrl={explorerUrl}
             />
           )}

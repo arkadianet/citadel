@@ -1,6 +1,6 @@
 import './Sidebar.css'
 
-type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bridge' | 'bonds' | 'timelocks' | 'explorer' | 'burn' | 'utxo-management'
+type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bridge' | 'bonds' | 'timelocks' | 'router' | 'explorer' | 'burn' | 'utxo-management'
 
 interface SidebarProps {
   view: View
@@ -181,6 +181,28 @@ export function Sidebar({ view, onNavigate, isConnected, capabilityTier, collaps
 
         <div className="sidebar-separator" />
         <div className="sidebar-section-label">Tools</div>
+
+        {/* SigUSD Router */}
+        <button
+          className={`sidebar-item ${view === 'router' ? 'active' : ''} ${!canUseProtocols ? 'disabled' : ''}`}
+          onClick={canUseProtocols ? () => onNavigate('router') : undefined}
+          disabled={!canUseProtocols}
+        >
+          <div className="sidebar-dashboard-icon">
+            <svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M3 12h6m6 0h6" />
+              <path d="M12 3v6m0 6v6" />
+              <path d="M5.6 5.6l4.2 4.2m4.4 4.4l4.2 4.2" />
+              <path d="M18.4 5.6l-4.2 4.2m-4.4 4.4l-4.2 4.2" />
+            </svg>
+          </div>
+          <div className="sidebar-item-text">
+            <span className="sidebar-item-name">Router</span>
+            <span className="sidebar-item-desc">SigUSD Routes</span>
+          </div>
+          <span className="sidebar-tooltip">SigUSD Router</span>
+        </button>
 
         {/* Explorer */}
         <button

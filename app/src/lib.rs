@@ -106,6 +106,13 @@ pub fn run() {
             commands::preview_pool_create,
             commands::build_pool_bootstrap_tx,
             commands::build_pool_create_tx,
+            // AMM Smart Router
+            commands::find_swap_routes,
+            commands::find_swap_routes_by_output,
+            commands::find_split_route,
+            commands::compare_sigusd_options,
+            commands::get_liquidity_depth,
+            commands::get_sigusd_arb_snapshot,
             // Explorer
             commands::explorer_node_info,
             commands::explorer_get_transaction,
