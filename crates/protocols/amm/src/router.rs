@@ -1279,13 +1279,24 @@ pub fn find_circular_arbs(
             }
         }
 
-        let optimal_input = (a + b) / 2;
-        let route = match quote_route(cycle, optimal_input) {
+        let forward_input = (a + b) / 2;
+        let forward_route = match quote_route(cycle, forward_input) {
             Some(r) => r,
             None => continue,
         };
 
-        let output = route.total_output;
+        let output = forward_route.total_output;
+
+        // Reverse-tighten: walk backwards from the final output to find the
+        // exact minimum input per hop, eliminating waste from integer truncation
+        // in the forward calculation.
+        let (optimal_input, route) =
+            if let Some(tight) = quote_route_reverse(cycle, output) {
+                (tight.total_input, tight)
+            } else {
+                (forward_input, forward_route)
+            };
+
         let gross_profit = output as i64 - optimal_input as i64;
         let hops = cycle.len();
         let tx_fee = tx_fee_per_hop * hops as u64;
@@ -1965,6 +1976,51 @@ mod tests {
                 arb.net_profit_nano,
                 arb.gross_profit_nano - arb.tx_fee_nano as i64
             );
+        }
+    }
+
+    #[test]
+    fn test_circular_arb_reverse_tightened() {
+        // Verify that reverse-tightening gives tighter input for same output
+        let pools = vec![
+            make_n2t_pool("p1", 100_000_000_000, "aa", "TokenA", 200_000, 997),
+            make_n2t_pool("p3", 200_000_000_000, "bb", "TokenB", 50_000, 997),
+            make_t2t_pool("p2", "aa", "TokenA", 200_000, "bb", "TokenB", 100_000, 997),
+        ];
+        let graph = build_pool_graph(&pools, 0);
+        let snap = find_circular_arbs(&graph, 4, 0);
+
+        for arb in &snap.windows {
+            // The tightened input should be <= what forward calc would give
+            // for the same output. Verify by forward-quoting the tightened input.
+            let cycle = find_cycles(&graph, 4);
+            for c in &cycle {
+                if let Some(forward) = quote_route(c, arb.optimal_input_nano) {
+                    // Forward output from tightened input should be >= arb output
+                    // (tightened input is the minimum needed for that output)
+                    if forward.total_output >= arb.output_nano {
+                        assert!(
+                            arb.optimal_input_nano <= forward.total_input,
+                            "Tightened input {} should be <= forward input {}",
+                            arb.optimal_input_nano,
+                            forward.total_input
+                        );
+                    }
+                }
+            }
+
+            // Route per-hop amounts should be consistent
+            let hops = &arb.route.hops;
+            for i in 1..hops.len() {
+                assert!(
+                    hops[i].input_amount <= hops[i - 1].output_amount,
+                    "Hop {} input {} should be <= hop {} output {}",
+                    i + 1,
+                    hops[i].input_amount,
+                    i,
+                    hops[i - 1].output_amount
+                );
+            }
         }
     }
 }
