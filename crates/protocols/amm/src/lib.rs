@@ -50,5 +50,6 @@ pub use router::{
     SplitAllocationDetail, SplitRoute, SplitRouteDetail, DEFAULT_MAX_POOLS_PER_PAIR,
     DEFAULT_MIN_LIQUIDITY_NANO, ERG_TOKEN_ID,
     calculate_oracle_arb_snapshot, OracleArbSnapshot, OracleArbWindow,
+    find_circular_arbs, find_cycles, CircularArb, CircularArbSnapshot,
 };
 pub use tx_builder::{build_swap_order_eip12, SwapBuildResult, SwapTxSummary};

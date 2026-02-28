@@ -113,6 +113,7 @@ pub fn run() {
             commands::compare_sigusd_options,
             commands::get_liquidity_depth,
             commands::get_sigusd_arb_snapshot,
+            commands::scan_circular_arbs,
             // Explorer
             commands::explorer_node_info,
             commands::explorer_get_transaction,

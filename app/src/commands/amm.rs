@@ -1606,3 +1606,22 @@ async fn fetch_sigmausd_params(
         reserve_ratio_pct: sigmausd_state.reserve_ratio_pct,
     })
 }
+
+/// Scan for profitable circular arbitrage loops (ERG → ... → ERG).
+///
+/// Returns all cycles where the output ERG exceeds input + tx fees.
+#[tauri::command]
+pub async fn scan_circular_arbs(
+    state: State<'_, AppState>,
+    max_hops: Option<usize>,
+) -> Result<amm::CircularArbSnapshot, String> {
+    let client = state.node_client().await.ok_or("Node not connected")?;
+    let pools = amm::discover_pools(&client)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    let max_hops = max_hops.unwrap_or(4);
+    // Min profit: 0.0001 ERG = 100_000 nanoERG
+    Ok(amm::find_circular_arbs(&graph, max_hops, 100_000))
+}
