@@ -19,6 +19,7 @@ import { BridgeTab } from './components/BridgeTab'
 import { SigmaFiTab } from './components/SigmaFiTab'
 import { TimelockTab } from './components/TimelockTab'
 import { RouterTab } from './components/RouterTab'
+import { ArbScannerTab } from './components/ArbScannerTab'
 import { ExplorerNavProvider, type ExplorerTarget } from './contexts/ExplorerNavContext'
 import './App.css'
 
@@ -75,7 +76,7 @@ interface WalletBalance {
   }>
 }
 
-type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bridge' | 'bonds' | 'timelocks' | 'router' | 'explorer' | 'burn' | 'utxo-management'
+type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bridge' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management'
 
 function App() {
   const [view, setView] = useState<View>('home')
@@ -503,6 +504,12 @@ function App() {
               reserveRatioPct={sigmaUsdState?.reserve_ratio_pct ?? 0}
               walletAddress={walletAddress}
               explorerUrl={explorerUrl}
+            />
+          )}
+
+          {view === 'arb-scanner' && (
+            <ArbScannerTab
+              walletAddress={walletAddress}
             />
           )}
 

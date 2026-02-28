@@ -1,6 +1,6 @@
 import './Sidebar.css'
 
-type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bridge' | 'bonds' | 'timelocks' | 'router' | 'explorer' | 'burn' | 'utxo-management'
+type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bridge' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management'
 
 interface SidebarProps {
   view: View
@@ -202,6 +202,25 @@ export function Sidebar({ view, onNavigate, isConnected, capabilityTier, collaps
             <span className="sidebar-item-desc">SigUSD Routes</span>
           </div>
           <span className="sidebar-tooltip">SigUSD Router</span>
+        </button>
+
+        {/* Arb Scanner */}
+        <button
+          className={`sidebar-item ${view === 'arb-scanner' ? 'active' : ''} ${!canUseProtocols ? 'disabled' : ''}`}
+          onClick={canUseProtocols ? () => onNavigate('arb-scanner') : undefined}
+          disabled={!canUseProtocols}
+        >
+          <div className="sidebar-dashboard-icon">
+            <svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+              <polyline points="16 7 22 7 22 13" />
+            </svg>
+          </div>
+          <div className="sidebar-item-text">
+            <span className="sidebar-item-name">Arb Scanner</span>
+            <span className="sidebar-item-desc">DEX Arbitrage</span>
+          </div>
+          <span className="sidebar-tooltip">Arb Scanner</span>
         </button>
 
         {/* Explorer */}
