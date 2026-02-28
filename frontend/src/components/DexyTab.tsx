@@ -459,17 +459,31 @@ export function DexyTab({
   const useUsd = useBalance * useUsdPerUnit
 
   // LP token balances and estimated values
+  // LP tokens represent a share of BOTH the ERG and token reserves in the pool.
   const goldLpBalance = walletBalance ? walletBalance.tokens.find(t => t.token_id === LP_TOKEN_IDS['gold'])?.amount ?? 0 : 0
   const useLpBalance = walletBalance ? walletBalance.tokens.find(t => t.token_id === LP_TOKEN_IDS['usd'])?.amount ?? 0 : 0
 
-  const goldLpErgValue = goldState && goldState.lp_circulating > 0
+  const goldLpErgShare = goldState && goldState.lp_circulating > 0
     ? goldLpBalance * goldState.lp_erg_reserves / goldState.lp_circulating * 0.98 / 1e9
     : 0
-  const useLpErgValue = usdState && usdState.lp_circulating > 0
+  const goldLpTokenShare = goldState && goldState.lp_circulating > 0
+    ? goldLpBalance * goldState.lp_dexy_reserves / goldState.lp_circulating * 0.98
+    : 0
+  const goldLpTokenUsd = goldLpTokenShare * goldUsdPerUnit
+  const goldLpErgUsd = goldLpErgShare * (ergUsdPrice || 0)
+  const goldLpTotalUsd = goldLpErgUsd + goldLpTokenUsd
+
+  const useLpErgShare = usdState && usdState.lp_circulating > 0
     ? useLpBalance * usdState.lp_erg_reserves / usdState.lp_circulating * 0.98 / 1e9
     : 0
-  const lpTotalErgValue = goldLpErgValue + useLpErgValue
-  const lpTotalUsd = lpTotalErgValue * (ergUsdPrice || 0)
+  const useLpTokenShare = usdState && usdState.lp_circulating > 0
+    ? useLpBalance * usdState.lp_dexy_reserves / usdState.lp_circulating * 0.98 / 1e3
+    : 0
+  const useLpTokenUsd = useLpTokenShare * useUsdPerUnit
+  const useLpErgUsd = useLpErgShare * (ergUsdPrice || 0)
+  const useLpTotalUsd = useLpErgUsd + useLpTokenUsd
+
+  const lpTotalUsd = goldLpTotalUsd + useLpTotalUsd
 
   const totalHoldingsUsd = ergUsd + goldUsd + useUsd + lpTotalUsd
 
@@ -640,8 +654,8 @@ export function DexyTab({
                   </div>
                   <div className="dexy-holding-amount">{goldLpBalance.toLocaleString()} LP</div>
                   <div className="dexy-holding-usd" style={{ color: 'var(--slate-400)' }}>
-                    ~{goldLpErgValue.toFixed(2)} ERG
-                    {ergUsdPrice ? ` ($${(goldLpErgValue * ergUsdPrice).toFixed(2)})` : ''}
+                    ~{goldLpErgShare.toFixed(2)} ERG + {goldLpTokenShare.toLocaleString(undefined, { maximumFractionDigits: 2 })} DexyGold
+                    {ergUsdPrice ? ` ($${goldLpTotalUsd.toFixed(2)})` : ''}
                   </div>
                 </div>
               )}
@@ -655,8 +669,8 @@ export function DexyTab({
                   </div>
                   <div className="dexy-holding-amount">{useLpBalance.toLocaleString()} LP</div>
                   <div className="dexy-holding-usd" style={{ color: 'var(--slate-400)' }}>
-                    ~{useLpErgValue.toFixed(2)} ERG
-                    {ergUsdPrice ? ` ($${(useLpErgValue * ergUsdPrice).toFixed(2)})` : ''}
+                    ~{useLpErgShare.toFixed(2)} ERG + {useLpTokenShare.toLocaleString(undefined, { maximumFractionDigits: 3 })} USE
+                    {ergUsdPrice ? ` ($${useLpTotalUsd.toFixed(2)})` : ''}
                   </div>
                 </div>
               )}
