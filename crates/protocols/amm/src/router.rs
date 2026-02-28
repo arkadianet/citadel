@@ -1224,6 +1224,119 @@ pub fn find_cycles(graph: &PoolGraph, max_hops: usize) -> Vec<Vec<PoolEdge>> {
     results
 }
 
+/// Scan all ERG→...→ERG cycles and find profitable arb opportunities.
+///
+/// Uses ternary search to find the input that maximizes profit for each cycle.
+/// Profit = output_erg - input_erg. The function is unimodal (rises as you
+/// capture the arb, then falls as price impact dominates).
+pub fn find_circular_arbs(
+    graph: &PoolGraph,
+    max_hops: usize,
+    min_profit_nano: i64,
+) -> CircularArbSnapshot {
+    let start = std::time::Instant::now();
+    let cycles = find_cycles(graph, max_hops);
+
+    let tx_fee_per_hop: u64 = 1_000_000; // 0.001 ERG
+
+    let mut windows: Vec<CircularArb> = Vec::new();
+
+    for cycle in &cycles {
+        if cycle.is_empty() {
+            continue;
+        }
+
+        let hi_cap = cycle[0].reserves_in.min(1_000_000_000_000); // 1000 ERG
+        let lo: u64 = 10_000_000; // 0.01 ERG
+
+        if hi_cap <= lo {
+            continue;
+        }
+
+        // Ternary search for profit-maximizing input
+        let mut a = lo;
+        let mut b = hi_cap;
+
+        for _ in 0..80 {
+            if b - a < 1_000_000 {
+                break;
+            }
+            let m1 = a + (b - a) / 3;
+            let m2 = b - (b - a) / 3;
+
+            let p1 = quote_route(cycle, m1)
+                .map(|r| r.total_output as i64 - m1 as i64)
+                .unwrap_or(i64::MIN);
+            let p2 = quote_route(cycle, m2)
+                .map(|r| r.total_output as i64 - m2 as i64)
+                .unwrap_or(i64::MIN);
+
+            if p1 < p2 {
+                a = m1;
+            } else {
+                b = m2;
+            }
+        }
+
+        let optimal_input = (a + b) / 2;
+        let route = match quote_route(cycle, optimal_input) {
+            Some(r) => r,
+            None => continue,
+        };
+
+        let output = route.total_output;
+        let gross_profit = output as i64 - optimal_input as i64;
+        let hops = cycle.len();
+        let tx_fee = tx_fee_per_hop * hops as u64;
+        let net_profit = gross_profit - tx_fee as i64;
+
+        if net_profit < min_profit_nano {
+            continue;
+        }
+
+        let profit_pct = if optimal_input > 0 {
+            net_profit as f64 / optimal_input as f64 * 100.0
+        } else {
+            0.0
+        };
+
+        // Build path label
+        let mut label_parts: Vec<String> = vec!["ERG".to_string()];
+        for edge in cycle {
+            let name = resolve_token_name(&edge.pool, &edge.token_out)
+                .unwrap_or_else(|| edge.token_out[..6.min(edge.token_out.len())].to_string());
+            label_parts.push(name);
+        }
+        let path_label = label_parts.join(" \u{2192} "); // → character
+
+        let pool_ids: Vec<String> = cycle.iter().map(|e| e.pool.pool_id.clone()).collect();
+
+        windows.push(CircularArb {
+            path_label,
+            hops,
+            pool_ids,
+            optimal_input_nano: optimal_input,
+            output_nano: output,
+            gross_profit_nano: gross_profit,
+            tx_fee_nano: tx_fee,
+            net_profit_nano: net_profit,
+            profit_pct,
+            price_impact: route.total_price_impact,
+        });
+    }
+
+    windows.sort_by(|a, b| b.net_profit_nano.cmp(&a.net_profit_nano));
+
+    let total_net = windows.iter().map(|w| w.net_profit_nano).sum();
+    let elapsed = start.elapsed().as_millis() as u64;
+
+    CircularArbSnapshot {
+        windows,
+        total_net_profit_nano: total_net,
+        scan_time_ms: elapsed,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -1804,5 +1917,52 @@ mod tests {
         }
         let cycles_4 = find_cycles(&graph, 4);
         assert!(cycles_4.len() >= cycles_2.len());
+    }
+
+    #[test]
+    fn test_circular_arb_profitable() {
+        // Mispriced triangle: ERG->A cheap, A->B fair, B->ERG expensive
+        let pools = vec![
+            make_n2t_pool("p1", 100_000_000_000, "aa", "TokenA", 200_000, 997),
+            make_n2t_pool("p3", 200_000_000_000, "bb", "TokenB", 50_000, 997),
+            make_t2t_pool("p2", "aa", "TokenA", 200_000, "bb", "TokenB", 100_000, 997),
+        ];
+        let graph = build_pool_graph(&pools, 0);
+        let snap = find_circular_arbs(&graph, 4, 0);
+        assert!(!snap.windows.is_empty(), "Should find profitable arbs");
+        let best = &snap.windows[0];
+        assert!(best.net_profit_nano > 0, "Best arb should be profitable");
+        assert!(best.optimal_input_nano > 0);
+        assert!(best.output_nano > best.optimal_input_nano);
+    }
+
+    #[test]
+    fn test_circular_arb_no_opportunity() {
+        let pools = vec![
+            make_n2t_pool("p1", 100_000_000_000, "aa", "A", 50_000, 997),
+            make_n2t_pool("p2", 100_000_000_000, "bb", "B", 50_000, 997),
+            make_t2t_pool("p3", "aa", "A", 50_000, "bb", "B", 50_000, 997),
+        ];
+        let graph = build_pool_graph(&pools, 0);
+        let snap = find_circular_arbs(&graph, 4, 1_000_000);
+        assert!(snap.windows.is_empty(), "Balanced pools should have no arb");
+    }
+
+    #[test]
+    fn test_circular_arb_tx_fees_deducted() {
+        let pools = vec![
+            make_n2t_pool("p1", 100_000_000_000, "aa", "TokenA", 200_000, 997),
+            make_n2t_pool("p3", 200_000_000_000, "bb", "TokenB", 50_000, 997),
+            make_t2t_pool("p2", "aa", "TokenA", 200_000, "bb", "TokenB", 100_000, 997),
+        ];
+        let graph = build_pool_graph(&pools, 0);
+        let snap = find_circular_arbs(&graph, 4, 0);
+        for arb in &snap.windows {
+            assert_eq!(arb.tx_fee_nano, 1_000_000 * arb.hops as u64);
+            assert_eq!(
+                arb.net_profit_nano,
+                arb.gross_profit_nano - arb.tx_fee_nano as i64
+            );
+        }
     }
 }
