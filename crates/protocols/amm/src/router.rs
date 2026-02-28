@@ -825,6 +825,17 @@ pub fn optimize_split_detailed(
         return None;
     }
 
+    // Compute the true best single-route output (unfiltered) as the baseline.
+    // The split must beat THIS to be worth showing, not just the filtered subset.
+    let unfiltered_best: u64 = all_paths
+        .iter()
+        .filter_map(|p| quote_route(p, total_input).map(|r| r.total_output))
+        .max()
+        .unwrap_or(0);
+    if unfiltered_best == 0 {
+        return None;
+    }
+
     // Filter by minimum effective rate (spot rate at 0.01 ERG probe).
     // This excludes routes where the token trades below a price floor
     // (e.g. below oracle price) even at small amounts.
@@ -854,8 +865,7 @@ pub fn optimize_split_detailed(
         .collect();
     quoted.sort_by(|a, b| b.1.cmp(&a.1));
 
-    let best_single_output = quoted.first().map(|(_, o)| *o).unwrap_or(0);
-    if best_single_output == 0 {
+    if quoted.is_empty() {
         return None;
     }
 
@@ -869,12 +879,10 @@ pub fn optimize_split_detailed(
 
     let split = optimize_split(&top_paths, total_input, max_splits);
 
-    // Check improvement threshold
-    let improvement = if best_single_output > 0 {
-        (split.total_output as f64 - best_single_output as f64) / best_single_output as f64 * 100.0
-    } else {
-        0.0
-    };
+    // Compare against the unfiltered best route, not just the filtered subset.
+    let improvement = (split.total_output as f64 - unfiltered_best as f64)
+        / unfiltered_best as f64
+        * 100.0;
 
     if improvement < 0.5 {
         return None; // Not worth splitting
@@ -1141,6 +1149,79 @@ pub fn calculate_oracle_arb_snapshot(
         total_sigusd_below_oracle_raw: total_sigusd,
         total_erg_needed_nano: total_erg,
     }
+}
+
+// ---------------------------------------------------------------------------
+// Step 6: Circular Arb Detection
+// ---------------------------------------------------------------------------
+
+/// A single profitable circular arbitrage opportunity.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CircularArb {
+    pub path_label: String,
+    pub hops: usize,
+    pub pool_ids: Vec<String>,
+    pub optimal_input_nano: u64,
+    pub output_nano: u64,
+    pub gross_profit_nano: i64,
+    pub tx_fee_nano: u64,
+    pub net_profit_nano: i64,
+    pub profit_pct: f64,
+    pub price_impact: f64,
+}
+
+/// Snapshot of all circular arb opportunities.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CircularArbSnapshot {
+    pub windows: Vec<CircularArb>,
+    pub total_net_profit_nano: i64,
+    pub scan_time_ms: u64,
+}
+
+/// Find all cycles from ERG back to ERG up to max_hops.
+///
+/// Uses DFS. Does not revisit tokens within a cycle (except ERG as the
+/// start/end). Does not reuse the same pool within a cycle.
+pub fn find_cycles(graph: &PoolGraph, max_hops: usize) -> Vec<Vec<PoolEdge>> {
+    let mut results: Vec<Vec<PoolEdge>> = Vec::new();
+
+    type State = (String, Vec<PoolEdge>, HashSet<String>, HashSet<String>);
+    let mut stack: Vec<State> = Vec::new();
+
+    let mut initial_visited = HashSet::new();
+    initial_visited.insert(ERG_TOKEN_ID.to_string());
+    stack.push((
+        ERG_TOKEN_ID.to_string(),
+        Vec::new(),
+        initial_visited,
+        HashSet::new(),
+    ));
+
+    while let Some((current, path, visited, used_pools)) = stack.pop() {
+        if let Some(edges) = graph.adjacency.get(current.as_str()) {
+            for edge in edges {
+                if used_pools.contains(&edge.pool.pool_id) {
+                    continue;
+                }
+
+                if edge.token_out == ERG_TOKEN_ID && !path.is_empty() {
+                    let mut cycle = path.clone();
+                    cycle.push(edge.clone());
+                    results.push(cycle);
+                } else if path.len() + 1 < max_hops && !visited.contains(&edge.token_out) {
+                    let mut new_visited = visited.clone();
+                    new_visited.insert(edge.token_out.clone());
+                    let mut new_pools = used_pools.clone();
+                    new_pools.insert(edge.pool.pool_id.clone());
+                    let mut new_path = path.clone();
+                    new_path.push(edge.clone());
+                    stack.push((edge.token_out.clone(), new_path, new_visited, new_pools));
+                }
+            }
+        }
+    }
+
+    results
 }
 
 // ---------------------------------------------------------------------------
@@ -1674,5 +1755,54 @@ mod tests {
         let graph = build_pool_graph(&[], 0);
         let snap = calculate_oracle_arb_snapshot(&graph, "sigusd", 2.0, 2);
         assert!(snap.windows.is_empty());
+    }
+
+    // -- Circular Arb Detection --
+
+    #[test]
+    fn test_find_cycles_triangle() {
+        let pools = vec![
+            make_n2t_pool("p1", 100_000_000_000, "token_a", "TokenA", 50_000, 997),
+            make_n2t_pool("p3", 200_000_000_000, "token_b", "TokenB", 50_000, 997),
+            make_t2t_pool("p2", "token_a", "TokenA", 50_000, "token_b", "TokenB", 50_000, 997),
+        ];
+        let graph = build_pool_graph(&pools, 0);
+        let cycles = find_cycles(&graph, 4);
+        assert!(cycles.len() >= 2);
+        for cycle in &cycles {
+            assert!(cycle.len() >= 2);
+            assert_eq!(cycle.last().unwrap().token_out, ERG_TOKEN_ID);
+        }
+    }
+
+    #[test]
+    fn test_find_cycles_no_loop() {
+        let pools = vec![make_n2t_pool(
+            "p1",
+            100_000_000_000,
+            "token_a",
+            "TokenA",
+            50_000,
+            997,
+        )];
+        let graph = build_pool_graph(&pools, 0);
+        let cycles = find_cycles(&graph, 4);
+        assert_eq!(cycles.len(), 0);
+    }
+
+    #[test]
+    fn test_find_cycles_respects_max_hops() {
+        let pools = vec![
+            make_n2t_pool("p1", 100_000_000_000, "a", "A", 50_000, 997),
+            make_n2t_pool("p2", 100_000_000_000, "b", "B", 50_000, 997),
+            make_t2t_pool("p3", "a", "A", 50_000, "b", "B", 50_000, 997),
+        ];
+        let graph = build_pool_graph(&pools, 0);
+        let cycles_2 = find_cycles(&graph, 2);
+        for c in &cycles_2 {
+            assert!(c.len() <= 2);
+        }
+        let cycles_4 = find_cycles(&graph, 4);
+        assert!(cycles_4.len() >= cycles_2.len());
     }
 }
