@@ -1,1 +1,817 @@
-/* SmartSwap styles — populated in Task 5 */
+/* ============================================================================
+   Smart Swap — all component styles
+   ============================================================================ */
+
+/* ============================================================================
+   Token Selector
+   ============================================================================ */
+
+.token-selector {
+  position: relative;
+  min-width: 140px;
+}
+
+.token-selector-trigger {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(13, 18, 30, 0.8);
+  border: 1px solid rgba(38, 50, 70, 0.6);
+  border-radius: 8px;
+  width: 100%;
+  cursor: pointer;
+  color: rgb(var(--text));
+  font-size: var(--text-sm);
+  font-weight: 500;
+  transition: border-color 0.15s;
+  text-align: left;
+  gap: 6px;
+}
+
+.token-selector-trigger:hover:not(:disabled) {
+  border-color: var(--emerald-400);
+}
+
+.token-selector-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.token-selector-placeholder {
+  color: var(--slate-400);
+}
+
+.token-selector-arrow {
+  margin-left: auto;
+  color: var(--slate-400);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.token-selector-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: rgba(13, 18, 30, 0.98);
+  border: 1px solid rgba(38, 50, 70, 0.7);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  max-height: 300px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.token-selector-search {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(38, 50, 70, 0.5);
+  outline: none;
+  color: rgb(var(--text));
+  font-size: var(--text-sm);
+  padding: 8px 12px;
+  width: 100%;
+}
+
+.token-selector-search::placeholder {
+  color: var(--slate-500);
+}
+
+.token-selector-list {
+  overflow-y: auto;
+  max-height: 250px;
+}
+
+.token-selector-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: rgb(var(--text));
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-align: left;
+  gap: 8px;
+  transition: background 0.1s;
+}
+
+.token-selector-item:hover {
+  background: rgba(52, 211, 153, 0.06);
+}
+
+.token-selector-item.active {
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.token-selector-item-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.token-selector-item-balance {
+  color: var(--slate-400);
+  font-size: var(--text-xs);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.token-selector-empty {
+  padding: 16px 12px;
+  text-align: center;
+  color: var(--slate-400);
+  font-size: var(--text-sm);
+}
+
+/* ============================================================================
+   Smart Swap Layout
+   ============================================================================ */
+
+.smart-swap-view {
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+}
+
+.smart-swap-input-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: var(--space-sm);
+}
+
+.smart-swap-token-col {
+  flex: 0 0 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.smart-swap-amount-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.smart-swap-label {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.smart-swap-amount-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.smart-swap-balance {
+  font-size: var(--text-xs);
+  color: var(--emerald-400);
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.smart-swap-balance:hover {
+  text-decoration: underline;
+}
+
+.smart-swap-amount-input-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.smart-swap-amount-input {
+  flex: 1;
+  background: rgba(13, 18, 30, 0.8);
+  border: 1px solid rgba(38, 50, 70, 0.6);
+  border-radius: 6px;
+  color: rgb(var(--text));
+  font-size: var(--text-sm);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  padding: 8px 10px;
+  outline: none;
+  min-width: 0;
+  transition: border-color 0.15s;
+}
+
+.smart-swap-amount-input:focus {
+  border-color: var(--emerald-400);
+}
+
+.smart-swap-amount-input::placeholder {
+  color: var(--slate-600);
+  font-weight: 400;
+}
+
+.smart-swap-max-btn,
+.smart-swap-slippage-btn {
+  padding: 6px 10px;
+  background: rgba(13, 18, 30, 0.8);
+  border: 1px solid rgba(38, 50, 70, 0.6);
+  border-radius: 6px;
+  color: var(--emerald-400);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.smart-swap-max-btn:hover,
+.smart-swap-slippage-btn:hover {
+  background: rgba(52, 211, 153, 0.06);
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+.smart-swap-target-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.smart-swap-target-row .token-selector {
+  width: 100%;
+}
+
+/* ============================================================================
+   Slippage Popover
+   ============================================================================ */
+
+.smart-swap-slippage-popover {
+  background: rgba(13, 18, 30, 0.98);
+  border: 1px solid rgba(38, 50, 70, 0.7);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.smart-swap-slippage-label {
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.smart-swap-slippage-options {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  align-items: center;
+}
+
+.smart-swap-slippage-options .smart-swap-slippage-btn {
+  padding: 4px 8px;
+  font-size: var(--text-xs);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.smart-swap-slippage-options .smart-swap-slippage-btn.active {
+  border-color: var(--emerald-400);
+  color: var(--emerald-400);
+  background: rgba(52, 211, 153, 0.08);
+}
+
+.smart-swap-slippage-custom {
+  width: 60px;
+  padding: 4px 6px;
+  background: rgba(13, 18, 30, 0.8);
+  border: 1px solid rgba(38, 50, 70, 0.6);
+  border-radius: 6px;
+  color: rgb(var(--text));
+  font-size: var(--text-xs);
+  font-family: 'JetBrains Mono', monospace;
+  outline: none;
+  text-align: right;
+  transition: border-color 0.15s;
+}
+
+.smart-swap-slippage-custom:focus {
+  border-color: var(--emerald-400);
+}
+
+/* ============================================================================
+   Status Messages
+   ============================================================================ */
+
+.smart-swap-warning {
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: 6px;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+  font-size: var(--text-xs);
+}
+
+.smart-swap-info {
+  text-align: center;
+  padding: var(--space-xs) var(--space-sm);
+  color: var(--slate-400);
+  font-size: var(--text-xs);
+}
+
+.smart-swap-loading {
+  text-align: center;
+  padding: var(--space-md);
+  color: var(--slate-400);
+  font-size: var(--text-sm);
+}
+
+.smart-swap-loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 12, 21, 0.6);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--slate-400);
+  font-size: var(--text-sm);
+}
+
+.smart-swap-routes {
+  position: relative;
+  min-height: 60px;
+}
+
+.smart-swap-routes.stale {
+  opacity: 0.6;
+}
+
+.smart-swap-error {
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  font-size: var(--text-xs);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.smart-swap-retry-btn {
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 4px;
+  color: #fca5a5;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.smart-swap-retry-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.smart-swap-no-routes {
+  text-align: center;
+  padding: var(--space-lg);
+  color: var(--slate-400);
+  font-size: var(--text-sm);
+}
+
+/* ============================================================================
+   Route Card
+   ============================================================================ */
+
+.smart-route-card {
+  padding: var(--space-sm);
+  border-radius: 8px;
+  background: rgba(13, 18, 30, 0.6);
+  border: 1px solid rgba(38, 50, 70, 0.5);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.smart-route-card:hover {
+  border-color: rgba(51, 65, 85, 0.8);
+  background: rgba(13, 18, 30, 0.8);
+}
+
+.smart-route-card.best {
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.04);
+}
+
+.smart-route-card.selected {
+  border-color: var(--emerald-400);
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.25);
+}
+
+.smart-route-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.smart-route-badges {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.smart-badge-best {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--emerald-400);
+}
+
+.smart-badge-hops {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(51, 65, 85, 0.4);
+  color: var(--slate-400);
+}
+
+.smart-route-path {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.smart-route-path-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--slate-300);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(51, 65, 85, 0.3);
+}
+
+.smart-route-arrow {
+  color: var(--slate-400);
+  margin: 0 2px;
+  font-size: 12px;
+}
+
+.smart-route-output-amount {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: rgb(var(--text));
+}
+
+.smart-route-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  font-size: var(--text-xs);
+  color: var(--slate-400);
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 4px;
+}
+
+.smart-route-expand-btn {
+  background: transparent;
+  border: none;
+  color: var(--emerald-400);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 2px 0;
+  transition: opacity 0.15s;
+}
+
+.smart-route-expand-btn:hover {
+  text-decoration: underline;
+}
+
+.smart-route-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+
+/* ============================================================================
+   Hop Detail
+   ============================================================================ */
+
+.smart-hop-detail {
+  padding: var(--space-xs) var(--space-sm);
+  background: rgba(15, 23, 42, 0.35);
+  border-radius: 6px;
+  font-size: var(--text-xs);
+}
+
+.smart-hop-detail-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.smart-hop-label {
+  color: rgb(var(--text));
+  font-weight: 500;
+}
+
+.smart-hop-pool-tag {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--slate-500);
+  padding: 0 4px;
+  border-radius: 2px;
+  background: rgba(51, 65, 85, 0.2);
+  margin-left: 4px;
+}
+
+.smart-hop-impact {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.smart-hop-detail-amounts {
+  display: flex;
+  gap: 12px;
+  margin-top: 3px;
+  color: var(--slate-300);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.smart-hop-detail-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 2px;
+  color: var(--slate-500);
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ============================================================================
+   Impact Colors
+   ============================================================================ */
+
+.impact-low {
+  color: var(--emerald-400);
+}
+
+.impact-medium {
+  color: #fbbf24;
+}
+
+.impact-high {
+  color: #f97316;
+}
+
+.impact-severe {
+  color: #ef4444;
+}
+
+/* ============================================================================
+   Compact Route
+   ============================================================================ */
+
+.smart-route-compact {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(13, 18, 30, 0.6);
+  border: 1px solid rgba(38, 50, 70, 0.5);
+  border-radius: 6px;
+  color: rgb(var(--text));
+  font-size: var(--text-sm);
+  cursor: pointer;
+  gap: 8px;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: left;
+}
+
+.smart-route-compact:hover {
+  border-color: rgba(51, 65, 85, 0.8);
+  background: rgba(13, 18, 30, 0.8);
+}
+
+.smart-route-compact.selected {
+  border-color: var(--emerald-400);
+}
+
+.smart-route-compact-path {
+  flex: 1;
+  min-width: 0;
+  color: var(--slate-400);
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.smart-route-compact-output {
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: rgb(var(--text));
+  flex-shrink: 0;
+}
+
+.smart-route-compact-impact {
+  font-size: var(--text-xs);
+  font-family: 'JetBrains Mono', monospace;
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   Route List
+   ============================================================================ */
+
+.smart-route-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.smart-route-alternatives {
+  margin-top: var(--space-xs);
+}
+
+.smart-route-alternatives-toggle {
+  background: transparent;
+  border: none;
+  color: var(--slate-400);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 2px 0;
+  transition: color 0.15s;
+}
+
+.smart-route-alternatives-toggle:hover {
+  color: var(--slate-300);
+  text-decoration: underline;
+}
+
+/* ============================================================================
+   Split Suggestion
+   ============================================================================ */
+
+.smart-split-suggestion {
+  padding: var(--space-sm);
+  border-radius: 8px;
+  background: rgba(52, 211, 153, 0.04);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  transition: border-color 0.15s;
+}
+
+.smart-split-suggestion.active {
+  border-color: rgba(52, 211, 153, 0.5);
+  background: rgba(52, 211, 153, 0.07);
+}
+
+.smart-split-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-xs);
+}
+
+.smart-split-label {
+  font-size: var(--text-sm);
+  color: var(--emerald-400);
+  font-weight: 600;
+}
+
+.smart-split-toggle {
+  padding: 3px 10px;
+  background: transparent;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  border-radius: 4px;
+  color: var(--emerald-400);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.smart-split-toggle:hover {
+  background: rgba(52, 211, 153, 0.06);
+  border-color: var(--emerald-400);
+}
+
+.smart-split-toggle.active {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: var(--emerald-400);
+}
+
+.smart-split-allocations {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.smart-split-alloc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-xs);
+  color: var(--slate-300);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.smart-split-alloc-pct {
+  font-weight: 700;
+  color: var(--emerald-400);
+  min-width: 32px;
+}
+
+/* ============================================================================
+   Swap Confirm Button
+   ============================================================================ */
+
+.smart-swap-confirm-btn {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-xs);
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--emerald-400);
+  color: #0f172a;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.smart-swap-confirm-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.smart-swap-confirm-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Mode Toggle
+   ============================================================================ */
+
+.smart-swap-mode-toggle {
+  display: flex;
+  gap: 2px;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 8px;
+  padding: 2px;
+  margin-bottom: var(--space-xs);
+  width: fit-content;
+}
+
+.smart-swap-mode-btn {
+  padding: 6px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--slate-400);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.smart-swap-mode-btn:hover {
+  color: var(--slate-200);
+}
+
+.smart-swap-mode-btn.active {
+  background: rgba(13, 18, 30, 0.9);
+  color: rgb(var(--text));
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
