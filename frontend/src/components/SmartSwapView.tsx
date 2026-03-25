@@ -8,6 +8,7 @@ import {
 } from '../api/router'
 import { TokenSelector, type TokenEntry } from './TokenSelector'
 import { RouteList } from './RouteList'
+import { SmartSwapModal } from './SmartSwapModal'
 import { formatTokenAmount } from '../utils/format'
 import './SmartSwap.css'
 
@@ -535,11 +536,17 @@ export function SmartSwapView({
         {executionBlockReason ?? 'Swap'}
       </button>
 
-      {/* SmartSwapModal placeholder — wired in Task 6 */}
       {showSwapModal && selectedRoute && walletAddress && (
-        <div className="smart-swap-modal-placeholder">
-          {/* SmartSwapModal will be inserted here in Task 6 */}
-        </div>
+        <SmartSwapModal
+          isOpen={showSwapModal}
+          onClose={() => setShowSwapModal(false)}
+          routeQuote={selectedRoute}
+          sourceAmount={rawInput}
+          slippage={slippage}
+          walletAddress={walletAddress}
+          explorerUrl={_explorerUrl}
+          onSuccess={() => setShowSwapModal(false)}
+        />
       )}
     </div>
   )
