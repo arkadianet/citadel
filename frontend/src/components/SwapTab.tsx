@@ -14,6 +14,7 @@ import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import { SwapModal } from './SwapModal'
 import { OrderHistory } from './OrderHistory'
 import { TokenIcon, PoolPairIcons } from './tokenIcons'
+import { SmartSwapView } from './SmartSwapView'
 
 interface SwapTabProps {
   isConnected: boolean
@@ -90,6 +91,7 @@ function formatForInput(amount: number, decimals: number): string {
 // =============================================================================
 
 export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl, ergUsdPrice, canMintSigusd, reserveRatioPct }: SwapTabProps) {
+  const [tabMode, setTabMode] = useState<'smart' | 'pool'>('smart')
   const [pools, setPools] = useState<AmmPool[]>([])
   const [filteredPools, setFilteredPools] = useState<AmmPool[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -625,6 +627,32 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
 
   return (
     <div className="swap-tab">
+      {/* Mode toggle */}
+      <div className="smart-swap-mode-toggle">
+        <button
+          className={`smart-swap-mode-btn ${tabMode === 'smart' ? 'active' : ''}`}
+          onClick={() => setTabMode('smart')}
+        >
+          Smart Swap
+        </button>
+        <button
+          className={`smart-swap-mode-btn ${tabMode === 'pool' ? 'active' : ''}`}
+          onClick={() => setTabMode('pool')}
+        >
+          Pool Swap
+        </button>
+      </div>
+
+      {tabMode === 'smart' ? (
+        <SmartSwapView
+          isConnected={isConnected}
+          walletAddress={walletAddress}
+          walletBalance={walletBalance}
+          explorerUrl={explorerUrl}
+          pools={pools}
+        />
+      ) : (
+      <>
       {/* Protocol Header */}
       <div className="swap-header">
         <div className="swap-header-row">
@@ -1511,6 +1539,8 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
         </div>
       </div>
       </>)}
+      </>
+      )}
       </>
       )}
     </div>
