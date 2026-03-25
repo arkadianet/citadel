@@ -193,14 +193,24 @@ export function SmartSwapView({
   // Token lists
   // =============================================================================
 
-  const sourceTokenList = useMemo(
+  const sourceTokens = useMemo(
     () => buildTokenList(pools, walletBalance, 'source'),
     [pools, walletBalance],
   )
 
-  const targetTokenList = useMemo(
+  const targetTokens = useMemo(
     () => buildTokenList(pools, walletBalance, 'target'),
     [pools, walletBalance],
+  )
+
+  const filteredTargetTokens = useMemo(
+    () => targetTokens.filter(t => t.token_id !== sourceToken?.token_id),
+    [targetTokens, sourceToken],
+  )
+
+  const filteredSourceTokens = useMemo(
+    () => sourceTokens.filter(t => t.token_id !== targetToken?.token_id),
+    [sourceTokens, targetToken],
   )
 
   // =============================================================================
@@ -241,14 +251,11 @@ export function SmartSwapView({
     setRouteError(null)
 
     try {
-      const result: RoutesResponse = await findSwapRoutes(
-        sourceToken.token_id,
-        targetToken.token_id,
-        rawInput,
-        4,
-        5,
-        slippage,
+      const routePromise = findSwapRoutes(sourceToken.token_id, targetToken.token_id, rawInput, 4, 5, slippage)
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Route finding timed out — check node connection')), 10000)
       )
+      const result: RoutesResponse = await Promise.race([routePromise, timeoutPromise])
       setRoutes(result.routes)
       setSplit(result.split)
       setSelectedRouteIndex(0)
@@ -286,6 +293,14 @@ export function SmartSwapView({
     findRoutes()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceToken?.token_id, targetToken?.token_id])
+
+  // Clear routes when either token becomes null
+  useEffect(() => {
+    if (!sourceToken || !targetToken) {
+      setRoutes([])
+      setSplit(null)
+    }
+  }, [sourceToken, targetToken])
 
   // =============================================================================
   // Max button
@@ -379,7 +394,7 @@ export function SmartSwapView({
         <div className="smart-swap-token-col">
           <label className="smart-swap-label">From</label>
           <TokenSelector
-            tokens={sourceTokenList}
+            tokens={filteredSourceTokens}
             selected={sourceToken}
             onSelect={handleSelectSource}
             placeholder="Select token"
@@ -462,7 +477,7 @@ export function SmartSwapView({
       <div className="smart-swap-target-row">
         <label className="smart-swap-label">To</label>
         <TokenSelector
-          tokens={targetTokenList}
+          tokens={filteredTargetTokens}
           selected={targetToken}
           onSelect={handleSelectTarget}
           placeholder="Select token"
