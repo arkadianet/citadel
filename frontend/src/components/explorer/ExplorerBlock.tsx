@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getBlock, formatErg, formatSize, formatDifficulty, truncateHash, calcFee, type Block, type Transaction } from '../../api/explorer'
+import { getBlock, formatSize, formatDifficulty, truncateHash, calcFee, type Block, type Transaction } from '../../api/explorer'
+import { formatErg } from '../../utils/format'
 import { ExplorerSkeleton } from './ExplorerSkeleton'
 import { TxTypeBadge } from './TxTypeBadge'
 import type { ExplorerRoute } from '../ExplorerTab'

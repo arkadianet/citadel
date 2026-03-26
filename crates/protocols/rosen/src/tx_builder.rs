@@ -1,48 +1,26 @@
-//! Lock transaction builder for Rosen Bridge
-//!
-//! Creates a "lock" transaction that sends ERG/tokens to the bridge lock address
-//! with metadata in R4 register. This is all that's needed on the Ergo side —
-//! the bridge watchers and guards handle the rest.
-
-use std::collections::HashMap;
-
-use ergo_lib::ergotree_ir::chain::address::{AddressEncoder, NetworkPrefix};
-use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
 use serde::{Deserialize, Serialize};
 
 use ergo_tx::eip12::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
 use ergo_tx::sigma::encode_sigma_coll_coll_byte;
-use ergo_tx::{collect_change_tokens, select_erg_boxes, select_token_boxes};
+use ergo_tx::{append_change_output, select_inputs_for_spend};
 
 use crate::constants::{LOCK_TX_FEE, MIN_BOX_VALUE};
 use crate::validate::validate_target_address;
 
-/// Request to build a lock transaction
 #[derive(Debug, Clone)]
 pub struct LockRequest {
-    /// Token to bridge: "erg" for native ERG, or token ID
     pub ergo_token_id: String,
-    /// Amount in base units (nanoERG or smallest token unit)
     pub amount: i64,
-    /// Target chain name ("cardano", "bitcoin", etc.)
     pub target_chain: String,
-    /// Destination address on the target chain
     pub target_address: String,
-    /// Protocol bridge fee in source token base units
     pub bridge_fee: i64,
-    /// Target chain network fee in source token base units
     pub network_fee: i64,
-    /// Sender's Ergo address (included in R4 as fromAddress)
     pub user_address: String,
-    /// Sender's ErgoTree hex (for change output)
     pub user_ergo_tree: String,
-    /// User's available UTXOs
     pub user_inputs: Vec<Eip12InputBox>,
-    /// Current blockchain height
     pub current_height: i32,
 }
 
-/// Result of building a lock transaction
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LockBuildResult {
@@ -50,7 +28,6 @@ pub struct LockBuildResult {
     pub summary: LockSummary,
 }
 
-/// Summary of a lock transaction for display
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LockSummary {
@@ -60,11 +37,10 @@ pub struct LockSummary {
     pub target_address: String,
     pub bridge_fee: i64,
     pub network_fee: i64,
-    /// Total ERG cost (for ERG: amount + fees; for tokens: min_box_value + miner_fee)
+    /// For ERG: amount + fees; for tokens: min_box_value + miner_fee
     pub total_cost_erg: i64,
 }
 
-/// Errors from lock transaction building
 #[derive(Debug, thiserror::Error)]
 pub enum LockError {
     #[error("Invalid target address: {0}")]
@@ -89,23 +65,11 @@ impl std::fmt::Display for LockBuildResult {
     }
 }
 
-/// Build a lock transaction for the Rosen Bridge.
-///
-/// The lock box is sent to `lock_address_ergo_tree` with metadata in R4:
-/// ```text
-/// R4: Coll[Coll[SByte]] = [
-///   target_chain,      // e.g. "cardano"
-///   target_address,    // e.g. "addr1q..."
-///   network_fee,       // as string, e.g. "500000"
-///   bridge_fee,        // as string, e.g. "300000"
-///   from_address       // sender's Ergo address
-/// ]
-/// ```
+/// R4: Coll[Coll[SByte]] = [target_chain, target_address, network_fee, bridge_fee, from_address]
 pub fn build_lock_tx(
     request: &LockRequest,
     lock_address_ergo_tree: &str,
 ) -> Result<LockBuildResult, LockError> {
-    // Validate
     if request.amount <= 0 {
         return Err(LockError::InvalidAmount);
     }
@@ -114,7 +78,6 @@ pub fn build_lock_tx(
 
     let is_erg = request.ergo_token_id == "erg";
 
-    // Build R4 register value: Coll[Coll[SByte]]
     let network_fee_str = request.network_fee.to_string();
     let bridge_fee_str = request.bridge_fee.to_string();
     let r4_values: Vec<&[u8]> = vec![
@@ -126,11 +89,8 @@ pub fn build_lock_tx(
     ];
     let r4_hex = encode_sigma_coll_coll_byte(&r4_values);
 
-    // Build the lock output box
     let lock_box = if is_erg {
-        // For ERG bridging: lock box value = amount to bridge
-        let mut registers = HashMap::new();
-        registers.insert("R4".to_string(), r4_hex);
+        let registers = ergo_tx::sigma_registers!("R4" => r4_hex);
 
         Eip12Output {
             value: request.amount.to_string(),
@@ -140,9 +100,7 @@ pub fn build_lock_tx(
             additional_registers: registers,
         }
     } else {
-        // For token bridging: lock box value = MIN_BOX_VALUE, tokens = [{id, amount}]
-        let mut registers = HashMap::new();
-        registers.insert("R4".to_string(), r4_hex);
+        let registers = ergo_tx::sigma_registers!("R4" => r4_hex);
 
         Eip12Output {
             value: MIN_BOX_VALUE.to_string(),
@@ -153,68 +111,50 @@ pub fn build_lock_tx(
         }
     };
 
-    // Calculate required ERG
     let required_erg = if is_erg {
-        // amount + miner fee + min change box
         (request.amount + LOCK_TX_FEE + citadel_core::constants::MIN_BOX_VALUE_NANO) as u64
     } else {
-        // min_box_value for lock + miner fee + min change box
         (MIN_BOX_VALUE + LOCK_TX_FEE + citadel_core::constants::MIN_BOX_VALUE_NANO) as u64
     };
 
-    // Select input boxes
-    let selected = if is_erg {
-        select_erg_boxes(&request.user_inputs, required_erg)
-            .map_err(|e| LockError::BoxSelection(e.to_string()))?
-    } else {
-        select_token_boxes(
-            &request.user_inputs,
-            &request.ergo_token_id,
-            request.amount as u64,
-            required_erg,
-        )
-        .map_err(|e| LockError::BoxSelection(e.to_string()))?
-    };
-
-    // Build change output
-    let change_erg = selected.total_erg as i64
-        - if is_erg {
-            request.amount
-        } else {
-            MIN_BOX_VALUE
-        }
-        - LOCK_TX_FEE;
-
-    if change_erg < 0 {
-        return Err(LockError::InsufficientFunds(format!(
-            "Need {} nanoERG more",
-            -change_erg
-        )));
-    }
-
-    // Collect change tokens (subtract tokens sent to lock box)
-    let spent_token = if is_erg {
+    let token_spend = if is_erg {
         None
     } else {
         Some((request.ergo_token_id.as_str(), request.amount as u64))
     };
-    let change_tokens = collect_change_tokens(&selected.boxes, spent_token);
+    let selected = select_inputs_for_spend(&request.user_inputs, required_erg, token_spend)
+        .map_err(|e| LockError::BoxSelection(e.to_string()))?;
 
-    let change_box = Eip12Output::change(
-        change_erg,
+    let lock_box_erg = if is_erg {
+        request.amount as u64
+    } else {
+        MIN_BOX_VALUE as u64
+    };
+    let erg_used = lock_box_erg + LOCK_TX_FEE as u64;
+
+    let spent_tokens: Vec<(&str, u64)> = if is_erg {
+        vec![]
+    } else {
+        vec![(request.ergo_token_id.as_str(), request.amount as u64)]
+    };
+
+    let mut outputs = vec![lock_box];
+    append_change_output(
+        &mut outputs,
+        &selected,
+        erg_used,
+        &spent_tokens,
         &request.user_ergo_tree,
-        change_tokens,
         request.current_height,
-    );
+        citadel_core::constants::MIN_BOX_VALUE_NANO as u64,
+    )
+    .map_err(|e| LockError::InsufficientFunds(e.to_string()))?;
+    outputs.push(Eip12Output::fee(LOCK_TX_FEE, request.current_height));
 
-    // Miner fee output
-    let fee_box = Eip12Output::fee(LOCK_TX_FEE, request.current_height);
-
-    // Assemble transaction
     let unsigned_tx = Eip12UnsignedTx {
         inputs: selected.boxes,
         data_inputs: vec![],
-        outputs: vec![lock_box, change_box, fee_box],
+        outputs,
     };
 
     let total_cost_erg = if is_erg {
@@ -243,27 +183,15 @@ pub fn build_lock_tx(
     })
 }
 
-/// Convert an Ergo address string to its ErgoTree hex representation.
 pub fn address_to_ergo_tree(address: &str) -> Result<String, LockError> {
-    for prefix in [NetworkPrefix::Mainnet, NetworkPrefix::Testnet] {
-        let encoder = AddressEncoder::new(prefix);
-        if let Ok(addr) = encoder.parse_address_from_str(address) {
-            if let Ok(tree) = addr.script() {
-                if let Ok(bytes) = tree.sigma_serialize_bytes() {
-                    return Ok(hex::encode(bytes));
-                }
-            }
-        }
-    }
-    Err(LockError::LockAddressConversion(format!(
-        "Failed to parse address: {}",
-        address
-    )))
+    ergo_tx::address::address_to_ergo_tree(address)
+        .map_err(|e| LockError::LockAddressConversion(e.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     fn mock_utxo(value: i64, tokens: Vec<(&str, i64)>) -> Eip12InputBox {
         Eip12InputBox {
@@ -299,25 +227,21 @@ mod tests {
 
         let result = build_lock_tx(&request, "0008cd03lock").unwrap();
 
-        // Lock box should be output[0]
-        assert_eq!(result.unsigned_tx.outputs.len(), 3); // lock + change + fee
+        assert_eq!(result.unsigned_tx.outputs.len(), 3);
         assert_eq!(
             result.unsigned_tx.outputs[0].value,
-            "1000000000" // 1 ERG
+            "1000000000"
         );
         assert_eq!(result.unsigned_tx.outputs[0].ergo_tree, "0008cd03lock");
         assert!(result.unsigned_tx.outputs[0]
             .additional_registers
             .contains_key("R4"));
 
-        // Change box should be output[1]
         let change_val: i64 = result.unsigned_tx.outputs[1].value.parse().unwrap();
         assert!(change_val > 0);
 
-        // Fee box should be output[2]
         assert_eq!(result.unsigned_tx.outputs[2].value, LOCK_TX_FEE.to_string());
 
-        // Summary
         assert_eq!(result.summary.token_name, "ERG");
         assert_eq!(result.summary.amount, 1_000_000_000);
         assert_eq!(result.summary.target_chain, "cardano");
@@ -344,7 +268,6 @@ mod tests {
 
         let result = build_lock_tx(&request, "0008cd03lock").unwrap();
 
-        // Lock box should have MIN_BOX_VALUE and the token
         assert_eq!(
             result.unsigned_tx.outputs[0].value,
             MIN_BOX_VALUE.to_string()
@@ -353,13 +276,12 @@ mod tests {
         assert_eq!(result.unsigned_tx.outputs[0].assets[0].token_id, token_id);
         assert_eq!(result.unsigned_tx.outputs[0].assets[0].amount, "1000");
 
-        // Change box should have remaining tokens
         let change_tokens = &result.unsigned_tx.outputs[1].assets;
         let change_tok = change_tokens
             .iter()
             .find(|a| a.token_id == token_id)
             .unwrap();
-        assert_eq!(change_tok.amount, "4000"); // 5000 - 1000
+        assert_eq!(change_tok.amount, "4000");
     }
 
     #[test]
@@ -402,7 +324,6 @@ mod tests {
             .get("R4")
             .unwrap();
 
-        // Decode and verify R4 contents
         let bytes = hex::decode(r4).unwrap();
         assert_eq!(bytes[0], 0x0e); // Coll
         assert_eq!(bytes[1], 0x0c); // Coll[SByte]

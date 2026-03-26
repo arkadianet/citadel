@@ -1,7 +1,3 @@
-//! Pool Discovery and Fetching
-//!
-//! Functions for discovering AMM pools from the Ergo node.
-
 use ergo_lib::ergotree_ir::chain::ergo_box::{ErgoBox, NonMandatoryRegisterId};
 use ergo_lib::ergotree_ir::ergo_tree::ErgoTree;
 use ergo_lib::ergotree_ir::mir::constant::Literal;
@@ -16,7 +12,6 @@ use crate::state::{
     TokenAmount,
 };
 
-/// Parse an N2T pool box into AmmPool
 pub fn parse_n2t_pool(ergo_box: &ErgoBox) -> Result<AmmPool, AmmError> {
     let tokens = ergo_box.tokens.as_ref().ok_or(AmmError::InvalidLayout {
         expected: "tokens array",
@@ -30,14 +25,12 @@ pub fn parse_n2t_pool(ergo_box: &ErgoBox) -> Result<AmmPool, AmmError> {
         });
     }
 
-    // Extract pool NFT (index 0)
     let pool_nft = tokens.get(n2t::INDEX_NFT).ok_or(AmmError::InvalidLayout {
         expected: "pool NFT at index 0",
         found: "missing token",
     })?;
     let pool_id = hex::encode(pool_nft.token_id.as_ref());
 
-    // Extract LP token (index 1)
     let lp_token = tokens.get(n2t::INDEX_LP).ok_or(AmmError::InvalidLayout {
         expected: "LP token at index 1",
         found: "missing token",
@@ -46,7 +39,6 @@ pub fn parse_n2t_pool(ergo_box: &ErgoBox) -> Result<AmmPool, AmmError> {
     let lp_locked = u64::from(lp_token.amount);
     let lp_circulating = (lp::TOTAL_EMISSION as u64).saturating_sub(lp_locked);
 
-    // Extract token Y (index 2)
     let token_y = tokens.get(n2t::INDEX_Y).ok_or(AmmError::InvalidLayout {
         expected: "token Y at index 2",
         found: "missing token",
@@ -54,13 +46,10 @@ pub fn parse_n2t_pool(ergo_box: &ErgoBox) -> Result<AmmPool, AmmError> {
     let token_y_id = hex::encode(token_y.token_id.as_ref());
     let token_y_amount = u64::from(token_y.amount);
 
-    // ERG reserves from box value
     let erg_reserves = u64::from(ergo_box.value);
-
-    // Box ID
     let box_id = hex::encode(ergo_box.box_id().as_ref());
 
-    // Read fee numerator from R4 register (Int)
+    // Fee numerator from R4 — different pools have different fees, never hardcode
     let fee_num = ergo_box
         .additional_registers
         .get_constant(NonMandatoryRegisterId::R4)
@@ -91,7 +80,6 @@ pub fn parse_n2t_pool(ergo_box: &ErgoBox) -> Result<AmmPool, AmmError> {
     })
 }
 
-/// Parse a T2T pool box into AmmPool
 pub fn parse_t2t_pool(ergo_box: &ErgoBox) -> Result<AmmPool, AmmError> {
     let tokens = ergo_box.tokens.as_ref().ok_or(AmmError::InvalidLayout {
         expected: "tokens array",
@@ -105,14 +93,12 @@ pub fn parse_t2t_pool(ergo_box: &ErgoBox) -> Result<AmmPool, AmmError> {
         });
     }
 
-    // Extract pool NFT (index 0)
     let pool_nft = tokens.get(t2t::INDEX_NFT).ok_or(AmmError::InvalidLayout {
         expected: "pool NFT at index 0",
         found: "missing token",
     })?;
     let pool_id = hex::encode(pool_nft.token_id.as_ref());
 
-    // Extract LP token (index 1)
     let lp_token = tokens.get(t2t::INDEX_LP).ok_or(AmmError::InvalidLayout {
         expected: "LP token at index 1",
         found: "missing token",
@@ -121,7 +107,6 @@ pub fn parse_t2t_pool(ergo_box: &ErgoBox) -> Result<AmmPool, AmmError> {
     let lp_locked = u64::from(lp_token.amount);
     let lp_circulating = (lp::TOTAL_EMISSION as u64).saturating_sub(lp_locked);
 
-    // Extract token X (index 2)
     let token_x = tokens.get(t2t::INDEX_X).ok_or(AmmError::InvalidLayout {
         expected: "token X at index 2",
         found: "missing token",
@@ -129,7 +114,6 @@ pub fn parse_t2t_pool(ergo_box: &ErgoBox) -> Result<AmmPool, AmmError> {
     let token_x_id = hex::encode(token_x.token_id.as_ref());
     let token_x_amount = u64::from(token_x.amount);
 
-    // Extract token Y (index 3)
     let token_y = tokens.get(t2t::INDEX_Y).ok_or(AmmError::InvalidLayout {
         expected: "token Y at index 3",
         found: "missing token",
@@ -137,13 +121,10 @@ pub fn parse_t2t_pool(ergo_box: &ErgoBox) -> Result<AmmPool, AmmError> {
     let token_y_id = hex::encode(token_y.token_id.as_ref());
     let token_y_amount = u64::from(token_y.amount);
 
-    // ERG from box value (for fees)
     let erg_reserves = u64::from(ergo_box.value);
-
-    // Box ID
     let box_id = hex::encode(ergo_box.box_id().as_ref());
 
-    // Read fee numerator from R4 register (Int)
+    // Fee numerator from R4 — different pools have different fees, never hardcode
     let fee_num = ergo_box
         .additional_registers
         .get_constant(NonMandatoryRegisterId::R4)
@@ -179,7 +160,6 @@ pub fn parse_t2t_pool(ergo_box: &ErgoBox) -> Result<AmmPool, AmmError> {
     })
 }
 
-/// Discover all N2T pools from the node
 pub async fn discover_n2t_pools(
     node: &ergo_node_client::NodeClient,
 ) -> Result<Vec<AmmPool>, AmmError> {
@@ -206,7 +186,6 @@ pub async fn discover_n2t_pools(
     Ok(pools)
 }
 
-/// Discover all T2T pools from the node
 pub async fn discover_t2t_pools(
     node: &ergo_node_client::NodeClient,
 ) -> Result<Vec<AmmPool>, AmmError> {
@@ -233,12 +212,10 @@ pub async fn discover_t2t_pools(
     Ok(pools)
 }
 
-/// Discover all pools (N2T and T2T) with resolved token names
 pub async fn discover_pools(node: &ergo_node_client::NodeClient) -> Result<Vec<AmmPool>, AmmError> {
     let mut pools = discover_n2t_pools(node).await?;
     pools.extend(discover_t2t_pools(node).await?);
 
-    // Collect unique token IDs that need name resolution
     let mut token_ids = std::collections::HashSet::new();
     for pool in &pools {
         token_ids.insert(pool.token_y.token_id.clone());
@@ -247,7 +224,6 @@ pub async fn discover_pools(node: &ergo_node_client::NodeClient) -> Result<Vec<A
         }
     }
 
-    // Resolve token info in parallel
     let mut token_info_map = std::collections::HashMap::new();
     for token_id in &token_ids {
         match node.get_token_info(token_id).await {
@@ -260,7 +236,6 @@ pub async fn discover_pools(node: &ergo_node_client::NodeClient) -> Result<Vec<A
         }
     }
 
-    // Populate pool token metadata
     for pool in &mut pools {
         if let Some(info) = token_info_map.get(&pool.token_y.token_id) {
             pool.token_y.name = info.name.clone();
@@ -278,7 +253,6 @@ pub async fn discover_pools(node: &ergo_node_client::NodeClient) -> Result<Vec<A
         }
     }
 
-    // Sort by ERG reserves descending (deepest liquidity first)
     pools.sort_by(|a, b| {
         b.erg_reserves
             .unwrap_or(0)
@@ -293,8 +267,6 @@ pub async fn discover_pools(node: &ergo_node_client::NodeClient) -> Result<Vec<A
     Ok(pools)
 }
 
-/// Match an ErgoTree against known swap order templates.
-/// Returns the order type if the tree matches a known template.
 pub fn match_swap_template(tree: &ErgoTree) -> Option<SwapOrderType> {
     let tmpl = match tree.template_bytes() {
         Ok(t) => t,
@@ -309,7 +281,6 @@ pub fn match_swap_template(tree: &ErgoTree) -> Option<SwapOrderType> {
     }
 }
 
-/// Extract key constants from a swap order ErgoTree.
 /// Returns (pool_id_hex, redeemer_prop_bytes, base_amount, min_quote_amount).
 pub fn parse_order_constants(
     tree: &ErgoTree,
@@ -327,7 +298,6 @@ pub fn parse_order_constants(
     Ok((pool_id, redeemer_bytes, base_amount, min_quote))
 }
 
-/// Check if the redeemer bytes match a user's ErgoTree hex.
 pub fn redeemer_matches_user(redeemer_bytes: &[u8], user_ergo_tree_hex: &str) -> bool {
     match hex::decode(user_ergo_tree_hex) {
         Ok(user_bytes) => redeemer_bytes == user_bytes.as_slice(),
@@ -383,15 +353,6 @@ fn extract_coll_byte_constant(
     }
 }
 
-// NOTE: get_pool_by_id and get_pools_by_token stubs were removed.
-// Callers use discover_pools() and filter client-side instead.
-// When needed, implement by querying boxes by token ID (pool NFT).
-
-/// Find pending swap orders for an address by scanning recent transactions.
-///
-/// Scans the user's recent transactions, identifies swap order outputs via
-/// template matching, checks that the redeemer matches the user, and verifies
-/// the box is still unspent (i.e. still pending).
 pub async fn find_pending_orders(
     node: &ergo_node_client::NodeClient,
     user_address: &str,
@@ -491,7 +452,6 @@ pub async fn find_pending_orders(
     Ok(orders)
 }
 
-/// Check if an ErgoTree hex matches one of the known pool templates.
 fn is_pool_ergo_tree(ergo_tree_hex: &str) -> bool {
     let tree_bytes = match hex::decode(ergo_tree_hex) {
         Ok(b) => b,
@@ -508,11 +468,8 @@ fn is_pool_ergo_tree(ergo_tree_hex: &str) -> bool {
     tmpl == *pool_template_bytes::N2T_POOL || tmpl == *pool_template_bytes::T2T_POOL
 }
 
-/// Find direct swap transactions in the mempool for a given user.
-///
-/// Scans unconfirmed transactions involving the user's address and identifies
-/// direct swaps: transactions where outputs[0] is a pool box and another output
-/// goes to the user's address.
+/// Finds direct swaps in mempool: txs where outputs[0] is a pool box
+/// and another output goes to the user.
 pub async fn find_mempool_swaps(
     node: &ergo_node_client::NodeClient,
     user_address: &str,
@@ -538,7 +495,6 @@ pub async fn find_mempool_swaps(
             _ => continue,
         };
 
-        // Check if outputs[0] is a pool box
         let first_ergo_tree = match outputs[0]["ergoTree"].as_str() {
             Some(s) => s,
             None => continue,
@@ -547,7 +503,6 @@ pub async fn find_mempool_swaps(
             continue;
         }
 
-        // Extract pool NFT ID from outputs[0].assets[0].tokenId
         let pool_id = match outputs[0]["assets"]
             .as_array()
             .and_then(|a| a.first())
@@ -557,7 +512,6 @@ pub async fn find_mempool_swaps(
             None => continue,
         };
 
-        // Find the user's output box (ergoTree matches user)
         let user_output = outputs[1..]
             .iter()
             .find(|o| o["ergoTree"].as_str() == Some(user_ergo_tree_hex));

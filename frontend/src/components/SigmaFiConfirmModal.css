@@ -106,63 +106,6 @@
   color: var(--amber-400);
 }
 
-/* ============================================================================
-   Actions
-   ============================================================================ */
-
-.sf-modal-actions {
-  display: flex;
-  gap: var(--space-sm);
-}
-
-.sf-modal-actions .btn {
-  flex: 1;
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-  border: none;
-}
-
-.sf-modal-actions .btn-primary {
-  background: var(--emerald-500);
-  color: white;
-}
-
-.sf-modal-actions .btn-primary:hover:not(:disabled) {
-  background: var(--emerald-600);
-}
-
-.sf-modal-actions .btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.sf-modal-actions .btn-danger {
-  background: rgba(239, 68, 68, 0.15);
-  color: var(--red-400);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-}
-
-.sf-modal-actions .btn-danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.25);
-}
-
-.sf-modal-actions .btn-danger:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.sf-modal-actions .btn-secondary {
-  background: var(--slate-700);
-  color: rgb(var(--text));
-}
-
-.sf-modal-actions .btn-secondary:hover {
-  background: var(--slate-600);
-}
 
 /* ============================================================================
    Signing Step
@@ -234,7 +177,7 @@
 }
 
 .sigmafi-confirm-modal .waiting-icon {
-  animation: sfPulse 2s infinite;
+  animation: pulse 2s infinite;
 }
 
 .sigmafi-confirm-modal .waiting-spinner {
@@ -243,7 +186,7 @@
   border: 3px solid var(--slate-700);
   border-top-color: var(--emerald-500);
   border-radius: 50%;
-  animation: sfSpin 1s linear infinite;
+  animation: spin 1s linear infinite;
 }
 
 .sigmafi-confirm-modal .qr-container {
@@ -252,54 +195,7 @@
   border-radius: var(--radius-lg);
 }
 
-/* ============================================================================
-   Success / Error Steps
-   ============================================================================ */
 
-.sf-success-step,
-.sf-error-step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-xl) var(--space-md);
-  text-align: center;
-}
-
-.sf-success-step h3,
-.sf-error-step h3 {
-  font-size: var(--text-xl);
-  font-weight: 600;
-  color: rgb(var(--text));
-  margin: 0;
-}
-
-.sf-success-step p,
-.sf-error-step p {
-  color: var(--slate-400);
-  margin: 0;
-  font-size: var(--text-sm);
-}
-
-.sf-error-step .error-message {
-  color: var(--red-400);
-  font-size: var(--text-sm);
-  max-width: 100%;
-  word-break: break-word;
-}
-
-/* ============================================================================
-   Animations
-   ============================================================================ */
-
-@keyframes sfPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-@keyframes sfSpin {
-  to { transform: rotate(360deg); }
-}
 
 @media (max-width: 480px) {
   .sigmafi-confirm-modal .sign-methods {

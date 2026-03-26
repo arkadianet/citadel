@@ -30,8 +30,6 @@ export interface SplitBuildResponse {
   minerFee: number
 }
 
-export type UtxoSignResponse = SignResponse
-export type UtxoTxStatusResponse = TxStatusResponse
 
 // =============================================================================
 // API Functions
@@ -74,15 +72,15 @@ export async function buildSplitTx(
 export async function startUtxoMgmtSign(
   unsignedTx: object,
   message: string,
-): Promise<UtxoSignResponse> {
-  return await invoke<UtxoSignResponse>('start_utxo_mgmt_sign', {
+): Promise<SignResponse> {
+  return await invoke<SignResponse>('start_utxo_mgmt_sign', {
     unsignedTx,
     message,
   })
 }
 
-export async function getUtxoMgmtTxStatus(requestId: string): Promise<UtxoTxStatusResponse> {
-  return await invoke<UtxoTxStatusResponse>('get_utxo_mgmt_tx_status', {
+export async function getUtxoMgmtTxStatus(requestId: string): Promise<TxStatusResponse> {
+  return await invoke<TxStatusResponse>('get_utxo_mgmt_tx_status', {
     requestId,
   })
 }

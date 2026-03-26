@@ -7,9 +7,9 @@ use citadel_api::AppState;
 use lending::{
     constants as lending_constants, fetch_all_markets, tx_builder as lending_tx_builder, PoolState,
 };
+use super::StrErr;
 use tauri::State;
 
-/// Convert PoolState to PoolInfo for API response
 fn pool_state_to_info(state: &PoolState) -> PoolInfo {
     PoolInfo {
         pool_id: state.pool_id.clone(),
@@ -38,7 +38,6 @@ fn pool_state_to_info(state: &PoolState) -> PoolInfo {
     }
 }
 
-/// Convert health factor to UI status string for color coding
 fn health_factor_to_status(health_factor: f64) -> String {
     if health_factor >= lending_constants::health::HEALTHY_THRESHOLD {
         "green".to_string()
@@ -49,22 +48,14 @@ fn health_factor_to_status(health_factor: f64) -> String {
     }
 }
 
-/// Get all lending markets with pool metrics
 #[tauri::command]
 pub async fn get_lending_markets(state: State<'_, AppState>) -> Result<MarketsResponse, String> {
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
     let markets_response = fetch_all_markets(&client, &capabilities, None)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let pools: Vec<PoolInfo> = markets_response
         .pools
@@ -78,27 +69,18 @@ pub async fn get_lending_markets(state: State<'_, AppState>) -> Result<MarketsRe
     })
 }
 
-/// Get user lending positions for an address
 #[tauri::command]
 pub async fn get_lending_positions(
     state: State<'_, AppState>,
     address: String,
 ) -> Result<PositionsResponse, String> {
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
     let markets_response = fetch_all_markets(&client, &capabilities, Some(&address))
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
-    // Extract lend positions from pools
     let lend_positions: Vec<LendPositionInfo> = markets_response
         .pools
         .iter()
@@ -115,7 +97,6 @@ pub async fn get_lending_positions(
         })
         .collect();
 
-    // Extract borrow positions from pools
     let borrow_positions: Vec<BorrowPositionInfo> = markets_response
         .pools
         .iter()
@@ -146,7 +127,6 @@ pub async fn get_lending_positions(
     })
 }
 
-/// Parse user UTXOs from JSON to tx_builder's UserUtxo format
 fn parse_lending_utxos(
     utxos_json: Vec<serde_json::Value>,
 ) -> Result<Vec<lending_tx_builder::UserUtxo>, String> {
@@ -161,7 +141,6 @@ fn parse_lending_utxos(
         .collect()
 }
 
-/// Parse a single UTXO from JSON
 fn parse_single_lending_utxo(
     v: serde_json::Value,
     idx: usize,
@@ -204,7 +183,6 @@ fn parse_single_lending_utxo(
         .ok_or_else(|| format!("UTXO {} missing creationHeight", idx))?
         as i32;
 
-    // Parse assets (optional)
     let assets: Vec<(String, i64)> = v["assets"]
         .as_array()
         .map(|arr| {
@@ -225,7 +203,6 @@ fn parse_single_lending_utxo(
         })
         .unwrap_or_default();
 
-    // Parse registers (optional)
     let registers: std::collections::HashMap<String, String> = v["additionalRegisters"]
         .as_object()
         .or_else(|| v["additional_registers"].as_object())
@@ -248,7 +225,6 @@ fn parse_single_lending_utxo(
     })
 }
 
-/// Convert BuildResponse to LendingBuildResponse
 fn lending_build_response_to_api(
     response: lending_tx_builder::BuildResponse,
 ) -> Result<LendingBuildResponse, String> {
@@ -272,25 +248,20 @@ fn lending_build_response_to_api(
     })
 }
 
-/// Build lend (deposit) transaction
 #[tauri::command]
 pub async fn build_lend_tx(
     _state: State<'_, AppState>,
     request: LendBuildRequest,
 ) -> Result<LendingBuildResponse, String> {
-    // Validate amount is non-zero
     if request.amount == 0 {
         return Err("Amount must be greater than 0".to_string());
     }
 
-    // Validate pool_id exists
     let pool_config = lending_constants::get_pool(&request.pool_id)
         .ok_or_else(|| format!("Pool '{}' not found", request.pool_id))?;
 
-    // Parse user UTXOs
     let user_utxos = parse_lending_utxos(request.user_utxos)?;
 
-    // Build the lend request
     let lend_request = lending_tx_builder::LendRequest {
         pool_id: request.pool_id.clone(),
         amount: request.amount,
@@ -300,33 +271,27 @@ pub async fn build_lend_tx(
         slippage_bps: request.slippage_bps,
     };
 
-    // Build the transaction
     let result =
         lending_tx_builder::build_lend_tx(lend_request, pool_config, request.current_height)
-            .map_err(|e| e.to_string())?;
+            .str_err()?;
 
     lending_build_response_to_api(result)
 }
 
-/// Build withdraw (redeem LP tokens) transaction
 #[tauri::command]
 pub async fn build_withdraw_tx(
     _state: State<'_, AppState>,
     request: WithdrawBuildRequest,
 ) -> Result<LendingBuildResponse, String> {
-    // Validate amount is non-zero
     if request.lp_amount == 0 {
         return Err("LP amount must be greater than 0".to_string());
     }
 
-    // Validate pool_id exists
     let pool_config = lending_constants::get_pool(&request.pool_id)
         .ok_or_else(|| format!("Pool '{}' not found", request.pool_id))?;
 
-    // Parse user UTXOs
     let user_utxos = parse_lending_utxos(request.user_utxos)?;
 
-    // Build the withdraw request
     let withdraw_request = lending_tx_builder::WithdrawRequest {
         pool_id: request.pool_id.clone(),
         lp_amount: request.lp_amount,
@@ -335,28 +300,23 @@ pub async fn build_withdraw_tx(
         min_output: None,
     };
 
-    // Build the transaction
     let result = lending_tx_builder::build_withdraw_tx(
         withdraw_request,
         pool_config,
         request.current_height,
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     lending_build_response_to_api(result)
 }
 
-/// Build borrow transaction
-///
-/// Creates a proxy box with collateral tokens and registers that Duckpools bots
-/// process to execute the borrow. Fetches liquidation threshold/penalty from
-/// the on-chain parameter box to ensure they match what the pool contract validates.
+/// Fetches liquidation threshold/penalty from on-chain parameter box --
+/// never hardcode these, the protocol team can update them.
 #[tauri::command]
 pub async fn build_borrow_tx(
     state: State<'_, AppState>,
     request: BorrowBuildRequest,
 ) -> Result<LendingBuildResponse, String> {
-    // Validate amounts
     if request.borrow_amount == 0 {
         return Err("Borrow amount must be greater than 0".to_string());
     }
@@ -364,28 +324,19 @@ pub async fn build_borrow_tx(
         return Err("Collateral amount must be greater than 0".to_string());
     }
 
-    // Validate pool_id exists
     let pool_config = lending_constants::get_pool(&request.pool_id)
         .ok_or_else(|| format!("Pool '{}' not found", request.pool_id))?;
 
-    // Get node client to fetch on-chain parameter box
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
-    // Fetch real threshold/penalty from on-chain parameter box
     let collateral_options = lending::fetch_collateral_from_parameter_box(
         &client,
         &capabilities,
         pool_config,
     )
     .await
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     if collateral_options.is_empty() {
         return Err(format!(
@@ -394,9 +345,6 @@ pub async fn build_borrow_tx(
         ));
     }
 
-    // Find the matching collateral option for the user's chosen token
-    // Token pools: collateral_token = "native" (ERG)
-    // ERG pool: collateral_token = token_id of the collateral token
     let collateral_config = collateral_options
         .iter()
         .find(|opt| opt.token_id == request.collateral_token)
@@ -414,10 +362,8 @@ pub async fn build_borrow_tx(
         })?
         .clone();
 
-    // Parse user UTXOs
     let user_utxos = parse_lending_utxos(request.user_utxos)?;
 
-    // Build the borrow request
     let borrow_request = lending_tx_builder::BorrowRequest {
         pool_id: request.pool_id.clone(),
         collateral_token: request.collateral_token,
@@ -427,37 +373,31 @@ pub async fn build_borrow_tx(
         user_utxos,
     };
 
-    // Build the transaction
     let result = lending_tx_builder::build_borrow_tx(
         borrow_request,
         pool_config,
         &collateral_config,
         request.current_height,
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     lending_build_response_to_api(result)
 }
 
-/// Build repay transaction
 #[tauri::command]
 pub async fn build_repay_tx(
     _state: State<'_, AppState>,
     request: RepayBuildRequest,
 ) -> Result<LendingBuildResponse, String> {
-    // Validate amount is non-zero
     if request.repay_amount == 0 {
         return Err("Repay amount must be greater than 0".to_string());
     }
 
-    // Validate pool_id exists
     let pool_config = lending_constants::get_pool(&request.pool_id)
         .ok_or_else(|| format!("Pool '{}' not found", request.pool_id))?;
 
-    // Parse user UTXOs
     let user_utxos = parse_lending_utxos(request.user_utxos)?;
 
-    // Build the repay request
     let repay_request = lending_tx_builder::RepayRequest {
         pool_id: request.pool_id.clone(),
         collateral_box_id: request.collateral_box_id,
@@ -467,24 +407,21 @@ pub async fn build_repay_tx(
         user_utxos,
     };
 
-    // Build the transaction
     let result =
         lending_tx_builder::build_repay_tx(repay_request, pool_config, request.current_height)
-            .map_err(|e| e.to_string())?;
+            .str_err()?;
 
     lending_build_response_to_api(result)
 }
 
-/// Build refund transaction for stuck proxy box
 #[tauri::command]
 pub async fn build_refund_tx(
     state: State<'_, AppState>,
     request: RefundBuildRequest,
 ) -> Result<LendingBuildResponse, String> {
-    // Fetch the proxy box directly from the node by its box ID.
-    // The proxy box lives at a contract address, not the user's wallet,
+    // Proxy box lives at a contract address, not the user's wallet,
     // so it won't appear in get_user_utxos.
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     let proxy_eip12 = client
         .get_eip12_box_by_id(&request.proxy_box_id)
         .await
@@ -493,13 +430,11 @@ pub async fn build_refund_tx(
     let proxy_utxo = serde_json::to_value(&proxy_eip12)
         .map_err(|e| format!("Failed to serialize proxy box: {}", e))?;
 
-    // Extract proxy box fields from EIP-12 format
     let value: i64 = proxy_eip12
         .value
         .parse()
         .map_err(|_| format!("Invalid proxy box value: {}", proxy_eip12.value))?;
 
-    // Parse assets
     let assets: Vec<(String, i64)> = proxy_eip12
         .assets
         .iter()
@@ -509,10 +444,8 @@ pub async fn build_refund_tx(
         })
         .collect();
 
-    // Extract user's ErgoTree and refund height from registers.
-    // Different proxy types store user ErgoTree in different registers:
-    // - Lend/Withdraw/Borrow: R4 = Coll[Byte] (user ErgoTree)
-    // - Repay/PartialRepay:   R5 = Coll[Byte] (user ErgoTree), R4 = Long
+    // Lend/Withdraw/Borrow: R4 = Coll[Byte] (user ErgoTree)
+    // Repay/PartialRepay:   R5 = Coll[Byte] (user ErgoTree), R4 = Long
     let registers = proxy_utxo["additionalRegisters"]
         .as_object()
         .or_else(|| proxy_utxo["additional_registers"].as_object())
@@ -528,12 +461,10 @@ pub async fn build_refund_tx(
         .and_then(|v| v.as_str())
         .ok_or_else(|| "Proxy box missing R6 (refund height)".to_string())?;
 
-    // Try R4 as Coll[Byte] first (lend/withdraw/borrow proxies).
-    // If that fails (repay proxies store a Long in R4), fall back to R5.
+    // Try R4 as Coll[Byte] first; repay proxies store Long in R4, ErgoTree in R5
     let (user_ergo_tree, is_repay_proxy) = match decode_sigma_byte_array(r4_encoded) {
         Ok(tree) => (tree, false),
         Err(_) => {
-            // Repay/PartialRepay proxy: user ErgoTree is in R5
             let r5_encoded = registers
                 .get("R5")
                 .and_then(|v| v.as_str())
@@ -544,11 +475,9 @@ pub async fn build_refund_tx(
         }
     };
 
-    // Decode R6: Int or Long containing refund height
     let r6_refund_height =
         decode_sigma_int_or_long(r6_encoded).map_err(|e| format!("Invalid R6 encoding: {}", e))?;
 
-    // Build ProxyBoxData — include all registers for correct box ID verification
     let proxy_box = lending_tx_builder::ProxyBoxData {
         box_id: request.proxy_box_id.clone(),
         tx_id: proxy_eip12.transaction_id,
@@ -563,11 +492,9 @@ pub async fn build_refund_tx(
         additional_registers: proxy_eip12.additional_registers,
     };
 
-    // Build the refund transaction
     let result = lending_tx_builder::build_refund_tx(proxy_box, request.current_height)
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
-    // Convert RefundResponse to LendingBuildResponse
     let unsigned_tx: serde_json::Value = serde_json::from_str(&result.unsigned_tx)
         .map_err(|e| format!("Failed to parse unsigned_tx: {}", e))?;
 
@@ -588,10 +515,6 @@ pub async fn build_refund_tx(
     })
 }
 
-/// Check if a box is a valid proxy box and return its info
-///
-/// Fetches the box from the node, parses registers, and returns
-/// value, refund height, and whether it looks like a proxy box.
 #[tauri::command]
 pub async fn check_proxy_box(
     state: State<'_, AppState>,
@@ -600,17 +523,15 @@ pub async fn check_proxy_box(
     use ergo_lib::ergotree_ir::chain::ergo_box::NonMandatoryRegisterId;
     use ergo_tx::ergo_box_utils;
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
-    // Fetch the box by ID (works without extraIndex)
     let ergo_box_id = citadel_core::BoxId::new(&box_id);
-    let ergo_box = ergo_node_client::queries::get_box_by_id(client.inner(), &ergo_box_id)
+    let ergo_box = client.get_box_by_id(&ergo_box_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let value_nano = ergo_box.value.as_i64();
 
-    // Try to parse R6 as refund height (Int or Long)
     let refund_height: i64 = ergo_box
         .additional_registers
         .get_constant(NonMandatoryRegisterId::R6)
@@ -624,7 +545,6 @@ pub async fn check_proxy_box(
         })
         .unwrap_or(0);
 
-    // A proxy box should have R4 (user ErgoTree) and R6 (refund height)
     let has_r4 = ergo_box
         .additional_registers
         .get_constant(NonMandatoryRegisterId::R4)
@@ -640,54 +560,38 @@ pub async fn check_proxy_box(
     }))
 }
 
-/// Discover stuck proxy boxes belonging to the user across all Duckpools proxy contracts.
 #[tauri::command]
 pub async fn discover_stuck_proxies(
     state: State<'_, AppState>,
     user_address: String,
 ) -> Result<serde_json::Value, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
-    let current_height = client.current_height().await.map_err(|e| e.to_string())? as u32;
+    let client = state.require_node_client().await?;
+    let current_height = client.current_height().await.str_err()? as u32;
 
     let stuck_boxes =
         lending::fetch::discover_stuck_proxy_boxes(&client, &user_address, current_height)
             .await
-            .map_err(|e| e.to_string())?;
+            .str_err()?;
 
-    serde_json::to_value(&stuck_boxes).map_err(|e| e.to_string())
+    serde_json::to_value(&stuck_boxes).str_err()
 }
 
-/// Get DEX pool price for collateral calculation.
-///
-/// Fetches the Spectrum DEX pool box by its NFT and returns the
-/// ERG/token price ratio, used to auto-calculate borrow collateral amounts.
 #[tauri::command]
 pub async fn get_dex_price(
     state: State<'_, AppState>,
     dex_nft: String,
 ) -> Result<serde_json::Value, String> {
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
     let token_id = citadel_core::TokenId::new(&dex_nft);
-    let dex_box = ergo_node_client::queries::get_box_by_token_id(
-        client.inner(),
-        &capabilities,
+    let dex_box = client.get_box_by_token_id(&capabilities,
         &token_id,
     )
     .await
     .map_err(|e| format!("DEX box not found for NFT {}: {}", dex_nft, e))?;
 
-    // ERG reserves from box value
     let erg_reserves = dex_box.value.as_i64() as f64;
-
-    // Token reserves from tokens[2]
     let tokens = dex_box.tokens.as_ref().ok_or("DEX box has no tokens")?;
     if tokens.len() < 3 {
         return Err("DEX box has fewer than 3 tokens".to_string());
@@ -707,15 +611,10 @@ pub async fn get_dex_price(
         "erg_reserves": erg_reserves as u64,
         "token_reserves": token_reserves as u64,
     }))
-    .map_err(|e| e.to_string())
+    .str_err()
 }
 
-// =============================================================================
-// Sigma Decoding Helpers (for refund transactions)
-// =============================================================================
-
-/// Decode a Sigma Coll[Byte] from register hex string
-/// Format: 0e (type tag) + VLQ length + data bytes
+/// Decode Sigma Coll[Byte]: 0e (type tag) + VLQ length + data bytes
 fn decode_sigma_byte_array(hex_str: &str) -> Result<String, String> {
     let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid hex: {}", e))?;
 
@@ -723,7 +622,6 @@ fn decode_sigma_byte_array(hex_str: &str) -> Result<String, String> {
         return Err("Not a Coll[Byte] type (expected 0x0e prefix)".to_string());
     }
 
-    // Decode VLQ length
     let mut idx = 1;
     let mut length: usize = 0;
     let mut shift = 0;
@@ -749,12 +647,9 @@ fn decode_sigma_byte_array(hex_str: &str) -> Result<String, String> {
         ));
     }
 
-    // Extract the data bytes and return as hex
     Ok(hex::encode(&bytes[idx..idx + length]))
 }
 
-/// Decode a zigzag-VLQ encoded integer from sigma-serialized bytes.
-/// Used for both Int (0x04) and Long (0x05) types.
 fn decode_zigzag_vlq(bytes: &[u8], start: usize) -> Result<i64, String> {
     let mut idx = start;
     let mut zigzag: u64 = 0;
@@ -782,8 +677,6 @@ fn decode_zigzag_vlq(bytes: &[u8], start: usize) -> Result<i64, String> {
     Ok(value)
 }
 
-/// Decode a Sigma Int or Long from register hex string
-/// Handles both type 0x04 (Int) and 0x05 (Long)
 fn decode_sigma_int_or_long(hex_str: &str) -> Result<i64, String> {
     let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid hex: {}", e))?;
     if bytes.is_empty() {

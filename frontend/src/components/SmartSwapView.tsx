@@ -86,7 +86,7 @@ function buildTokenList(
 
   if (mode === 'source') {
     const walletTokens: TokenEntry[] = (walletBalance?.tokens ?? [])
-      .filter((t) => t.amount > 0)
+      .filter((t) => t.amount > 0 && poolTokenMeta.has(t.token_id))
       .map((t) => {
         const meta = poolTokenMeta.get(t.token_id)
         return {
@@ -364,6 +364,7 @@ export function SmartSwapView({
 
   function handleSelectSource(token: TokenEntry) {
     setSourceToken(token)
+    setInputAmount('')
     setRoutes([])
     setSplit(null)
     setRouteError(null)

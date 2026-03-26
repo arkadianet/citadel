@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { QRCodeSVG } from 'qrcode.react'
-import { buildMultiBurnTx, startBurnSign, getBurnTxStatus } from '../api/burn'
+import { buildMultiBurnTx } from '../api/burn'
+import { startSign, getTxStatus } from '../api/types'
 import type { BurnItemInput, BurnedTokenEntry } from '../api/burn'
 import { getCachedTokenInfo } from '../api/tokenCache'
 import { formatTokenAmount } from '../utils/format'
@@ -111,7 +112,7 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
       if (isPolling) return
       isPolling = true
       try {
-        const status = await getBurnTxStatus(requestId)
+        const status = await getTxStatus(requestId)
         if (status.status === 'submitted' && status.tx_id) {
           setTxId(status.tx_id)
           setStep('success')
@@ -250,7 +251,7 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
 
       const count = burnItems.length
       const message = `Burn ${count} token${count !== 1 ? 's' : ''}`
-      const signResult = await startBurnSign(result.unsignedTx, message)
+      const signResult = await startSign(result.unsignedTx, message)
 
       setRequestId(signResult.request_id)
       setQrUrl(signResult.ergopay_url)

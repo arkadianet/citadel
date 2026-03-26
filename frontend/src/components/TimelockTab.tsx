@@ -6,17 +6,14 @@ import {
   getLockDurations,
   buildLockTx,
   buildUnlockTx,
-  startMewLockSign,
-  getMewLockTxStatus,
-  formatErg,
-  blocksToTime,
   formatUnlockStatus,
-  truncateAddress,
   calculateFeePreview,
   type MewLockBox,
   type MewLockState,
   type LockDuration,
 } from '../api/mewlock'
+import { formatErg, blocksToTime, truncateAddress } from '../utils/format'
+import { startSign, getTxStatus } from '../api/types'
 import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import './TimelockTab.css'
@@ -385,7 +382,7 @@ function CreateLockModal({
   const [buildLoading, setBuildLoading] = useState(false)
 
   const flow = useTransactionFlow({
-    pollStatus: getMewLockTxStatus,
+    pollStatus: getTxStatus,
     isOpen: true,
     onSuccess: () => { setStep('success'); onSuccess() },
     onError: (err) => { setError(err); setStep('error') },
@@ -428,7 +425,7 @@ function CreateLockModal({
         currentHeight,
       )
 
-      const signResult = await startMewLockSign(tx, 'Lock assets in MewLock timelock')
+      const signResult = await startSign(tx, 'Lock assets in MewLock timelock')
       setStep('signing')
       flow.startSigning(signResult.request_id, signResult.ergopay_url, signResult.nautilus_url)
     } catch (e) {
@@ -636,7 +633,7 @@ function UnlockModal({
   const [buildLoading, setBuildLoading] = useState(false)
 
   const flow = useTransactionFlow({
-    pollStatus: getMewLockTxStatus,
+    pollStatus: getTxStatus,
     isOpen: true,
     onSuccess: () => { setStep('success'); onSuccess() },
     onError: (err) => { setError(err); setStep('error') },
@@ -661,7 +658,7 @@ function UnlockModal({
         currentHeight,
       )
 
-      const signResult = await startMewLockSign(tx, 'Unlock MewLock timelock')
+      const signResult = await startSign(tx, 'Unlock MewLock timelock')
       setStep('signing')
       flow.startSigning(signResult.request_id, signResult.ergopay_url, signResult.nautilus_url)
     } catch (e) {

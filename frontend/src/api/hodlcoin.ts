@@ -6,8 +6,6 @@
 
 import { invoke } from '@tauri-apps/api/core'
 
-import type { SignResponse, TxStatusResponse } from './types'
-export type { SignResponse, TxStatusResponse }
 
 // =============================================================================
 // Type Definitions
@@ -107,32 +105,9 @@ export async function buildHodlCoinBurnTx(
   })
 }
 
-export async function startHodlCoinSign(
-  unsignedTx: object,
-  message?: string,
-): Promise<SignResponse> {
-  return await invoke<SignResponse>('start_hodlcoin_sign', {
-    unsignedTx,
-    message,
-  })
-}
-
-export async function getHodlCoinTxStatus(requestId: string): Promise<TxStatusResponse> {
-  return await invoke<TxStatusResponse>('get_hodlcoin_tx_status', {
-    requestId,
-  })
-}
-
 // =============================================================================
 // Helper Functions
 // =============================================================================
-
-export function formatNanoErg(nanoErg: number): string {
-  return (nanoErg / 1_000_000_000).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  })
-}
 
 export function formatHodlPrice(priceNano: number): string {
   return (priceNano / 1_000_000_000).toLocaleString(undefined, {

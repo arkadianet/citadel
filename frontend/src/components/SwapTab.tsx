@@ -2,14 +2,15 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { QRCodeSVG } from 'qrcode.react'
 import {
-  getAmmPools, getAmmQuote, getPoolDisplayName, formatTokenAmount, formatErg,
+  getAmmPools, getAmmQuote, getPoolDisplayName,
   buildAmmLpDepositTx, buildAmmLpDepositOrder,
   buildAmmLpRedeemTx, buildAmmLpRedeemOrder,
-  startSwapSign, getSwapTxStatus,
   previewPoolCreate, buildPoolBootstrapTx, buildPoolCreateTx,
   type AmmPool, type SwapQuote, type AmmLpBuildResponse,
   type PoolCreatePreviewResponse,
 } from '../api/amm'
+import { startSign, getTxStatus } from '../api/types'
+import { formatTokenAmount, formatErg } from '../utils/format'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import { SwapModal } from './SwapModal'
 import { OrderHistory } from './OrderHistory'
@@ -302,7 +303,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
   // =========================================================================
 
   const lpFlow = useTransactionFlow({
-    pollStatus: getSwapTxStatus,
+    pollStatus: getTxStatus,
     isOpen: lpTxStep === 'signing',
     onSuccess: (txId) => {
       void txId
@@ -417,7 +418,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
       }
 
       const tokenName = lpPool.token_y.name || 'Token'
-      const signResult = await startSwapSign(
+      const signResult = await startSign(
         buildResult.unsignedTx,
         `Add liquidity: ${depositErgInput} ERG + ${depositTokenInput} ${tokenName}`
       )
@@ -453,7 +454,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
         )
       }
 
-      const signResult = await startSwapSign(
+      const signResult = await startSign(
         buildResult.unsignedTx,
         `Remove liquidity: ${redeemLpInput} LP tokens`
       )
@@ -541,11 +542,11 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
       )
 
       // Sign TX0
-      const sign0 = await startSwapSign(tx0.unsignedTx, 'Create pool: mint LP tokens')
-      let status0 = await getSwapTxStatus(sign0.request_id)
+      const sign0 = await startSign(tx0.unsignedTx, 'Create pool: mint LP tokens')
+      let status0 = await getTxStatus(sign0.request_id)
       while (status0.status === 'pending') {
         await new Promise(r => setTimeout(r, 1500))
-        status0 = await getSwapTxStatus(sign0.request_id)
+        status0 = await getTxStatus(sign0.request_id)
       }
       if (status0.status !== 'success') {
         throw new Error(status0.error || 'Bootstrap signing failed')
@@ -583,11 +584,11 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
       )
 
       // Sign TX1
-      const sign1 = await startSwapSign(tx1.unsignedTx, 'Create pool: deploy pool')
-      let status1 = await getSwapTxStatus(sign1.request_id)
+      const sign1 = await startSign(tx1.unsignedTx, 'Create pool: deploy pool')
+      let status1 = await getTxStatus(sign1.request_id)
       while (status1.status === 'pending') {
         await new Promise(r => setTimeout(r, 1500))
-        status1 = await getSwapTxStatus(sign1.request_id)
+        status1 = await getTxStatus(sign1.request_id)
       }
       if (status1.status !== 'success') {
         throw new Error(status1.error || 'Pool creation signing failed')

@@ -6,8 +6,6 @@
 
 import { invoke } from '@tauri-apps/api/core'
 
-import type { SignResponse, TxStatusResponse } from './types'
-export type { SignResponse, TxStatusResponse }
 
 // =============================================================================
 // Type Definitions
@@ -99,51 +97,15 @@ export async function buildUnlockTx(
   })
 }
 
-export async function startMewLockSign(
-  unsignedTx: object,
-  message?: string,
-): Promise<SignResponse> {
-  return await invoke<SignResponse>('start_mewlock_sign', {
-    unsignedTx,
-    message,
-  })
-}
-
-export async function getMewLockTxStatus(requestId: string): Promise<TxStatusResponse> {
-  return await invoke<TxStatusResponse>('get_mewlock_tx_status', { requestId })
-}
-
 // =============================================================================
-// Formatting Helpers
+// Protocol-specific Helpers
 // =============================================================================
 
-export function formatErg(nanoErg: number): string {
-  return (nanoErg / 1_000_000_000).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  })
-}
-
-export function blocksToTime(blocks: number): string {
-  const minutes = Math.abs(blocks) * 2
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
-  const months = Math.floor(days / 30)
-
-  if (months > 0) return `${months}mo ${days % 30}d`
-  if (days > 0) return `${days}d ${hours % 24}h`
-  if (hours > 0) return `${hours}h ${minutes % 60}m`
-  return `${minutes}m`
-}
+import { blocksToTime } from '../utils/format'
 
 export function formatUnlockStatus(blocksRemaining: number): string {
   if (blocksRemaining <= 0) return 'Unlockable'
   return `${blocksToTime(blocksRemaining)} remaining`
-}
-
-export function truncateAddress(addr: string, chars = 8): string {
-  if (addr.length <= chars * 2 + 3) return addr
-  return `${addr.slice(0, chars)}...${addr.slice(-chars)}`
 }
 
 /** Calculate 3% fee for display purposes */

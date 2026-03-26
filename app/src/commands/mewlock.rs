@@ -1,22 +1,21 @@
-use citadel_api::dto::{MintSignRequest, MintSignResponse, MintTxStatusResponse};
 use citadel_api::AppState;
 use tauri::State;
 
-/// Fetch MewLock timelock state (all locks on chain)
+use super::StrErr;
+
 #[tauri::command]
 pub async fn mewlock_fetch_state(
     state: State<'_, AppState>,
     user_address: Option<String>,
 ) -> Result<mewlock::MewLockState, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
-    let height = client.current_height().await.map_err(|e| e.to_string())?;
+    let client = state.require_node_client().await?;
+    let height = client.current_height().await.str_err()?;
 
     mewlock::fetch_mewlock_state(&client, user_address.as_deref(), height as u32)
         .await
-        .map_err(|e| e.to_string())
+        .str_err()
 }
 
-/// Get available lock duration presets
 #[tauri::command]
 pub async fn mewlock_get_durations() -> Result<serde_json::Value, String> {
     let durations: Vec<_> = mewlock::DURATION_PRESETS
@@ -31,7 +30,6 @@ pub async fn mewlock_get_durations() -> Result<serde_json::Value, String> {
     Ok(serde_json::Value::Array(durations))
 }
 
-/// Build a lock transaction
 #[tauri::command]
 pub async fn mewlock_build_lock(
     user_ergo_tree: String,
@@ -73,11 +71,10 @@ pub async fn mewlock_build_lock(
         current_height,
     };
 
-    let tx = mewlock::tx_builder::build_lock_tx(&req).map_err(|e| e.to_string())?;
+    let tx = mewlock::tx_builder::build_lock_tx(&req).str_err()?;
     serde_json::to_value(&tx).map_err(|e| format!("Failed to serialize tx: {}", e))
 }
 
-/// Build an unlock transaction
 #[tauri::command]
 pub async fn mewlock_build_unlock(
     state: State<'_, AppState>,
@@ -86,7 +83,7 @@ pub async fn mewlock_build_unlock(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<serde_json::Value, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     let lock_box = client
         .get_eip12_box_by_id(&box_id)
         .await
@@ -100,32 +97,7 @@ pub async fn mewlock_build_unlock(
         current_height,
     };
 
-    let tx = mewlock::tx_builder::build_unlock_tx(&req).map_err(|e| e.to_string())?;
+    let tx = mewlock::tx_builder::build_unlock_tx(&req).str_err()?;
     serde_json::to_value(&tx).map_err(|e| format!("Failed to serialize tx: {}", e))
 }
 
-/// Start signing a MewLock transaction (reuses ErgoPay sign flow)
-#[tauri::command]
-pub async fn start_mewlock_sign(
-    state: State<'_, AppState>,
-    unsigned_tx: serde_json::Value,
-    message: Option<String>,
-) -> Result<MintSignResponse, String> {
-    super::start_mint_sign(
-        state,
-        MintSignRequest {
-            unsigned_tx,
-            message: message.unwrap_or_else(|| "MewLock transaction".to_string()),
-        },
-    )
-    .await
-}
-
-/// Get MewLock transaction signing status
-#[tauri::command]
-pub async fn get_mewlock_tx_status(
-    state: State<'_, AppState>,
-    request_id: String,
-) -> Result<MintTxStatusResponse, String> {
-    super::get_mint_tx_status(state, request_id).await
-}

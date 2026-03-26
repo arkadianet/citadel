@@ -9,8 +9,9 @@ import {
   type OracleArbSnapshot,
 } from '../api/router'
 import {
-  buildDirectSwapTx, startSwapSign, getSwapTxStatus,
+  buildDirectSwapTx,
 } from '../api/amm'
+import { startSign, getTxStatus } from '../api/types'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import { formatTokenAmount } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
@@ -87,7 +88,7 @@ export function RouterTab({
   const [execTxId, setExecTxId] = useState<string | null>(null)
 
   const flow = useTransactionFlow({
-    pollStatus: getSwapTxStatus,
+    pollStatus: getTxStatus,
     isOpen: execRoute !== null && execStep === 'signing',
     onSuccess: (txId) => { setExecTxId(txId ?? null); setExecStep('success') },
     onError: (err) => { setExecError(err); setExecStep('error') },
@@ -230,7 +231,7 @@ export function RouterTab({
       const outLabel = hop.token_out_name || 'SigUSD'
       const message = `Router: ${formatTokenAmount(hop.input_amount, hop.token_in_decimals)} ${inLabel} → ${formatTokenAmount(hop.output_amount, hop.token_out_decimals)} ${outLabel}`
 
-      const signResult = await startSwapSign(buildResult.unsigned_tx, message)
+      const signResult = await startSign(buildResult.unsigned_tx, message)
       flow.startSigning(signResult.request_id, signResult.ergopay_url, signResult.nautilus_url)
       setExecStep('signing')
     } catch (e) {

@@ -6,15 +6,11 @@ import {
   buildCloseOrder,
   buildRepay,
   buildLiquidate,
-  startSigmaFiSign,
-  getSigmaFiTxStatus,
-  formatAmount,
-  formatPercent,
-  blocksToTimeString,
-  truncateAddress,
   type OpenOrder,
   type ActiveBond,
 } from '../api/sigmafi'
+import { formatAmount, formatPercent, blocksToTime, truncateAddress } from '../utils/format'
+import { startSign, getTxStatus } from '../api/types'
 import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import type { TxStatusResponse } from '../api/types'
@@ -40,7 +36,7 @@ const UI_FEE_ERGO_TREE =
   '0008cd03a11d3028b9bc57b6ac724485e99960b89c278db6bab5d2b961b01aee29405a02'
 
 function pollSigmaFiStatus(requestId: string): Promise<TxStatusResponse> {
-  return getSigmaFiTxStatus(requestId)
+  return getTxStatus(requestId)
 }
 
 const MODE_CONFIG = {
@@ -144,7 +140,7 @@ export function SigmaFiConfirmModal({
         }
       }
 
-      const signResult = await startSigmaFiSign(unsignedTx, message)
+      const signResult = await startSign(unsignedTx, message)
       flow.startSigning(signResult.request_id, signResult.ergopay_url, signResult.nautilus_url)
       setStep('signing')
     } catch (e) {
@@ -193,7 +189,7 @@ export function SigmaFiConfirmModal({
                   </div>
                   <div className="sf-detail-row">
                     <span>Term</span>
-                    <span>{blocksToTimeString(order.maturityBlocks)}</span>
+                    <span>{blocksToTime(order.maturityBlocks)}</span>
                   </div>
                   <div className="sf-detail-row">
                     <span>Collateral</span>
@@ -251,8 +247,8 @@ export function SigmaFiConfirmModal({
                     <span>Time Remaining</span>
                     <span className={bond.blocksRemaining <= 0 ? 'danger' : ''}>
                       {bond.blocksRemaining <= 0
-                        ? `Overdue ${blocksToTimeString(-bond.blocksRemaining)}`
-                        : blocksToTimeString(bond.blocksRemaining)}
+                        ? `Overdue ${blocksToTime(-bond.blocksRemaining)}`
+                        : blocksToTime(bond.blocksRemaining)}
                     </span>
                   </div>
                   <div className="sf-detail-row">
@@ -280,7 +276,7 @@ export function SigmaFiConfirmModal({
 
               {error && <div className="message error">{error}</div>}
 
-              <div className="sf-modal-actions">
+              <div className="button-group">
                 <button className="btn btn-secondary" onClick={onClose}>
                   Cancel
                 </button>
@@ -351,7 +347,7 @@ export function SigmaFiConfirmModal({
           )}
 
           {step === 'success' && (
-            <div className="sf-success-step">
+            <div className="success-step">
               <div className="success-icon">
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-400)" strokeWidth="2">
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -368,7 +364,7 @@ export function SigmaFiConfirmModal({
           )}
 
           {step === 'error' && (
-            <div className="sf-error-step">
+            <div className="error-step">
               <div className="error-icon">
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--red-400)" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />
@@ -378,7 +374,7 @@ export function SigmaFiConfirmModal({
               </div>
               <h3>Transaction Failed</h3>
               <p className="error-message">{error}</p>
-              <div className="sf-modal-actions">
+              <div className="button-group">
                 <button className="btn btn-secondary" onClick={onClose}>Close</button>
                 <button className="btn btn-primary" onClick={() => setStep('confirm')}>Try Again</button>
               </div>

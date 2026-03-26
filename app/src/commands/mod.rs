@@ -55,3 +55,30 @@ pub fn parse_eip12_utxos(
 
     Ok(parsed)
 }
+
+/// Extract a 33-byte public key hex from a P2PK ErgoTree hex string.
+///
+/// Expects the ErgoTree to start with `0008cd` followed by 66 hex chars (33 bytes).
+pub fn extract_p2pk_pubkey(ergo_tree: &str) -> Result<String, String> {
+    if ergo_tree.starts_with("0008cd") && ergo_tree.len() >= 72 {
+        Ok(ergo_tree[6..72].to_string())
+    } else {
+        Err(format!(
+            "Cannot extract public key from ErgoTree: expected P2PK tree starting with '0008cd', got '{}'",
+            &ergo_tree[..std::cmp::min(12, ergo_tree.len())]
+        ))
+    }
+}
+
+/// Extension trait to convert any `Result<T, E: Display>` to `Result<T, String>`.
+///
+/// Replaces the repeated `.map_err(|e| e.to_string())` pattern across all commands.
+pub trait StrErr<T> {
+    fn str_err(self) -> Result<T, String>;
+}
+
+impl<T, E: std::fmt::Display> StrErr<T> for Result<T, E> {
+    fn str_err(self) -> Result<T, String> {
+        self.map_err(|e| e.to_string())
+    }
+}

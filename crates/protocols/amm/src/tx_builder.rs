@@ -1,18 +1,5 @@
-//! Swap Order Transaction Builder
-//!
-//! Builds EIP-12 unsigned transactions for swap orders using the proxy box pattern.
-//! The proxy box contains the swap contract ErgoTree with substituted constants,
-//! and is detected and executed by off-chain Spectrum bots.
-//!
-//! # Transaction Structure
-//!
-//! Inputs:  [user UTXOs]
-//! Outputs: [swap proxy box, miner fee, change (optional)]
-//!
-//! The swap proxy box contains:
-//! - The swap contract ErgoTree (template with user-specific constants)
-//! - Input funds (ERG for ERG->Token, or ERG + tokens for Token->ERG)
-//! - Execution fee for the bot
+//! Builds EIP-12 unsigned transactions for AMM swap proxy boxes.
+//! Spectrum bots detect proxy boxes and execute swaps against pool boxes.
 
 use std::collections::HashMap;
 
@@ -26,39 +13,21 @@ use serde::{Deserialize, Serialize};
 use crate::constants::swap_templates;
 use crate::state::{AmmError, AmmPool, PoolType, SwapInput, SwapRequest};
 use ergo_tx::{
-    collect_change_tokens, select_erg_boxes, select_token_boxes, Eip12Asset, Eip12InputBox,
-    Eip12Output, Eip12UnsignedTx,
+    append_change_output, select_inputs_for_spend, Eip12Asset, Eip12InputBox, Eip12Output,
+    Eip12UnsignedTx,
 };
 
-// =============================================================================
-// Constants
-// =============================================================================
-
-/// Minimum proxy box value in nanoERG (0.004 ERG)
-/// This covers the minimum box value plus overhead for the bot
-const PROXY_BOX_VALUE: u64 = 4_000_000;
-
-/// Transaction fee in nanoERG (0.0011 ERG - standard)
+const PROXY_BOX_VALUE: u64 = 4_000_000; // 0.004 ERG
 pub(crate) const TX_FEE: u64 = citadel_core::constants::TX_FEE_NANO as u64;
-
-/// Bot execution fee in nanoERG (0.002 ERG)
-const EXECUTION_FEE: u64 = 2_000_000;
-
-/// Minimum box value for change output in nanoERG
+const EXECUTION_FEE: u64 = 2_000_000; // 0.002 ERG
 pub(crate) const MIN_CHANGE_VALUE: u64 = 1_000_000;
 
-// =============================================================================
-// Public Types
-// =============================================================================
-
-/// Build result containing the unsigned transaction and a summary
 #[derive(Debug)]
 pub struct SwapBuildResult {
     pub unsigned_tx: Eip12UnsignedTx,
     pub summary: SwapTxSummary,
 }
 
-/// Summary of the swap transaction for the UI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapTxSummary {
     pub input_amount: u64,
@@ -70,28 +39,6 @@ pub struct SwapTxSummary {
     pub total_erg_cost: u64,
 }
 
-// =============================================================================
-// Main Builder Function
-// =============================================================================
-
-/// Build a swap order EIP-12 unsigned transaction
-///
-/// Creates a proxy box containing the swap contract with user-specific constants.
-/// Off-chain Spectrum bots will detect this proxy box and execute the swap.
-///
-/// # Arguments
-///
-/// * `request` - Swap parameters (pool, input, min output, redeemer address)
-/// * `pool` - Current pool state
-/// * `user_utxos` - User's available UTXOs for funding
-/// * `user_ergo_tree` - User's ErgoTree hex (for change output)
-/// * `user_pk` - User's compressed public key hex (33 bytes, for RefundProp)
-/// * `current_height` - Current blockchain height
-/// * `execution_fee` - Optional execution fee in nanoERG (defaults to EXECUTION_FEE constant)
-///
-/// # Returns
-///
-/// `SwapBuildResult` with the unsigned transaction and a summary for UI display
 #[allow(clippy::too_many_arguments)]
 pub fn build_swap_order_eip12(
     request: &SwapRequest,
@@ -103,7 +50,6 @@ pub fn build_swap_order_eip12(
     execution_fee: Option<u64>,
     recipient_ergo_tree: Option<&str>,
 ) -> Result<SwapBuildResult, AmmError> {
-    // 0. Validate pool ID matches request
     if request.pool_id != pool.pool_id {
         return Err(AmmError::TxBuildError(format!(
             "Pool ID mismatch: request has {}, pool has {}",
@@ -113,15 +59,12 @@ pub fn build_swap_order_eip12(
 
     let ex_fee = execution_fee.unwrap_or(EXECUTION_FEE);
 
-    // 1. Determine swap direction and amounts
     let (input_erg_amount, input_token, is_erg_to_token) = match &request.input {
         SwapInput::Erg { amount } => (*amount, None, true),
         SwapInput::Token { token_id, amount } => (0u64, Some((token_id.clone(), *amount)), false),
     };
 
-    // 2. Calculate the proxy box value
-    // For ERG->Token: proxy box holds input ERG + execution fee + proxy overhead
-    // For Token->ERG: proxy box holds minimum ERG for box + execution fee
+    // ERG->Token: input + execution fee + proxy overhead; Token->ERG: just fees
     let proxy_box_erg_value = if is_erg_to_token {
         input_erg_amount
             .checked_add(ex_fee)
@@ -137,26 +80,18 @@ pub fn build_swap_order_eip12(
         })?
     };
 
-    // 3. Calculate total ERG needed from user
     let total_erg_needed = proxy_box_erg_value.checked_add(TX_FEE).ok_or_else(|| {
         AmmError::TxBuildError("Arithmetic overflow calculating total ERG needed".to_string())
     })?;
 
-    // 4. Select minimum UTXOs needed
-    let selected = if let Some((ref token_id, token_amount)) = input_token {
-        // Token->ERG: need tokens + enough ERG for proxy box + fee
-        select_token_boxes(user_utxos, token_id, token_amount, total_erg_needed)
-            .map_err(|e| AmmError::TxBuildError(e.to_string()))?
-    } else {
-        // ERG->Token: need ERG only
-        select_erg_boxes(user_utxos, total_erg_needed)
-            .map_err(|e| AmmError::TxBuildError(e.to_string()))?
-    };
+    let token_requirement = input_token
+        .as_ref()
+        .map(|(id, amt)| (id.as_str(), *amt));
+    let selected = select_inputs_for_spend(user_utxos, total_erg_needed, token_requirement)
+        .map_err(|e| AmmError::TxBuildError(e.to_string()))?;
 
-    // 6. Build the swap ErgoTree with substituted constants
     let swap_ergo_tree_hex = build_swap_ergo_tree(pool, request, user_pk, recipient_ergo_tree)?;
 
-    // 7. Build proxy box output
     let proxy_assets = if let Some((ref token_id, token_amount)) = input_token {
         vec![Eip12Asset {
             token_id: token_id.clone(),
@@ -174,42 +109,30 @@ pub fn build_swap_order_eip12(
         additional_registers: HashMap::new(),
     };
 
-    // 8. Build miner fee output
     let fee_output = Eip12Output::fee(TX_FEE as i64, current_height);
-
-    // 9. Build change output
     let mut outputs = vec![proxy_output, fee_output];
 
-    let change_erg = selected.total_erg - total_erg_needed;
-    let spent_token = input_token.as_ref().map(|(id, amt)| (id.as_str(), *amt));
-    let change_tokens = collect_change_tokens(&selected.boxes, spent_token);
+    let spent: Vec<(&str, u64)> = input_token
+        .as_ref()
+        .map(|(id, amt)| vec![(id.as_str(), *amt)])
+        .unwrap_or_default();
+    append_change_output(
+        &mut outputs,
+        &selected,
+        total_erg_needed,
+        &spent,
+        user_ergo_tree,
+        current_height,
+        MIN_CHANGE_VALUE,
+    )
+    .map_err(|e| AmmError::TxBuildError(e.to_string()))?;
 
-    // Error if we have change tokens but not enough ERG for a box
-    if !change_tokens.is_empty() && change_erg < MIN_CHANGE_VALUE {
-        return Err(AmmError::TxBuildError(format!(
-            "Change tokens exist but not enough ERG for change box (need {}, have {})",
-            MIN_CHANGE_VALUE, change_erg
-        )));
-    }
-
-    // Create change output if we have sufficient ERG or any tokens
-    if change_erg >= MIN_CHANGE_VALUE || !change_tokens.is_empty() {
-        outputs.push(Eip12Output::change(
-            change_erg as i64,
-            user_ergo_tree,
-            change_tokens,
-            current_height,
-        ));
-    }
-
-    // 10. Build the transaction
     let unsigned_tx = Eip12UnsignedTx {
         inputs: selected.boxes,
         data_inputs: vec![],
         outputs,
     };
 
-    // 11. Build the summary
     let (input_token_name, output_token_name) = match &request.input {
         SwapInput::Erg { .. } => (
             "ERG".to_string(),
@@ -246,15 +169,6 @@ pub fn build_swap_order_eip12(
     })
 }
 
-// =============================================================================
-// ErgoTree Construction
-// =============================================================================
-
-/// Build the swap ErgoTree by substituting constants into the template
-///
-/// This is the critical function that creates the swap contract for a specific order.
-/// It selects the correct template based on pool type and swap direction, then
-/// substitutes user-specific constants at the correct positions.
 fn build_swap_ergo_tree(
     pool: &AmmPool,
     request: &SwapRequest,
@@ -279,7 +193,6 @@ fn build_swap_ergo_tree(
             ),
         },
         PoolType::T2T => {
-            // T2T swap support can be added later when needed
             Err(AmmError::TxBuildError(
                 "T2T swaps not yet implemented".to_string(),
             ))
@@ -287,15 +200,10 @@ fn build_swap_ergo_tree(
     }
 }
 
-/// Build N2T SwapSell ErgoTree (ERG -> Token)
-///
-/// Constant positions for N2T SwapSell:
-/// {1}=ExFeePerTokenDenom[Long], {2}=Delta[Long], {3}=BaseAmount[Long],
-/// {4}=FeeNum[Int], {5}=RefundProp[ProveDlog], {10}=SpectrumIsQuote[Boolean],
-/// {11}=MaxExFee[Long], {13}=PoolNFT[Coll[Byte]], {14}=RedeemerPropBytes[Coll[Byte]],
-/// {15}=QuoteId[Coll[Byte]], {16}=MinQuoteAmount[Long],
-/// {23}=SpectrumId[Coll[Byte]], {27}=FeeDenom[Int],
-/// {28}=MinerPropBytes[Coll[Byte]], {31}=MaxMinerFee[Long]
+/// Constant positions: {1}=ExFeePerTokenDenom, {2}=Delta, {3}=BaseAmount,
+/// {4}=FeeNum, {5}=RefundProp, {10}=SpectrumIsQuote, {11}=MaxExFee,
+/// {13}=PoolNFT, {14}=RedeemerPropBytes, {15}=QuoteId, {16}=MinQuoteAmount,
+/// {23}=SpectrumId, {27}=FeeDenom, {28}=MinerPropBytes, {31}=MaxMinerFee
 fn build_n2t_swap_sell_tree(
     pool: &AmmPool,
     base_amount: u64,
@@ -306,12 +214,11 @@ fn build_n2t_swap_sell_tree(
     let template_hex = swap_templates::N2T_SWAP_SELL_TEMPLATE;
     let tree = parse_ergo_tree(template_hex)?;
 
-    // Prepare constant values
     let pool_nft_bytes = hex_to_bytes(&pool.pool_id)?;
     let quote_id_bytes = hex_to_bytes(&pool.token_y.token_id)?;
     let spf_bytes = hex_to_bytes(swap_templates::SPF_TOKEN_ID)?;
     let miner_prop_bytes = hex_to_bytes(swap_templates::MINER_FEE_ERGO_TREE)?;
-    // RedeemerPropBytes: use recipient's full ErgoTree if set, otherwise user's P2PK tree
+    // RedeemerPropBytes must be full P2PK ErgoTree (0008cd + pubkey), NOT raw pubkey
     let redeemer_prop_bytes = if let Some(recipient) = recipient_ergo_tree {
         hex_to_bytes(recipient)?
     } else {
@@ -319,7 +226,6 @@ fn build_n2t_swap_sell_tree(
     };
     let refund_prop = build_prove_dlog(user_pk)?;
 
-    // Substitute constants using chain pattern (with_constant consumes self)
     let tree = tree
         .with_constant(
             1,
@@ -364,14 +270,10 @@ fn build_n2t_swap_sell_tree(
     serialize_ergo_tree(&tree)
 }
 
-/// Build N2T SwapBuy ErgoTree (Token -> ERG)
-///
-/// Constant positions for N2T SwapBuy:
-/// {1}=BaseAmount[Long], {2}=FeeNum[Int], {3}=RefundProp[ProveDlog],
-/// {7}=MaxExFee[Long], {8}=ExFeePerTokenDenom[Long], {9}=ExFeePerTokenNum[Long],
-/// {11}=PoolNFT[Coll[Byte]], {12}=RedeemerPropBytes[Coll[Byte]],
-/// {13}=MinQuoteAmount[Long], {16}=SpectrumId[Coll[Byte]],
-/// {20}=FeeDenom[Int], {21}=MinerPropBytes[Coll[Byte]], {24}=MaxMinerFee[Long]
+/// Constant positions: {1}=BaseAmount, {2}=FeeNum, {3}=RefundProp,
+/// {7}=MaxExFee, {8}=ExFeePerTokenDenom, {9}=ExFeePerTokenNum,
+/// {11}=PoolNFT, {12}=RedeemerPropBytes, {13}=MinQuoteAmount,
+/// {16}=SpectrumId, {20}=FeeDenom, {21}=MinerPropBytes, {24}=MaxMinerFee
 fn build_n2t_swap_buy_tree(
     pool: &AmmPool,
     base_amount: u64,
@@ -382,11 +284,10 @@ fn build_n2t_swap_buy_tree(
     let template_hex = swap_templates::N2T_SWAP_BUY_TEMPLATE;
     let tree = parse_ergo_tree(template_hex)?;
 
-    // Prepare constant values
     let pool_nft_bytes = hex_to_bytes(&pool.pool_id)?;
     let spf_bytes = hex_to_bytes(swap_templates::SPF_TOKEN_ID)?;
     let miner_prop_bytes = hex_to_bytes(swap_templates::MINER_FEE_ERGO_TREE)?;
-    // RedeemerPropBytes: use recipient's full ErgoTree if set, otherwise user's P2PK tree
+    // RedeemerPropBytes must be full P2PK ErgoTree (0008cd + pubkey), NOT raw pubkey
     let redeemer_prop_bytes = if let Some(recipient) = recipient_ergo_tree {
         hex_to_bytes(recipient)?
     } else {
@@ -394,7 +295,6 @@ fn build_n2t_swap_buy_tree(
     };
     let refund_prop = build_prove_dlog(user_pk)?;
 
-    // Substitute constants
     let tree = tree
         .with_constant(1, Constant::from(base_amount as i64))
         .map_err(|e| AmmError::TxBuildError(format!("Failed to set BaseAmount: {}", e)))?
@@ -435,11 +335,6 @@ fn build_n2t_swap_buy_tree(
     serialize_ergo_tree(&tree)
 }
 
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-/// Parse an ErgoTree from hex string
 fn parse_ergo_tree(hex_str: &str) -> Result<ErgoTree, AmmError> {
     let bytes = hex::decode(hex_str)
         .map_err(|e| AmmError::TxBuildError(format!("Invalid ErgoTree hex: {}", e)))?;
@@ -447,7 +342,6 @@ fn parse_ergo_tree(hex_str: &str) -> Result<ErgoTree, AmmError> {
         .map_err(|e| AmmError::TxBuildError(format!("Failed to parse ErgoTree: {}", e)))
 }
 
-/// Serialize an ErgoTree to hex string
 fn serialize_ergo_tree(tree: &ErgoTree) -> Result<String, AmmError> {
     let bytes = tree
         .sigma_serialize_bytes()
@@ -455,13 +349,11 @@ fn serialize_ergo_tree(tree: &ErgoTree) -> Result<String, AmmError> {
     Ok(hex::encode(bytes))
 }
 
-/// Decode hex string to bytes
 fn hex_to_bytes(hex_str: &str) -> Result<Vec<u8>, AmmError> {
     hex::decode(hex_str)
         .map_err(|e| AmmError::TxBuildError(format!("Invalid hex string '{}': {}", hex_str, e)))
 }
 
-/// Build a ProveDlog constant from a compressed public key hex
 fn build_prove_dlog(pk_hex: &str) -> Result<ProveDlog, AmmError> {
     let pk_bytes = hex_to_bytes(pk_hex)?;
     if pk_bytes.len() != 33 {
@@ -478,10 +370,6 @@ fn build_prove_dlog(pk_hex: &str) -> Result<ProveDlog, AmmError> {
     })?;
     Ok(ProveDlog::new(ec_point))
 }
-
-// =============================================================================
-// Tests
-// =============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -552,30 +440,24 @@ mod tests {
         assert!(result.is_ok(), "Should build: {:?}", result.err());
         let build = result.unwrap();
 
-        // Should have 3 outputs: proxy box, miner fee, change
         assert_eq!(build.unsigned_tx.outputs.len(), 3);
 
-        // Output 0: proxy box with swap ErgoTree (not the user's tree)
         let proxy = &build.unsigned_tx.outputs[0];
         assert_ne!(
             proxy.ergo_tree,
             "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
         );
         let proxy_value: u64 = proxy.value.parse().unwrap();
-        // proxy_box_value = input_amount + EXECUTION_FEE + PROXY_BOX_VALUE
         assert_eq!(proxy_value, 1_000_000_000 + EXECUTION_FEE + PROXY_BOX_VALUE);
 
-        // Output 1: miner fee
         let fee_output = &build.unsigned_tx.outputs[1];
         assert_eq!(fee_output.value, TX_FEE.to_string());
 
-        // Output 2: change
         let change_output = &build.unsigned_tx.outputs[2];
         let change_value: u64 = change_output.value.parse().unwrap();
         let expected_change = 10_000_000_000 - proxy_value - TX_FEE;
         assert_eq!(change_value, expected_change);
 
-        // Summary
         assert_eq!(build.summary.input_amount, 1_000_000_000);
         assert_eq!(build.summary.input_token, "ERG");
         assert_eq!(build.summary.min_output, 9000);
@@ -620,20 +502,16 @@ mod tests {
         assert!(result.is_ok(), "Should build: {:?}", result.err());
         let build = result.unwrap();
 
-        // Should have 3 outputs: proxy box, miner fee, change
         assert_eq!(build.unsigned_tx.outputs.len(), 3);
 
-        // Proxy box should contain the token
         let proxy = &build.unsigned_tx.outputs[0];
         assert_eq!(proxy.assets.len(), 1);
         assert_eq!(proxy.assets[0].token_id, token_id);
         assert_eq!(proxy.assets[0].amount, "10000");
 
-        // Proxy ERG value = EXECUTION_FEE + PROXY_BOX_VALUE (no input ERG for token->ERG)
         let proxy_value: u64 = proxy.value.parse().unwrap();
         assert_eq!(proxy_value, EXECUTION_FEE + PROXY_BOX_VALUE);
 
-        // Change should have remaining tokens
         let change = &build.unsigned_tx.outputs[2];
         let change_tokens: Vec<&Eip12Asset> = change
             .assets
@@ -725,9 +603,6 @@ mod tests {
     #[test]
     fn test_build_swap_no_change_when_exact() {
         let pool = test_n2t_pool();
-        // Calculate exact amount needed:
-        // proxy_box_value = 1_000_000_000 + EXECUTION_FEE + PROXY_BOX_VALUE
-        // total = proxy_box_value + TX_FEE
         let proxy_val = 1_000_000_000u64 + EXECUTION_FEE + PROXY_BOX_VALUE;
         let total = proxy_val + TX_FEE;
 
@@ -758,13 +633,11 @@ mod tests {
         assert!(result.is_ok(), "Should build: {:?}", result.err());
         let build = result.unwrap();
 
-        // Should only have 2 outputs when no change: proxy + fee
         assert_eq!(build.unsigned_tx.outputs.len(), 2);
     }
 
     #[test]
     fn test_build_prove_dlog() {
-        // Standard generator point public key
         let pk = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
         let result = build_prove_dlog(pk);
         assert!(result.is_ok(), "Should parse valid PK: {:?}", result.err());
@@ -778,14 +651,7 @@ mod tests {
 
     #[test]
     fn test_parse_n2t_swap_sell_template() {
-        let result = parse_ergo_tree(swap_templates::N2T_SWAP_SELL_TEMPLATE);
-        assert!(
-            result.is_ok(),
-            "Should parse N2T SwapSell template: {:?}",
-            result.err()
-        );
-
-        let tree = result.unwrap();
+        let tree = parse_ergo_tree(swap_templates::N2T_SWAP_SELL_TEMPLATE).unwrap();
         let num_constants = tree.constants_len().unwrap();
         assert!(
             num_constants >= 32,
@@ -796,14 +662,7 @@ mod tests {
 
     #[test]
     fn test_parse_n2t_swap_buy_template() {
-        let result = parse_ergo_tree(swap_templates::N2T_SWAP_BUY_TEMPLATE);
-        assert!(
-            result.is_ok(),
-            "Should parse N2T SwapBuy template: {:?}",
-            result.err()
-        );
-
-        let tree = result.unwrap();
+        let tree = parse_ergo_tree(swap_templates::N2T_SWAP_BUY_TEMPLATE).unwrap();
         let num_constants = tree.constants_len().unwrap();
         assert!(
             num_constants >= 25,
@@ -823,7 +682,6 @@ mod tests {
             result.err()
         );
 
-        // Verify result is valid hex that can be parsed back
         let hex = result.unwrap();
         let roundtrip = parse_ergo_tree(&hex);
         assert!(
@@ -893,7 +751,6 @@ mod tests {
         );
         let build = result.unwrap();
 
-        // UTXO selection should pick only 1 box (5 ERG covers ~1.007 ERG needed)
         assert_eq!(build.unsigned_tx.inputs.len(), 1);
     }
 
@@ -935,26 +792,19 @@ mod tests {
 
     #[test]
     fn test_template_constant_types() {
-        // Verify that the template constants have the expected types at key positions
         let sell_tree = parse_ergo_tree(swap_templates::N2T_SWAP_SELL_TEMPLATE).unwrap();
         let buy_tree = parse_ergo_tree(swap_templates::N2T_SWAP_BUY_TEMPLATE).unwrap();
 
-        // SwapSell: verify key constant types
         assert_eq!(sell_tree.constants_len().unwrap(), 33);
-        // [5] = SSigmaProp (RefundProp)
-        let c5 = sell_tree.get_constant(5).unwrap().unwrap();
+        let c5 = sell_tree.get_constant(5).unwrap().unwrap(); // RefundProp
         assert_eq!(format!("{:?}", c5.tpe), "SSigmaProp");
-        // [13] = SColl(SByte) (PoolNFT)
-        let c13 = sell_tree.get_constant(13).unwrap().unwrap();
+        let c13 = sell_tree.get_constant(13).unwrap().unwrap(); // PoolNFT
         assert_eq!(format!("{:?}", c13.tpe), "SColl(SByte)");
 
-        // SwapBuy: verify key constant types
         assert_eq!(buy_tree.constants_len().unwrap(), 26);
-        // [3] = SSigmaProp (RefundProp)
-        let c3 = buy_tree.get_constant(3).unwrap().unwrap();
+        let c3 = buy_tree.get_constant(3).unwrap().unwrap(); // RefundProp
         assert_eq!(format!("{:?}", c3.tpe), "SSigmaProp");
-        // [11] = SColl(SByte) (PoolNFT)
-        let c11 = buy_tree.get_constant(11).unwrap().unwrap();
+        let c11 = buy_tree.get_constant(11).unwrap().unwrap(); // PoolNFT
         assert_eq!(format!("{:?}", c11.tpe), "SColl(SByte)");
     }
 }

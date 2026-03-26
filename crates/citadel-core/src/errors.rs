@@ -2,25 +2,6 @@
 
 use thiserror::Error;
 
-/// Core errors that can occur in Citadel
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("Node error: {0}")]
-    Node(#[from] NodeError),
-
-    #[error("Protocol error: {0}")]
-    Protocol(#[from] ProtocolError),
-
-    #[error("Transaction error: {0}")]
-    Transaction(#[from] TxError),
-
-    #[error("Configuration error: {0}")]
-    Config(String),
-
-    #[error("Serialization error: {0}")]
-    Serialization(String),
-}
-
 /// Node connection and query errors
 #[derive(Debug, Error)]
 pub enum NodeError {
@@ -94,8 +75,6 @@ pub enum TxError {
     SubmissionFailed { message: String },
 }
 
-/// Result type alias for Citadel operations
-pub type Result<T> = std::result::Result<T, Error>;
 
 impl ProtocolError {
     /// Get an HTTP-friendly error code

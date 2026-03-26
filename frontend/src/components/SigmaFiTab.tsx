@@ -1,14 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   fetchBondMarket,
-  formatAmount,
-  formatPercent,
-  blocksToTimeString,
-  truncateAddress,
   type BondMarket,
   type OpenOrder,
   type ActiveBond,
 } from '../api/sigmafi'
+import { formatAmount, formatPercent, blocksToTime, truncateAddress } from '../utils/format'
 import { SigmaFiConfirmModal, type ConfirmMode } from './SigmaFiConfirmModal'
 import { CreateOrderModal } from './CreateOrderModal'
 import './SigmaFiTab.css'
@@ -357,7 +354,7 @@ function OrderCard({ order, walletAddress, onCancel, onLend }: OrderCardProps) {
         </div>
         <div className="sigmafi-row">
           <span className="sigmafi-row-label">Term</span>
-          <span className="sigmafi-row-value">{blocksToTimeString(order.maturityBlocks)}</span>
+          <span className="sigmafi-row-value">{blocksToTime(order.maturityBlocks)}</span>
         </div>
         <div className="sigmafi-row">
           <span className="sigmafi-row-label">Collateral</span>
@@ -421,7 +418,7 @@ function BondCard({ bond, onRepay, onLiquidate }: BondCardProps) {
         <div className="sigmafi-row">
           <span className="sigmafi-row-label">Time Remaining</span>
           <span className={`sigmafi-row-value ${isPastDue ? 'danger' : ''}`}>
-            {isPastDue ? `Overdue ${blocksToTimeString(-bond.blocksRemaining)}` : blocksToTimeString(bond.blocksRemaining)}
+            {isPastDue ? `Overdue ${blocksToTime(-bond.blocksRemaining)}` : blocksToTime(bond.blocksRemaining)}
           </span>
         </div>
         <div className="sigmafi-row">

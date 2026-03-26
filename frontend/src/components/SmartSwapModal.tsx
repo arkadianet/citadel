@@ -1,14 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { QRCodeSVG } from 'qrcode.react'
 import {
-  previewDirectSwap, buildDirectSwapTx, startSwapSign, getSwapTxStatus,
-  formatErg, type DirectSwapPreviewResponse,
+  previewDirectSwap, buildDirectSwapTx,
+  type DirectSwapPreviewResponse,
 } from '../api/amm'
+import { startSign, getTxStatus } from '../api/types'
+import { formatErg } from '../utils/format'
 import type { RouteQuote } from '../api/router'
 import { formatTokenAmount } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
+import { useModalStep } from '../hooks/useModalStep'
 
 // =============================================================================
 // Props
@@ -25,8 +28,6 @@ interface SmartSwapModalProps {
   onSuccess: () => void
 }
 
-type SwapStep = 'preview' | 'signing' | 'success' | 'error'
-
 // =============================================================================
 // SmartSwapModal
 // =============================================================================
@@ -41,11 +42,6 @@ export function SmartSwapModal({
   explorerUrl,
   onSuccess,
 }: SmartSwapModalProps) {
-  const [step, setStep] = useState<SwapStep>('preview')
-  const [preview, setPreview] = useState<DirectSwapPreviewResponse | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
   // Derive hop info from route
   const hop = routeQuote.route.hops[0]
   const inputType: 'erg' | 'token' = hop.token_in === 'ERG' ? 'erg' : 'token'
@@ -55,41 +51,25 @@ export function SmartSwapModal({
   const inputLabel = hop.token_in_name ?? (inputType === 'erg' ? 'ERG' : hop.token_in.slice(0, 8))
   const outputLabel = hop.token_out_name ?? hop.token_out.slice(0, 8)
 
+  const fetchPreview = useCallback(
+    () => previewDirectSwap(poolId, inputType, sourceAmount, tokenId, slippage),
+    [poolId, inputType, sourceAmount, tokenId, slippage]
+  )
+
+  const { step, setStep, preview, loading, setLoading, error, setError, onTxSuccess, onTxError } =
+    useModalStep<DirectSwapPreviewResponse>({ isOpen, fetchPreview })
+
   const flow = useTransactionFlow({
-    pollStatus: getSwapTxStatus,
+    pollStatus: getTxStatus,
     isOpen,
-    onSuccess: () => setStep('success'),
-    onError: (err) => { setError(err); setStep('error') },
+    onSuccess: onTxSuccess,
+    onError: onTxError,
     watchParams: {
       protocol: 'AMM',
       operation: 'swap',
       description: `Direct swap ${inputLabel} → ${outputLabel}`,
     },
   })
-
-  // Reset state when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setStep('preview')
-      setPreview(null)
-      setError(null)
-      fetchPreview()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen])
-
-  const fetchPreview = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const result = await previewDirectSwap(poolId, inputType, sourceAmount, tokenId, slippage)
-      setPreview(result)
-    } catch (e) {
-      setError(String(e))
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleConfirmSwap = async () => {
     if (!preview) return
@@ -112,7 +92,7 @@ export function SmartSwapModal({
       )
 
       const message = `Direct swap ${inputLabel} → ${outputLabel}`
-      const signResult = await startSwapSign(buildResult.unsigned_tx, message)
+      const signResult = await startSign(buildResult.unsigned_tx, message)
 
       flow.startSigning(signResult.request_id, signResult.ergopay_url, signResult.nautilus_url)
       setStep('signing')

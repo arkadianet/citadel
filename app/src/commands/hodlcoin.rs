@@ -1,19 +1,18 @@
-use citadel_api::dto::{MintSignRequest, MintSignResponse, MintTxStatusResponse};
 use citadel_api::AppState;
 use tauri::State;
 
-/// Get all discovered HodlCoin banks
+use super::StrErr;
+
 #[tauri::command]
 pub async fn get_hodlcoin_banks(
     state: State<'_, AppState>,
 ) -> Result<Vec<hodlcoin::HodlBankState>, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     hodlcoin::discover_banks(&client)
         .await
-        .map_err(|e| e.to_string())
+        .str_err()
 }
 
-/// Preview minting hodlTokens
 #[tauri::command]
 pub async fn preview_hodlcoin_mint(
     state: State<'_, AppState>,
@@ -24,11 +23,11 @@ pub async fn preview_hodlcoin_mint(
         return Err("Amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
     let banks = hodlcoin::discover_banks(&client)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let bank = banks
         .into_iter()
@@ -54,7 +53,6 @@ pub async fn preview_hodlcoin_mint(
     })
 }
 
-/// Preview burning hodlTokens
 #[tauri::command]
 pub async fn preview_hodlcoin_burn(
     state: State<'_, AppState>,
@@ -65,11 +63,11 @@ pub async fn preview_hodlcoin_burn(
         return Err("Amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
     let banks = hodlcoin::discover_banks(&client)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let bank = banks
         .into_iter()
@@ -98,7 +96,6 @@ pub async fn preview_hodlcoin_burn(
     })
 }
 
-/// Build a hodlcoin mint EIP-12 unsigned transaction
 #[tauri::command]
 pub async fn build_hodlcoin_mint_tx(
     state: State<'_, AppState>,
@@ -111,26 +108,23 @@ pub async fn build_hodlcoin_mint_tx(
         return Err("Amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
     let banks = hodlcoin::discover_banks(&client)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let bank = banks
         .into_iter()
         .find(|b| b.singleton_token_id == singleton_token_id)
         .ok_or_else(|| format!("Bank not found: {}", singleton_token_id))?;
 
-    // Fetch bank box in EIP-12 format
     let bank_box = client
         .get_eip12_box_by_id(&bank.bank_box_id)
         .await
         .map_err(|e| format!("Failed to fetch bank box: {}", e))?;
 
-    // Parse user UTXOs
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
-
     let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
 
     let unsigned_tx = hodlcoin::build_mint_tx_eip12(
@@ -141,13 +135,12 @@ pub async fn build_hodlcoin_mint_tx(
         &user_ergo_tree,
         current_height,
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     serde_json::to_value(&unsigned_tx)
         .map_err(|e| format!("Failed to serialize transaction: {}", e))
 }
 
-/// Build a hodlcoin burn EIP-12 unsigned transaction
 #[tauri::command]
 pub async fn build_hodlcoin_burn_tx(
     state: State<'_, AppState>,
@@ -160,26 +153,23 @@ pub async fn build_hodlcoin_burn_tx(
         return Err("Amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
     let banks = hodlcoin::discover_banks(&client)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let bank = banks
         .into_iter()
         .find(|b| b.singleton_token_id == singleton_token_id)
         .ok_or_else(|| format!("Bank not found: {}", singleton_token_id))?;
 
-    // Fetch bank box in EIP-12 format
     let bank_box = client
         .get_eip12_box_by_id(&bank.bank_box_id)
         .await
         .map_err(|e| format!("Failed to fetch bank box: {}", e))?;
 
-    // Parse user UTXOs
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
-
     let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
 
     let unsigned_tx = hodlcoin::build_burn_tx_eip12(
@@ -190,34 +180,9 @@ pub async fn build_hodlcoin_burn_tx(
         &user_ergo_tree,
         current_height,
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     serde_json::to_value(&unsigned_tx)
         .map_err(|e| format!("Failed to serialize transaction: {}", e))
 }
 
-/// Start signing a hodlcoin transaction (reuses ErgoPay sign flow)
-#[tauri::command]
-pub async fn start_hodlcoin_sign(
-    state: State<'_, AppState>,
-    unsigned_tx: serde_json::Value,
-    message: Option<String>,
-) -> Result<MintSignResponse, String> {
-    super::start_mint_sign(
-        state,
-        MintSignRequest {
-            unsigned_tx,
-            message: message.unwrap_or_else(|| "HodlCoin transaction".to_string()),
-        },
-    )
-    .await
-}
-
-/// Get hodlcoin transaction signing status (reuses ErgoPay poll)
-#[tauri::command]
-pub async fn get_hodlcoin_tx_status(
-    state: State<'_, AppState>,
-    request_id: String,
-) -> Result<MintTxStatusResponse, String> {
-    super::get_mint_tx_status(state, request_id).await
-}

@@ -16,20 +16,13 @@ use sigmausd::{
     },
     NftIds, SigmaUsdState,
 };
+use super::StrErr;
 use tauri::State;
 
-/// Get SigmaUSD protocol state
 #[tauri::command]
 pub async fn get_sigmausd_state(state: State<'_, AppState>) -> Result<SigmaUsdState, String> {
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
     let config = state.config().await;
     let nft_ids = NftIds::for_network(config.network)
@@ -37,21 +30,13 @@ pub async fn get_sigmausd_state(state: State<'_, AppState>) -> Result<SigmaUsdSt
 
     fetch_sigmausd_state(&client, &capabilities, &nft_ids)
         .await
-        .map_err(|e| e.to_string())
+        .str_err()
 }
 
-/// Get ERG/USD oracle price
 #[tauri::command]
 pub async fn get_oracle_price(state: State<'_, AppState>) -> Result<OraclePriceResponse, String> {
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
     let config = state.config().await;
     let nft_ids = NftIds::for_network(config.network)
@@ -59,7 +44,7 @@ pub async fn get_oracle_price(state: State<'_, AppState>) -> Result<OraclePriceR
 
     let price = fetch_oracle_price(&client, &capabilities, &nft_ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     Ok(OraclePriceResponse {
         nanoerg_per_usd: price.nanoerg_per_usd,
@@ -68,16 +53,13 @@ pub async fn get_oracle_price(state: State<'_, AppState>) -> Result<OraclePriceR
     })
 }
 
-/// Preview mint SigUSD (calculate cost without UTXOs)
 #[tauri::command]
 pub async fn preview_mint_sigusd(
     state: State<'_, AppState>,
     request: MintPreviewRequest,
 ) -> Result<MintPreviewResponse, String> {
-    // Get protocol state for validation
     let sigmausd_state = get_sigmausd_state_internal(&state).await?;
 
-    // Validate amount
     if request.amount <= 0 {
         return Err("Amount must be positive".to_string());
     }
@@ -107,7 +89,6 @@ pub async fn preview_mint_sigusd(
         });
     }
 
-    // Calculate cost
     let calc = cost_to_mint_sigusd(request.amount, sigmausd_state.oracle_erg_per_usd_nano);
     let tx_fee = TX_FEE_NANO;
     let min_box = MIN_BOX_VALUE_NANO;
@@ -123,47 +104,31 @@ pub async fn preview_mint_sigusd(
     })
 }
 
-/// Build mint SigUSD transaction (requires user UTXOs)
 #[tauri::command]
 pub async fn build_mint_sigusd(
     state: State<'_, AppState>,
     request: MintBuildRequest,
 ) -> Result<MintBuildResponse, String> {
-    // Get node client
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
     let config = state.config().await;
     let nft_ids = NftIds::for_network(config.network)
         .ok_or_else(|| format!("SigmaUSD not available on {:?}", config.network))?;
 
-    // Fetch current protocol state for validation
     let sigmausd_state = fetch_sigmausd_state(&client, &capabilities, &nft_ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
-    // Validate the mint request
-    validate_mint_sigusd(request.amount, &sigmausd_state).map_err(|e| e.to_string())?;
+    validate_mint_sigusd(request.amount, &sigmausd_state).str_err()?;
 
-    // Fetch tx context (bank and oracle boxes in EIP12 format)
     let tx_ctx = fetch_tx_context(&client, &capabilities, &nft_ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
-    // Convert user UTXOs from JSON to Eip12InputBox
     let user_inputs = super::parse_eip12_utxos(request.user_utxos)?;
-
-    // Extract user's ErgoTree from first input
     let user_ergo_tree = user_inputs[0].ergo_tree.clone();
 
-    // Build the TxContext from fetch context
     let build_ctx = TxContext {
         nft_ids: nft_ids.clone(),
         bank_input: tx_ctx.bank_input,
@@ -176,7 +141,6 @@ pub async fn build_mint_sigusd(
         oracle_rate: tx_ctx.oracle_rate,
     };
 
-    // Build the mint request
     let mint_request = MintSigUsdRequest {
         amount: request.amount,
         user_address: request.user_address,
@@ -186,15 +150,12 @@ pub async fn build_mint_sigusd(
         recipient_ergo_tree: None,
     };
 
-    // Build the transaction
     let result = build_mint_sigusd_tx(&mint_request, &build_ctx, &sigmausd_state)
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
-    // Convert to JSON for response
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
 
-    // Build summary DTO
     let summary = TxSummaryDto {
         action: result.summary.action,
         erg_amount_nano: result.summary.erg_amount_nano.to_string(),
@@ -210,17 +171,9 @@ pub async fn build_mint_sigusd(
     })
 }
 
-/// Internal helper to get SigmaUSD state
 async fn get_sigmausd_state_internal(state: &State<'_, AppState>) -> Result<SigmaUsdState, String> {
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
     let config = state.config().await;
     let nft_ids = NftIds::for_network(config.network)
@@ -228,14 +181,9 @@ async fn get_sigmausd_state_internal(state: &State<'_, AppState>) -> Result<Sigm
 
     fetch_sigmausd_state(&client, &capabilities, &nft_ids)
         .await
-        .map_err(|e| e.to_string())
+        .str_err()
 }
 
-// =============================================================================
-// Unified SigmaUSD Preview Command
-// =============================================================================
-
-/// Preview any SigmaUSD operation (unified command)
 #[tauri::command]
 pub async fn preview_sigmausd_tx(
     state: State<'_, AppState>,
@@ -256,12 +204,10 @@ pub async fn preview_sigmausd_tx(
     }
 }
 
-/// Preview mint SigUSD operation
 fn preview_mint_sigusd_internal(
     sigmausd_state: &SigmaUsdState,
     amount: i64,
 ) -> Result<SigmaUsdPreviewResponse, String> {
-    // Check if minting is allowed
     if !sigmausd_state.can_mint_sigusd {
         return Ok(SigmaUsdPreviewResponse {
             erg_amount_nano: "0".to_string(),
@@ -275,7 +221,6 @@ fn preview_mint_sigusd_internal(
         });
     }
 
-    // Check against maximum mintable
     if amount > sigmausd_state.max_sigusd_mintable {
         return Ok(SigmaUsdPreviewResponse {
             erg_amount_nano: "0".to_string(),
@@ -292,7 +237,6 @@ fn preview_mint_sigusd_internal(
         });
     }
 
-    // Calculate cost
     let calc = cost_to_mint_sigusd(amount, sigmausd_state.oracle_erg_per_usd_nano);
     let tx_fee = TX_FEE_NANO;
     let min_box = MIN_BOX_VALUE_NANO;
@@ -310,12 +254,10 @@ fn preview_mint_sigusd_internal(
     })
 }
 
-/// Preview redeem SigUSD operation
 fn preview_redeem_sigusd_internal(
     sigmausd_state: &SigmaUsdState,
     amount: i64,
 ) -> Result<SigmaUsdPreviewResponse, String> {
-    // Check if there's enough circulating supply to redeem
     if amount > sigmausd_state.sigusd_circulating {
         return Ok(SigmaUsdPreviewResponse {
             erg_amount_nano: "0".to_string(),
@@ -332,10 +274,9 @@ fn preview_redeem_sigusd_internal(
         });
     }
 
-    // Calculate ERG received
     let calc = erg_from_redeem_sigusd(amount, sigmausd_state.oracle_erg_per_usd_nano);
     let tx_fee = TX_FEE_NANO;
-    // For redeem: user receives ERG (negative total means user receives)
+    // Negative total means user receives ERG
     let total = -(calc.net_amount as i64) + tx_fee;
 
     Ok(SigmaUsdPreviewResponse {
@@ -350,12 +291,10 @@ fn preview_redeem_sigusd_internal(
     })
 }
 
-/// Preview mint SigRSV operation
 fn preview_mint_sigrsv_internal(
     sigmausd_state: &SigmaUsdState,
     amount: i64,
 ) -> Result<SigmaUsdPreviewResponse, String> {
-    // Check if minting is allowed
     if !sigmausd_state.can_mint_sigrsv {
         return Ok(SigmaUsdPreviewResponse {
             erg_amount_nano: "0".to_string(),
@@ -369,7 +308,6 @@ fn preview_mint_sigrsv_internal(
         });
     }
 
-    // Check against maximum mintable
     if amount > sigmausd_state.max_sigrsv_mintable {
         return Ok(SigmaUsdPreviewResponse {
             erg_amount_nano: "0".to_string(),
@@ -386,7 +324,6 @@ fn preview_mint_sigrsv_internal(
         });
     }
 
-    // Calculate cost
     let calc = cost_to_mint_sigrsv(amount, sigmausd_state.sigrsv_price_nano);
     let tx_fee = TX_FEE_NANO;
     let min_box = MIN_BOX_VALUE_NANO;
@@ -404,12 +341,10 @@ fn preview_mint_sigrsv_internal(
     })
 }
 
-/// Preview redeem SigRSV operation
 fn preview_redeem_sigrsv_internal(
     sigmausd_state: &SigmaUsdState,
     amount: i64,
 ) -> Result<SigmaUsdPreviewResponse, String> {
-    // Check if redeeming is allowed
     if !sigmausd_state.can_redeem_sigrsv {
         return Ok(SigmaUsdPreviewResponse {
             erg_amount_nano: "0".to_string(),
@@ -423,7 +358,6 @@ fn preview_redeem_sigrsv_internal(
         });
     }
 
-    // Check if there's enough circulating supply to redeem
     if amount > sigmausd_state.sigrsv_circulating {
         return Ok(SigmaUsdPreviewResponse {
             erg_amount_nano: "0".to_string(),
@@ -440,10 +374,9 @@ fn preview_redeem_sigrsv_internal(
         });
     }
 
-    // Calculate ERG received
     let calc = erg_from_redeem_sigrsv(amount, sigmausd_state.sigrsv_price_nano);
     let tx_fee = TX_FEE_NANO;
-    // For redeem: user receives ERG (negative total means user receives)
+    // Negative total means user receives ERG
     let total = -(calc.net_amount as i64) + tx_fee;
 
     Ok(SigmaUsdPreviewResponse {
@@ -458,47 +391,35 @@ fn preview_redeem_sigrsv_internal(
     })
 }
 
-// =============================================================================
-// Unified SigmaUSD Build Command
-// =============================================================================
-
-/// Build any SigmaUSD transaction (unified command)
 #[tauri::command]
 pub async fn build_sigmausd_tx(
     state: State<'_, AppState>,
     request: SigmaUsdBuildRequest,
 ) -> Result<SigmaUsdBuildResponse, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or("Node capabilities not available")?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
     let config = state.config().await;
     let nft_ids = NftIds::for_network(config.network)
         .ok_or_else(|| format!("SigmaUSD not available on {:?}", config.network))?;
 
     let sigmausd_state = fetch_sigmausd_state(&client, &capabilities, &nft_ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let tx_ctx = fetch_tx_context(&client, &capabilities, &nft_ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
-    // Convert UTXOs
     let user_inputs = super::parse_eip12_utxos(request.user_utxos)?;
-
     let user_ergo_tree = user_inputs[0].ergo_tree.clone();
 
-    // Convert optional recipient address to ErgoTree
     let recipient_ergo_tree = match &request.recipient_address {
         Some(addr) if !addr.is_empty() => {
-            Some(ergo_tx::address_to_ergo_tree(addr).map_err(|e| e.to_string())?)
+            Some(ergo_tx::address_to_ergo_tree(addr).str_err()?)
         }
         _ => None,
     };
 
-    // Build TxContext from fetch result
     let ctx = TxContext {
         nft_ids: nft_ids.clone(),
         bank_input: tx_ctx.bank_input,
@@ -511,10 +432,9 @@ pub async fn build_sigmausd_tx(
         oracle_rate: tx_ctx.oracle_rate,
     };
 
-    // Route to appropriate builder based on action
     let result = match request.action.as_str() {
         "mint_sigusd" => {
-            validate_mint_sigusd(request.amount, &sigmausd_state).map_err(|e| e.to_string())?;
+            validate_mint_sigusd(request.amount, &sigmausd_state).str_err()?;
             let req = MintSigUsdRequest {
                 amount: request.amount,
                 user_address: request.user_address,
@@ -523,10 +443,10 @@ pub async fn build_sigmausd_tx(
                 current_height: request.current_height,
                 recipient_ergo_tree,
             };
-            build_mint_sigusd_tx(&req, &ctx, &sigmausd_state).map_err(|e| e.to_string())?
+            build_mint_sigusd_tx(&req, &ctx, &sigmausd_state).str_err()?
         }
         "redeem_sigusd" => {
-            validate_redeem_sigusd(request.amount, &sigmausd_state).map_err(|e| e.to_string())?;
+            validate_redeem_sigusd(request.amount, &sigmausd_state).str_err()?;
             let req = RedeemSigUsdRequest {
                 amount: request.amount,
                 user_address: request.user_address,
@@ -535,10 +455,10 @@ pub async fn build_sigmausd_tx(
                 current_height: request.current_height,
                 recipient_ergo_tree,
             };
-            build_redeem_sigusd_tx(&req, &ctx, &sigmausd_state).map_err(|e| e.to_string())?
+            build_redeem_sigusd_tx(&req, &ctx, &sigmausd_state).str_err()?
         }
         "mint_sigrsv" => {
-            validate_mint_sigrsv(request.amount, &sigmausd_state).map_err(|e| e.to_string())?;
+            validate_mint_sigrsv(request.amount, &sigmausd_state).str_err()?;
             let req = MintSigRsvRequest {
                 amount: request.amount,
                 user_address: request.user_address,
@@ -547,10 +467,10 @@ pub async fn build_sigmausd_tx(
                 current_height: request.current_height,
                 recipient_ergo_tree,
             };
-            build_mint_sigrsv_tx(&req, &ctx, &sigmausd_state).map_err(|e| e.to_string())?
+            build_mint_sigrsv_tx(&req, &ctx, &sigmausd_state).str_err()?
         }
         "redeem_sigrsv" => {
-            validate_redeem_sigrsv(request.amount, &sigmausd_state).map_err(|e| e.to_string())?;
+            validate_redeem_sigrsv(request.amount, &sigmausd_state).str_err()?;
             let req = RedeemSigRsvRequest {
                 amount: request.amount,
                 user_address: request.user_address,
@@ -559,7 +479,7 @@ pub async fn build_sigmausd_tx(
                 current_height: request.current_height,
                 recipient_ergo_tree,
             };
-            build_redeem_sigrsv_tx(&req, &ctx, &sigmausd_state).map_err(|e| e.to_string())?
+            build_redeem_sigrsv_tx(&req, &ctx, &sigmausd_state).str_err()?
         }
         _ => return Err(format!("Unknown action: {}", request.action)),
     };

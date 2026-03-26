@@ -8,14 +8,12 @@ use crate::eip12::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
 
 use citadel_core::constants::TX_FEE_NANO as TX_FEE;
 
-/// Result of building a burn transaction
 #[derive(Debug)]
 pub struct BurnBuildResult {
     pub unsigned_tx: Eip12UnsignedTx,
     pub summary: BurnSummary,
 }
 
-/// Summary of what the burn transaction does
 #[derive(Debug)]
 pub struct BurnSummary {
     pub burned_token_id: String,
@@ -24,14 +22,12 @@ pub struct BurnSummary {
     pub change_erg: i64,
 }
 
-/// A single token+amount to burn in a multi-burn transaction
 #[derive(Debug, Clone)]
 pub struct BurnItem {
     pub token_id: String,
     pub amount: u64,
 }
 
-/// Summary of a multi-burn transaction
 #[derive(Debug)]
 pub struct MultiBurnSummary {
     pub burned_tokens: Vec<BurnItem>,
@@ -39,14 +35,12 @@ pub struct MultiBurnSummary {
     pub change_erg: i64,
 }
 
-/// Result of building a multi-burn transaction
 #[derive(Debug)]
 pub struct MultiBurnBuildResult {
     pub unsigned_tx: Eip12UnsignedTx,
     pub summary: MultiBurnSummary,
 }
 
-/// Errors from burn tx building
 #[derive(Debug, thiserror::Error)]
 pub enum BurnError {
     #[error("Insufficient token balance: have {have}, need {need}")]
@@ -65,10 +59,7 @@ pub enum BurnError {
     DuplicateToken(String),
 }
 
-/// Build an EIP-12 unsigned transaction that burns a specified amount of a token.
-///
-/// The transaction spends user inputs and creates a single change output back to
-/// the user, minus the burned tokens and miner fee.
+/// Build an EIP-12 unsigned tx that burns a specified amount of a token.
 pub fn build_burn_tx(
     user_inputs: &[Eip12InputBox],
     burn_token_id: &str,
@@ -80,13 +71,11 @@ pub fn build_burn_tx(
         return Err(BurnError::ZeroAmount);
     }
 
-    // Sum total ERG from inputs
     let total_erg: i64 = user_inputs
         .iter()
         .map(|b| b.value.parse::<i64>().unwrap_or(0))
         .sum();
 
-    // Sum total of the burn token across all inputs
     let total_burn_token: u64 = user_inputs
         .iter()
         .flat_map(|b| b.assets.iter())
@@ -111,7 +100,6 @@ pub fn build_burn_tx(
 
     let change_erg = total_erg - TX_FEE;
 
-    // Aggregate all tokens from all inputs, then subtract the burned amount
     let mut token_totals: HashMap<String, u64> = HashMap::new();
     for input in user_inputs {
         for asset in &input.assets {
@@ -120,7 +108,6 @@ pub fn build_burn_tx(
         }
     }
 
-    // Subtract burn amount
     if let Some(balance) = token_totals.get_mut(burn_token_id) {
         *balance = balance.saturating_sub(burn_amount);
         if *balance == 0 {
@@ -128,7 +115,6 @@ pub fn build_burn_tx(
         }
     }
 
-    // Build change output assets (remaining tokens)
     let change_assets: Vec<Eip12Asset> = token_totals
         .into_iter()
         .map(|(id, amt)| Eip12Asset::new(id, amt as i64))
@@ -161,10 +147,7 @@ pub fn build_burn_tx(
     })
 }
 
-/// Build an EIP-12 unsigned transaction that burns multiple tokens at once.
-///
-/// All specified burn items are removed from the change output. Remaining tokens
-/// and ERG (minus miner fee) go to a single change box.
+/// Build an EIP-12 unsigned tx that burns multiple tokens at once.
 pub fn build_multi_burn_tx(
     user_inputs: &[Eip12InputBox],
     burn_items: &[BurnItem],
@@ -177,7 +160,6 @@ pub fn build_multi_burn_tx(
         return Err(BurnError::EmptyBurnList);
     }
 
-    // Check for zero amounts and duplicates
     let mut seen = HashSet::new();
     for item in burn_items {
         if item.amount == 0 {
@@ -188,7 +170,6 @@ pub fn build_multi_burn_tx(
         }
     }
 
-    // Sum total ERG from inputs
     let total_erg: i64 = user_inputs
         .iter()
         .map(|b| b.value.parse::<i64>().unwrap_or(0))
@@ -202,7 +183,6 @@ pub fn build_multi_burn_tx(
         });
     }
 
-    // Aggregate all tokens from all inputs
     let mut token_totals: HashMap<String, u64> = HashMap::new();
     for input in user_inputs {
         for asset in &input.assets {
@@ -211,7 +191,6 @@ pub fn build_multi_burn_tx(
         }
     }
 
-    // Validate each burn item has sufficient balance, then subtract
     for item in burn_items {
         let have = token_totals.get(&item.token_id).copied().unwrap_or(0);
         if have < item.amount {
@@ -230,7 +209,6 @@ pub fn build_multi_burn_tx(
 
     let change_erg = total_erg - TX_FEE;
 
-    // Build change output assets (remaining tokens)
     let change_assets: Vec<Eip12Asset> = token_totals
         .into_iter()
         .map(|(id, amt)| Eip12Asset::new(id, amt as i64))
@@ -293,13 +271,11 @@ mod tests {
         let inputs = vec![mock_input("box1", 10_000_000_000, vec![(TOKEN_A, 1000)])];
         let result = build_burn_tx(&inputs, TOKEN_A, 300, USER_TREE, 50000).unwrap();
 
-        // Burned 300 out of 1000
         assert_eq!(result.summary.burned_amount, 300);
         assert_eq!(result.summary.burned_token_id, TOKEN_A);
         assert_eq!(result.summary.miner_fee, TX_FEE);
         assert_eq!(result.summary.change_erg, 10_000_000_000 - TX_FEE);
 
-        // Change output should have 700 tokens remaining
         let change = &result.unsigned_tx.outputs[0];
         assert_eq!(change.ergo_tree, USER_TREE);
         assert_eq!(change.assets.len(), 1);
@@ -312,7 +288,6 @@ mod tests {
         let inputs = vec![mock_input("box1", 5_000_000_000, vec![(TOKEN_A, 500)])];
         let result = build_burn_tx(&inputs, TOKEN_A, 500, USER_TREE, 50000).unwrap();
 
-        // Change output should have no tokens
         let change = &result.unsigned_tx.outputs[0];
         assert!(change.assets.is_empty());
     }
@@ -326,7 +301,6 @@ mod tests {
         )];
         let result = build_burn_tx(&inputs, TOKEN_A, 1000, USER_TREE, 50000).unwrap();
 
-        // Only TOKEN_B should remain
         let change = &result.unsigned_tx.outputs[0];
         assert_eq!(change.assets.len(), 1);
         assert_eq!(change.assets[0].token_id, TOKEN_B);
@@ -386,24 +360,16 @@ mod tests {
         let inputs = vec![mock_input("box1", 5_000_000_000, vec![(TOKEN_A, 100)])];
         let result = build_burn_tx(&inputs, TOKEN_A, 50, USER_TREE, 50000).unwrap();
 
-        // Should have exactly 2 outputs: change + fee
         assert_eq!(result.unsigned_tx.outputs.len(), 2);
         assert_eq!(result.unsigned_tx.data_inputs.len(), 0);
 
-        // Output 0: change to user
         assert_eq!(result.unsigned_tx.outputs[0].ergo_tree, USER_TREE);
-
-        // Output 1: miner fee
         assert_eq!(
             result.unsigned_tx.outputs[1].ergo_tree,
             citadel_core::constants::MINER_FEE_ERGO_TREE
         );
         assert_eq!(result.unsigned_tx.outputs[1].value, TX_FEE.to_string());
     }
-
-    // =========================================================================
-    // Multi-burn tests
-    // =========================================================================
 
     #[test]
     fn test_multi_burn_two_tokens() {

@@ -391,126 +391,13 @@
   border-radius: var(--radius-lg);
 }
 
-/* ============================================================================
-   Success Step
-   ============================================================================ */
-
-.lend-success-step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-xl) var(--space-md);
-  text-align: center;
-}
-
-.lend-modal .success-icon {
-  margin-bottom: var(--space-xs);
-}
-
-.lend-success-step h3 {
-  font-size: var(--text-xl);
-  font-weight: 600;
-  color: rgb(var(--text));
-  margin: 0;
-}
-
-.lend-success-step p {
-  color: var(--slate-400);
-  margin: 0;
-  font-size: var(--text-sm);
-}
-
-.lend-success-step .success-note {
+/* Success note (lend-specific) */
+.success-step .success-note {
   font-size: var(--text-xs);
   color: var(--slate-500);
   max-width: 280px;
 }
 
-.lend-modal .tx-id {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: var(--text-xs);
-  color: var(--slate-400);
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid var(--slate-700);
-  padding: var(--space-xs) var(--space-md);
-  border-radius: var(--radius-sm);
-}
-
-/* ============================================================================
-   Error Step
-   ============================================================================ */
-
-.lend-error-step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-xl) var(--space-md);
-  text-align: center;
-}
-
-.lend-modal .error-icon {
-  margin-bottom: var(--space-xs);
-}
-
-.lend-error-step h3 {
-  font-size: var(--text-xl);
-  font-weight: 600;
-  color: rgb(var(--text));
-  margin: 0;
-}
-
-.lend-error-step .error-message {
-  color: var(--red-400);
-  font-size: var(--text-sm);
-  max-width: 100%;
-  word-break: break-word;
-}
-
-/* ============================================================================
-   Modal Actions
-   ============================================================================ */
-
-.lend-modal .modal-actions {
-  display: flex;
-  gap: var(--space-sm);
-  margin-top: var(--space-xs);
-}
-
-.lend-modal .modal-actions .btn {
-  flex: 1;
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-  border: none;
-}
-
-.lend-modal .modal-actions .btn-primary {
-  background: var(--blue-500);
-  color: white;
-}
-
-.lend-modal .modal-actions .btn-primary:hover:not(:disabled) {
-  background: var(--blue-600);
-}
-
-.lend-modal .modal-actions .btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.lend-modal .modal-actions .btn-secondary {
-  background: var(--slate-700);
-  color: rgb(var(--text));
-}
-
-.lend-modal .modal-actions .btn-secondary:hover {
-  background: var(--slate-600);
-}
 
 /* ============================================================================
    Warning Message
@@ -534,18 +421,6 @@
   font-size: var(--text-sm);
 }
 
-/* ============================================================================
-   Animations
-   ============================================================================ */
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
 
 /* ============================================================================
    Modal Header Detail (interest rate, etc.)

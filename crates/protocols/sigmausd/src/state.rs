@@ -6,7 +6,7 @@ use citadel_core::{BoxId, ProtocolError};
 use ergo_tx::decode_sigma_long;
 use serde::{Deserialize, Serialize};
 
-use crate::calculator::{calculate_state, ProtocolInput, ProtocolState};
+use crate::calculator::{calculate_state, ProtocolInput};
 
 /// SigmaUSD protocol state for API responses
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,16 +93,6 @@ impl SigmaUsdState {
         }
     }
 
-    /// Get the calculated protocol state
-    pub fn protocol_state(&self) -> ProtocolState {
-        let input = ProtocolInput {
-            bank_erg_nano: self.bank_erg_nano,
-            sigusd_circulating: self.sigusd_circulating,
-            sigrsv_circulating: self.sigrsv_circulating,
-            nanoerg_per_usd: self.oracle_erg_per_usd_nano,
-        };
-        calculate_state(&input)
-    }
 }
 
 /// Parse bank box R4 and R5 registers to extract circulating supplies

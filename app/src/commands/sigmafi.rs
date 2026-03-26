@@ -1,6 +1,7 @@
-use citadel_api::dto::{MintSignRequest, MintSignResponse, MintTxStatusResponse};
 use citadel_api::AppState;
 use tauri::State;
+
+use super::StrErr;
 
 /// Fetch the SigmaFi bond market (open orders + active bonds)
 #[tauri::command]
@@ -8,8 +9,8 @@ pub async fn sigmafi_fetch_market(
     state: State<'_, AppState>,
     user_address: Option<String>,
 ) -> Result<sigmafi::BondMarket, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
-    let height = client.current_height().await.map_err(|e| e.to_string())?;
+    let client = state.require_node_client().await?;
+    let height = client.current_height().await.str_err()?;
 
     // Try to get oracle price for collateral ratio calculation
     let oracle_erg_usd = get_oracle_erg_usd(&state).await.ok();
@@ -21,22 +22,19 @@ pub async fn sigmafi_fetch_market(
         oracle_erg_usd,
     )
     .await
-    .map_err(|e| e.to_string())
+    .str_err()
 }
 
 /// Get oracle ERG/USD price (helper)
 async fn get_oracle_erg_usd(state: &State<'_, AppState>) -> Result<f64, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or("Node capabilities not available")?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
     let config = state.config().await;
     let nft_ids = sigmausd::NftIds::for_network(config.network)
         .ok_or_else(|| format!("Oracle not available on {:?}", config.network))?;
     let price = sigmausd::fetch_oracle_price(&client, &capabilities, &nft_ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
     Ok(price.erg_usd)
 }
 
@@ -101,7 +99,7 @@ pub async fn sigmafi_build_open_order(
         current_height,
     };
 
-    let tx = sigmafi::tx_builder::build_open_order(&req).map_err(|e| e.to_string())?;
+    let tx = sigmafi::tx_builder::build_open_order(&req).str_err()?;
     serde_json::to_value(&tx).map_err(|e| format!("Failed to serialize tx: {}", e))
 }
 
@@ -114,7 +112,7 @@ pub async fn sigmafi_build_cancel_order(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<serde_json::Value, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     let order_box = client
         .get_eip12_box_by_id(&box_id)
         .await
@@ -128,7 +126,7 @@ pub async fn sigmafi_build_cancel_order(
         current_height,
     };
 
-    let tx = sigmafi::tx_builder::build_cancel_order(&req).map_err(|e| e.to_string())?;
+    let tx = sigmafi::tx_builder::build_cancel_order(&req).str_err()?;
     serde_json::to_value(&tx).map_err(|e| format!("Failed to serialize tx: {}", e))
 }
 
@@ -143,7 +141,7 @@ pub async fn sigmafi_build_close_order(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<serde_json::Value, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     let order_box = client
         .get_eip12_box_by_id(&box_id)
         .await
@@ -159,7 +157,7 @@ pub async fn sigmafi_build_close_order(
         current_height,
     };
 
-    let tx = sigmafi::tx_builder::build_close_order(&req).map_err(|e| e.to_string())?;
+    let tx = sigmafi::tx_builder::build_close_order(&req).str_err()?;
     serde_json::to_value(&tx).map_err(|e| format!("Failed to serialize tx: {}", e))
 }
 
@@ -173,7 +171,7 @@ pub async fn sigmafi_build_repay(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<serde_json::Value, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     let bond_box = client
         .get_eip12_box_by_id(&box_id)
         .await
@@ -188,7 +186,7 @@ pub async fn sigmafi_build_repay(
         current_height,
     };
 
-    let tx = sigmafi::tx_builder::build_repay(&req).map_err(|e| e.to_string())?;
+    let tx = sigmafi::tx_builder::build_repay(&req).str_err()?;
     serde_json::to_value(&tx).map_err(|e| format!("Failed to serialize tx: {}", e))
 }
 
@@ -201,7 +199,7 @@ pub async fn sigmafi_build_liquidate(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<serde_json::Value, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     let bond_box = client
         .get_eip12_box_by_id(&box_id)
         .await
@@ -215,32 +213,7 @@ pub async fn sigmafi_build_liquidate(
         current_height,
     };
 
-    let tx = sigmafi::tx_builder::build_liquidate(&req).map_err(|e| e.to_string())?;
+    let tx = sigmafi::tx_builder::build_liquidate(&req).str_err()?;
     serde_json::to_value(&tx).map_err(|e| format!("Failed to serialize tx: {}", e))
 }
 
-/// Start signing a SigmaFi transaction (reuses ErgoPay sign flow)
-#[tauri::command]
-pub async fn start_sigmafi_sign(
-    state: State<'_, AppState>,
-    unsigned_tx: serde_json::Value,
-    message: Option<String>,
-) -> Result<MintSignResponse, String> {
-    super::start_mint_sign(
-        state,
-        MintSignRequest {
-            unsigned_tx,
-            message: message.unwrap_or_else(|| "SigmaFi transaction".to_string()),
-        },
-    )
-    .await
-}
-
-/// Get SigmaFi transaction signing status
-#[tauri::command]
-pub async fn get_sigmafi_tx_status(
-    state: State<'_, AppState>,
-    request_id: String,
-) -> Result<MintTxStatusResponse, String> {
-    super::get_mint_tx_status(state, request_id).await
-}

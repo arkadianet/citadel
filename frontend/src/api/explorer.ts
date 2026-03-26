@@ -232,14 +232,6 @@ export async function search(query: string): Promise<SearchResult> {
 // Formatting Helpers
 // =============================================================================
 
-/** Format nanoERGs to ERG with appropriate precision */
-export function formatErg(nanoErgs: number, decimals: number = 4): string {
-  return (nanoErgs / 1e9).toLocaleString(undefined, {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  })
-}
-
 /** Format a timestamp (ms) to relative time */
 export function formatTimeAgo(timestampMs: number): string {
   const seconds = Math.floor((Date.now() - timestampMs) / 1000)

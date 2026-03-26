@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getAddress, formatErg, calcFee, type AddressInfo } from '../../api/explorer'
+import { getAddress, calcFee, type AddressInfo } from '../../api/explorer'
+import { formatErg } from '../../utils/format'
 import { ExplorerSkeleton } from './ExplorerSkeleton'
 import { Pagination } from './Pagination'
 import { TxTypeBadge } from './TxTypeBadge'

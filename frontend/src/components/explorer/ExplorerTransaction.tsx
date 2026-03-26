@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getTransaction, formatErg, truncateHash, formatSize, formatTimeAgo, calcFee, type Transaction, type TxOutput } from '../../api/explorer'
+import { getTransaction, truncateHash, formatSize, formatTimeAgo, calcFee, type Transaction, type TxOutput } from '../../api/explorer'
+import { formatErg } from '../../utils/format'
 import { ExplorerSkeleton } from './ExplorerSkeleton'
 import { TxTypeBadge } from './TxTypeBadge'
 import { TokenPopover } from './TokenPopover'

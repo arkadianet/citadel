@@ -1,14 +1,10 @@
 //! MewLock box discovery via node API
 
 use citadel_core::ProtocolError;
-use ergo_lib::ergotree_ir::chain::address::{Address, AddressEncoder, NetworkPrefix};
 use ergo_lib::ergotree_ir::chain::ergo_box::{ErgoBox, NonMandatoryRegisterId};
-use ergo_lib::ergotree_ir::ergo_tree::ErgoTree;
-use ergo_lib::ergotree_ir::mir::constant::Literal;
-use ergo_lib::ergotree_ir::mir::value::CollKind;
 use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
-use ergo_lib::ergotree_ir::types::stype::SType;
 use ergo_node_client::NodeClient;
+use ergo_tx::ergo_box_utils;
 
 use crate::constants::MEWLOCK_ADDRESS;
 use crate::state::{LockedToken, MewLockBox, MewLockState};
@@ -68,16 +64,16 @@ fn parse_mewlock_box(
     let depositor_address = extract_group_element_address(ergo_box)?;
 
     // R5: Int (unlock height)
-    let unlock_height = extract_int(ergo_box, NonMandatoryRegisterId::R5)?;
+    let unlock_height = ergo_box_utils::get_register_int(ergo_box, NonMandatoryRegisterId::R5)?;
 
     // R6: Optional Int (timestamp)
-    let timestamp = try_extract_long(ergo_box, NonMandatoryRegisterId::R6);
+    let timestamp = ergo_box_utils::try_register_long(ergo_box, NonMandatoryRegisterId::R6);
 
     // R7: Optional Coll[Byte] (lock name)
-    let lock_name = try_extract_coll_byte_utf8(ergo_box, NonMandatoryRegisterId::R7);
+    let lock_name = ergo_box_utils::try_register_coll_byte_utf8(ergo_box, NonMandatoryRegisterId::R7);
 
     // R8: Optional Coll[Byte] (lock description)
-    let lock_description = try_extract_coll_byte_utf8(ergo_box, NonMandatoryRegisterId::R8);
+    let lock_description = ergo_box_utils::try_register_coll_byte_utf8(ergo_box, NonMandatoryRegisterId::R8);
 
     // Box value and tokens
     let erg_value = *ergo_box.value.as_u64();
@@ -143,77 +139,6 @@ fn extract_group_element_address(ergo_box: &ErgoBox) -> Result<String, ProtocolE
     }
 }
 
-/// Extract Int from a register
-fn extract_int(ergo_box: &ErgoBox, reg: NonMandatoryRegisterId) -> Result<i32, ProtocolError> {
-    let constant = ergo_box
-        .additional_registers
-        .get_constant(reg)
-        .map_err(|e| ProtocolError::BoxParseError {
-            message: format!("Register {:?} error: {}", reg, e),
-        })?
-        .ok_or_else(|| ProtocolError::BoxParseError {
-            message: format!("Register {:?} not found", reg),
-        })?;
-
-    match &constant.v {
-        Literal::Int(val) => Ok(*val),
-        other => Err(ProtocolError::BoxParseError {
-            message: format!("Expected Int in {:?}, got {:?}", reg, other),
-        }),
-    }
-}
-
-/// Try to extract a Long from a register, returns None on failure
-fn try_extract_long(ergo_box: &ErgoBox, reg: NonMandatoryRegisterId) -> Option<i64> {
-    ergo_box
-        .additional_registers
-        .get_constant(reg)
-        .ok()
-        .flatten()
-        .and_then(|c| match &c.v {
-            Literal::Long(v) => Some(*v),
-            Literal::Int(v) => Some(*v as i64),
-            _ => None,
-        })
-}
-
-/// Try to extract Coll[Byte] from a register and decode as UTF-8
-fn try_extract_coll_byte_utf8(
-    ergo_box: &ErgoBox,
-    reg: NonMandatoryRegisterId,
-) -> Option<String> {
-    let constant = ergo_box
-        .additional_registers
-        .get_constant(reg)
-        .ok()
-        .flatten()?;
-
-    let raw_bytes = match &constant.v {
-        Literal::Coll(CollKind::NativeColl(
-            ergo_lib::ergotree_ir::mir::value::NativeColl::CollByte(bytes),
-        )) => {
-            let u8_bytes: Vec<u8> = bytes.iter().map(|&b| b as u8).collect();
-            Some(u8_bytes)
-        }
-        Literal::Coll(CollKind::WrappedColl {
-            elem_tpe: SType::SByte,
-            items,
-        }) => {
-            let bytes: Vec<u8> = items
-                .iter()
-                .filter_map(|item| match item {
-                    Literal::Byte(b) => Some(*b as u8),
-                    _ => None,
-                })
-                .collect();
-            Some(bytes)
-        }
-        _ => None,
-    }?;
-
-    String::from_utf8(raw_bytes).ok()
-}
-
 /// Extract tokens from a box
 fn extract_tokens(ergo_box: &ErgoBox) -> Vec<LockedToken> {
     ergo_box
@@ -236,23 +161,8 @@ fn extract_tokens(ergo_box: &ErgoBox) -> Vec<LockedToken> {
         .unwrap_or_default()
 }
 
-/// Convert an ErgoTree hex to an Ergo address locally
+/// Convert an ErgoTree hex to an Ergo address locally (delegates to ergo_tx)
 fn ergo_tree_to_address(ergo_tree_hex: &str) -> Result<String, ProtocolError> {
-    let tree_bytes = hex::decode(ergo_tree_hex).map_err(|e| ProtocolError::StateUnavailable {
-        reason: format!("Invalid ErgoTree hex: {}", e),
-    })?;
-
-    let tree =
-        ErgoTree::sigma_parse_bytes(&tree_bytes).map_err(|e| ProtocolError::StateUnavailable {
-            reason: format!("Failed to parse ErgoTree: {}", e),
-        })?;
-
-    let address = Address::recreate_from_ergo_tree(&tree).map_err(|e| {
-        ProtocolError::StateUnavailable {
-            reason: format!("Failed to create address from ErgoTree: {}", e),
-        }
-    })?;
-
-    let encoder = AddressEncoder::new(NetworkPrefix::Mainnet);
-    Ok(encoder.address_to_str(&address))
+    ergo_tx::address::ergo_tree_to_address(ergo_tree_hex)
+        .map_err(|e| ProtocolError::StateUnavailable { reason: e.to_string() })
 }

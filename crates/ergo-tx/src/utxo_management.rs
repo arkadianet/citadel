@@ -1,7 +1,3 @@
-//! UTXO Management transaction builders
-//!
-//! Consolidate (merge many UTXOs into one) and Split (create N boxes of specified amount).
-
 use std::collections::HashMap;
 
 use crate::eip12::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
@@ -9,10 +5,6 @@ use crate::eip12::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
 use citadel_core::constants::{MIN_BOX_VALUE_NANO as MIN_BOX_VALUE, TX_FEE_NANO as TX_FEE};
 
 const MAX_SPLIT_OUTPUTS: usize = 30;
-
-// =============================================================================
-// Error type
-// =============================================================================
 
 #[derive(Debug, thiserror::Error)]
 pub enum UtxoManagementError {
@@ -51,10 +43,6 @@ pub enum UtxoManagementError {
     ChangeBelowMin { change: i64, min: i64 },
 }
 
-// =============================================================================
-// Consolidate
-// =============================================================================
-
 #[derive(Debug)]
 pub struct ConsolidateSummary {
     pub input_count: usize,
@@ -70,9 +58,6 @@ pub struct ConsolidateBuildResult {
     pub summary: ConsolidateSummary,
 }
 
-/// Build a consolidation transaction that merges multiple UTXOs into a single output.
-///
-/// All tokens from all inputs are aggregated into the single change output.
 pub fn build_consolidate_tx(
     user_inputs: &[Eip12InputBox],
     user_ergo_tree: &str,
@@ -98,7 +83,6 @@ pub fn build_consolidate_tx(
         });
     }
 
-    // Aggregate all tokens
     let mut token_totals: HashMap<String, u64> = HashMap::new();
     for input in user_inputs {
         for asset in &input.assets {
@@ -107,7 +91,6 @@ pub fn build_consolidate_tx(
         }
     }
 
-    // Ergo boxes can hold at most 255 distinct tokens
     if token_totals.len() > 255 {
         return Err(UtxoManagementError::TooManyTokenTypes {
             count: token_totals.len(),
@@ -151,16 +134,9 @@ pub fn build_consolidate_tx(
     })
 }
 
-// =============================================================================
-// Split
-// =============================================================================
-
-/// The mode of splitting: either ERG or a specific token.
 #[derive(Debug, Clone)]
 pub enum SplitMode {
-    /// Split ERG into N boxes of `amount_per_box` nanoERG each
     Erg { amount_per_box: i64 },
-    /// Split a token into N boxes, each with `amount_per_box` tokens and `erg_per_box` nanoERG
     Token {
         token_id: String,
         amount_per_box: u64,
@@ -183,10 +159,6 @@ pub struct SplitBuildResult {
     pub summary: SplitSummary,
 }
 
-/// Build a split transaction that creates N identical outputs.
-///
-/// For ERG mode: each output gets `amount_per_box` nanoERG, remaining goes to change.
-/// For Token mode: each output gets `amount_per_box` tokens + `erg_per_box` ERG, remaining goes to change.
 pub fn build_split_tx(
     user_inputs: &[Eip12InputBox],
     mode: &SplitMode,
@@ -225,7 +197,6 @@ pub fn build_split_tx(
             }
 
             let split_total = *amount_per_box * count as i64;
-            // Need: split_total + TX_FEE + (potentially MIN_BOX_VALUE for change)
             let min_without_change = split_total + TX_FEE;
             if total_erg < min_without_change {
                 return Err(UtxoManagementError::InsufficientErg {
@@ -236,7 +207,6 @@ pub fn build_split_tx(
 
             let remainder = total_erg - split_total - TX_FEE;
 
-            // Collect all tokens from inputs for the change output
             let mut token_totals: HashMap<String, u64> = HashMap::new();
             for input in user_inputs {
                 for asset in &input.assets {
@@ -246,9 +216,6 @@ pub fn build_split_tx(
             }
             let has_tokens = !token_totals.is_empty();
 
-            // If remainder is 0 and no tokens, we can omit change
-            // If remainder > 0 but < MIN_BOX_VALUE, error
-            // If tokens exist, we must have a change output
             let need_change = remainder > 0 || has_tokens;
             if need_change && remainder > 0 && remainder < MIN_BOX_VALUE {
                 return Err(UtxoManagementError::ChangeBelowMin {
@@ -257,7 +224,6 @@ pub fn build_split_tx(
                 });
             }
             if has_tokens && remainder < MIN_BOX_VALUE {
-                // Need at least MIN_BOX_VALUE for the change box that holds tokens
                 return Err(UtxoManagementError::InsufficientErg {
                     have: total_erg,
                     need: split_total + TX_FEE + MIN_BOX_VALUE,
@@ -266,7 +232,6 @@ pub fn build_split_tx(
 
             let mut outputs = Vec::with_capacity(count + 2);
 
-            // N split outputs (ERG only, no tokens)
             for _ in 0..count {
                 outputs.push(Eip12Output {
                     value: amount_per_box.to_string(),
@@ -277,7 +242,6 @@ pub fn build_split_tx(
                 });
             }
 
-            // Change output (if needed)
             if need_change && (remainder > 0 || has_tokens) {
                 let change_assets: Vec<Eip12Asset> = token_totals
                     .into_iter()
@@ -298,7 +262,6 @@ pub fn build_split_tx(
                 });
             }
 
-            // Fee output
             outputs.push(Eip12Output::fee(TX_FEE, current_height));
 
             let unsigned_tx = Eip12UnsignedTx {
@@ -337,7 +300,6 @@ pub fn build_split_tx(
             let total_token_needed = *amount_per_box * count as u64;
             let erg_for_splits = *erg_per_box * count as i64;
 
-            // Sum total of this token across inputs
             let total_token: u64 = user_inputs
                 .iter()
                 .flat_map(|b| b.assets.iter())
@@ -353,7 +315,6 @@ pub fn build_split_tx(
                 });
             }
 
-            // ERG needed: splits + fee + change box
             let min_erg = erg_for_splits + TX_FEE + MIN_BOX_VALUE;
             if total_erg < min_erg {
                 return Err(UtxoManagementError::InsufficientErg {
@@ -364,7 +325,6 @@ pub fn build_split_tx(
 
             let change_erg = total_erg - erg_for_splits - TX_FEE;
 
-            // Aggregate all tokens for change calculation
             let mut token_totals: HashMap<String, u64> = HashMap::new();
             for input in user_inputs {
                 for asset in &input.assets {
@@ -373,7 +333,6 @@ pub fn build_split_tx(
                 }
             }
 
-            // Subtract the tokens going to split outputs
             if let Some(balance) = token_totals.get_mut(token_id) {
                 *balance = balance.saturating_sub(total_token_needed);
                 if *balance == 0 {
@@ -383,7 +342,6 @@ pub fn build_split_tx(
 
             let mut outputs = Vec::with_capacity(count + 2);
 
-            // N split outputs, each with token + ERG
             for _ in 0..count {
                 outputs.push(Eip12Output {
                     value: erg_per_box.to_string(),
@@ -394,7 +352,6 @@ pub fn build_split_tx(
                 });
             }
 
-            // Change output with remaining ERG + remaining tokens
             let change_assets: Vec<Eip12Asset> = token_totals
                 .into_iter()
                 .map(|(id, amt)| Eip12Asset::new(id, amt as i64))
@@ -408,7 +365,6 @@ pub fn build_split_tx(
                 additional_registers: HashMap::new(),
             });
 
-            // Fee output
             outputs.push(Eip12Output::fee(TX_FEE, current_height));
 
             let unsigned_tx = Eip12UnsignedTx {
@@ -430,10 +386,6 @@ pub fn build_split_tx(
         }
     }
 }
-
-// =============================================================================
-// Tests
-// =============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -461,10 +413,6 @@ mod tests {
         }
     }
 
-    // =========================================================================
-    // Consolidate tests
-    // =========================================================================
-
     #[test]
     fn test_consolidate_two_boxes() {
         let inputs = vec![
@@ -479,7 +427,6 @@ mod tests {
         assert_eq!(result.summary.token_count, 0);
         assert_eq!(result.summary.miner_fee, TX_FEE);
 
-        // 2 outputs: change + fee
         assert_eq!(result.unsigned_tx.outputs.len(), 2);
         assert_eq!(result.unsigned_tx.outputs[0].ergo_tree, USER_TREE);
         assert_eq!(
@@ -578,10 +525,6 @@ mod tests {
         assert_eq!(b, 30);
     }
 
-    // =========================================================================
-    // Split ERG tests
-    // =========================================================================
-
     #[test]
     fn test_split_erg_basic() {
         let inputs = vec![mock_input("box1", 10_000_000_000, vec![])];
@@ -595,7 +538,6 @@ mod tests {
         assert_eq!(result.summary.total_split, "5000000000");
         assert_eq!(result.summary.miner_fee, TX_FEE);
 
-        // 5 split + 1 change + 1 fee = 7 outputs
         assert_eq!(result.unsigned_tx.outputs.len(), 7);
         for i in 0..5 {
             assert_eq!(result.unsigned_tx.outputs[i].value, "1000000000");
@@ -632,7 +574,7 @@ mod tests {
     fn test_split_erg_below_min() {
         let inputs = vec![mock_input("box1", 10_000_000_000, vec![])];
         let mode = SplitMode::Erg {
-            amount_per_box: 500_000, // below MIN_BOX_VALUE
+            amount_per_box: 500_000,
         };
         let err = build_split_tx(&inputs, &mode, 3, USER_TREE, 50000).unwrap_err();
         match err {
@@ -649,12 +591,10 @@ mod tests {
         };
         let result = build_split_tx(&inputs, &mode, 3, USER_TREE, 50000).unwrap();
 
-        // Split outputs should not have tokens
         for i in 0..3 {
             assert!(result.unsigned_tx.outputs[i].assets.is_empty());
         }
 
-        // Change output should have the token
         let change = &result.unsigned_tx.outputs[3];
         assert_eq!(change.assets.len(), 1);
         assert_eq!(change.assets[0].token_id, TOKEN_A);
@@ -700,10 +640,6 @@ mod tests {
         }
     }
 
-    // =========================================================================
-    // Split Token tests
-    // =========================================================================
-
     #[test]
     fn test_split_token_basic() {
         let inputs = vec![mock_input("box1", 10_000_000_000, vec![(TOKEN_A, 1000)])];
@@ -718,7 +654,6 @@ mod tests {
         assert_eq!(result.summary.amount_per_box, "100");
         assert_eq!(result.summary.total_split, "300");
 
-        // 3 split + 1 change + 1 fee = 5 outputs
         assert_eq!(result.unsigned_tx.outputs.len(), 5);
         for i in 0..3 {
             assert_eq!(result.unsigned_tx.outputs[i].value, "1000000");
@@ -727,7 +662,6 @@ mod tests {
             assert_eq!(result.unsigned_tx.outputs[i].assets[0].amount, "100");
         }
 
-        // Change should have remaining tokens
         let change = &result.unsigned_tx.outputs[3];
         let remaining: u64 = change
             .assets
@@ -735,7 +669,7 @@ mod tests {
             .filter(|a| a.token_id == TOKEN_A)
             .map(|a| a.amount.parse::<u64>().unwrap())
             .sum();
-        assert_eq!(remaining, 700); // 1000 - 300
+        assert_eq!(remaining, 700);
     }
 
     #[test]
@@ -752,13 +686,11 @@ mod tests {
         };
         let result = build_split_tx(&inputs, &mode, 3, USER_TREE, 50000).unwrap();
 
-        // Split outputs should only have TOKEN_A
         for i in 0..3 {
             assert_eq!(result.unsigned_tx.outputs[i].assets.len(), 1);
             assert_eq!(result.unsigned_tx.outputs[i].assets[0].token_id, TOKEN_A);
         }
 
-        // Change should have remaining TOKEN_A + all TOKEN_B
         let change = &result.unsigned_tx.outputs[3];
         let remaining_a: u64 = change
             .assets
@@ -772,7 +704,7 @@ mod tests {
             .filter(|a| a.token_id == TOKEN_B)
             .map(|a| a.amount.parse::<u64>().unwrap())
             .sum();
-        assert_eq!(remaining_a, 400); // 1000 - 600
+        assert_eq!(remaining_a, 400);
         assert_eq!(remaining_b, 500);
     }
 
@@ -831,7 +763,7 @@ mod tests {
         let mode = SplitMode::Token {
             token_id: TOKEN_A.to_string(),
             amount_per_box: 100,
-            erg_per_box: 500_000, // below MIN_BOX_VALUE
+            erg_per_box: 500_000,
         };
         let err = build_split_tx(&inputs, &mode, 3, USER_TREE, 50000).unwrap_err();
         match err {
@@ -842,7 +774,6 @@ mod tests {
 
     #[test]
     fn test_split_erg_exact_no_change() {
-        // total = split_total + fee, no remainder, no tokens
         let total = 3_000_000_000 + TX_FEE;
         let inputs = vec![mock_input("box1", total, vec![])];
         let mode = SplitMode::Erg {
@@ -851,7 +782,6 @@ mod tests {
         let result = build_split_tx(&inputs, &mode, 3, USER_TREE, 50000).unwrap();
 
         assert_eq!(result.summary.change_erg, 0);
-        // 3 split + 1 fee = 4 outputs (no change)
         assert_eq!(result.unsigned_tx.outputs.len(), 4);
     }
 }

@@ -1,7 +1,8 @@
-use citadel_api::dto::{MintSignRequest, MintSignResponse, MintTxStatusResponse};
 use citadel_api::AppState;
 use serde::Serialize;
 use tauri::State;
+
+use super::StrErr;
 
 /// Response for building a burn transaction
 #[derive(Debug, Serialize)]
@@ -51,7 +52,7 @@ pub async fn build_burn_tx(
         &user_ergo_tree,
         current_height,
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize tx: {}", e))?;
@@ -118,7 +119,7 @@ pub async fn build_multi_burn_tx(
 
     // Select inputs covering all required tokens + ERG for fees
     let selected = ergo_tx::select_multi_token_boxes(&inputs, &required_tokens, min_erg)
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     // Convert to BurnItem for the builder
     let burn_items: Vec<ergo_tx::BurnItem> = parsed_items
@@ -135,7 +136,7 @@ pub async fn build_multi_burn_tx(
         &user_ergo_tree,
         current_height,
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize tx: {}", e))?;
@@ -156,28 +157,3 @@ pub async fn build_multi_burn_tx(
     })
 }
 
-/// Start ErgoPay signing flow for a burn transaction
-#[tauri::command]
-pub async fn start_burn_sign(
-    state: State<'_, AppState>,
-    unsigned_tx: serde_json::Value,
-    message: String,
-) -> Result<MintSignResponse, String> {
-    super::start_mint_sign(
-        state,
-        MintSignRequest {
-            unsigned_tx,
-            message,
-        },
-    )
-    .await
-}
-
-/// Get status of a burn transaction signing request
-#[tauri::command]
-pub async fn get_burn_tx_status(
-    state: State<'_, AppState>,
-    request_id: String,
-) -> Result<MintTxStatusResponse, String> {
-    super::get_mint_tx_status(state, request_id).await
-}

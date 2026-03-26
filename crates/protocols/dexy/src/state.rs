@@ -182,52 +182,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_bank_box_data() {
-        let bank = DexyBankBoxData {
-            box_id: "bank123".to_string(),
-            erg_value: 1_000_000_000_000,
-            dexy_tokens: 1_000_000,
-            ergo_tree: "tree".to_string(),
-        };
-        assert_eq!(bank.box_id, "bank123");
-        assert_eq!(bank.erg_value, 1_000_000_000_000);
-    }
-
-    #[test]
-    fn test_oracle_box_data() {
-        let oracle = DexyOracleBoxData {
-            box_id: "oracle456".to_string(),
-            rate_nano: 1_000_000_000,
-        };
-        assert_eq!(oracle.box_id, "oracle456");
-        assert_eq!(oracle.rate_nano, 1_000_000_000);
-    }
-
-    #[test]
-    fn test_lp_box_data() {
-        let lp = DexyLpBoxData {
-            box_id: "lp789".to_string(),
-            erg_reserves: 500_000_000_000,
-            dexy_reserves: 500_000,
-            lp_token_reserves: 0,
-        };
-        assert_eq!(lp.box_id, "lp789");
-        assert_eq!(lp.erg_reserves, 500_000_000_000);
-    }
-
-    #[test]
-    fn test_free_mint_box_data() {
-        let free_mint = DexyFreeMintBoxData {
-            box_id: "freemint123".to_string(),
-            reset_height: 1_000_000,
-            available: 50_000,
-        };
-        assert_eq!(free_mint.box_id, "freemint123");
-        assert_eq!(free_mint.reset_height, 1_000_000);
-        assert_eq!(free_mint.available, 50_000);
-    }
-
-    #[test]
     fn test_dexy_state_from_boxes() {
         let bank = DexyBankBoxData {
             box_id: "bank123".to_string(),

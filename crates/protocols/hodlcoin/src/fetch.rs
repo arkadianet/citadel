@@ -1,7 +1,3 @@
-//! Bank Discovery and Fetching
-//!
-//! Functions for discovering HodlCoin banks from the Ergo node.
-
 use ergo_lib::ergotree_ir::chain::ergo_box::{ErgoBox, NonMandatoryRegisterId};
 use ergo_tx::ergo_box_utils::read_register_long;
 
@@ -9,7 +5,6 @@ use crate::calculator;
 use crate::constants::{self, FEE_DENOM};
 use crate::state::{HodlBankState, HodlError};
 
-/// Parse a bank box into HodlBankState
 pub fn parse_bank_box(ergo_box: &ErgoBox) -> Result<HodlBankState, HodlError> {
     let tokens = ergo_box
         .tokens
@@ -23,7 +18,6 @@ pub fn parse_bank_box(ergo_box: &ErgoBox) -> Result<HodlBankState, HodlError> {
         )));
     }
 
-    // tokens[0] = singleton NFT (qty=1)
     let singleton = tokens
         .get(constants::bank_tokens::SINGLETON)
         .ok_or_else(|| {
@@ -38,18 +32,15 @@ pub fn parse_bank_box(ergo_box: &ErgoBox) -> Result<HodlBankState, HodlError> {
         )));
     }
 
-    // tokens[1] = hodlToken
     let hodl_token = tokens
         .get(constants::bank_tokens::HODL_TOKEN)
         .ok_or_else(|| HodlError::InvalidLayout("missing hodl token at index 1".to_string()))?;
     let hodl_token_id = hex::encode(hodl_token.token_id.as_ref());
     let hodl_tokens_in_bank = u64::from(hodl_token.amount) as i64;
 
-    // Box value = reserve nanoERG
     let reserve_nano_erg = u64::from(ergo_box.value) as i64;
     let bank_box_id = hex::encode(ergo_box.box_id().as_ref());
 
-    // Read registers
     let total_token_supply = read_register_long(ergo_box, NonMandatoryRegisterId::R4)
         .ok_or_else(|| HodlError::InvalidLayout("missing R4 (total supply)".to_string()))?;
 
@@ -65,7 +56,6 @@ pub fn parse_bank_box(ergo_box: &ErgoBox) -> Result<HodlBankState, HodlError> {
     let bank_fee_num = read_register_long(ergo_box, NonMandatoryRegisterId::R8)
         .ok_or_else(|| HodlError::InvalidLayout("missing R8 (bank fee)".to_string()))?;
 
-    // Derived state
     let circulating_supply = total_token_supply - hodl_tokens_in_bank;
 
     let price_nano_per_hodl = if circulating_supply > 0 {
@@ -100,7 +90,6 @@ pub fn parse_bank_box(ergo_box: &ErgoBox) -> Result<HodlBankState, HodlError> {
     })
 }
 
-/// Discover all hodlERG banks from the node
 pub async fn discover_banks(
     node: &ergo_node_client::NodeClient,
 ) -> Result<Vec<HodlBankState>, HodlError> {
@@ -120,7 +109,6 @@ pub async fn discover_banks(
         }
     }
 
-    // Resolve hodlToken names
     for bank in &mut banks {
         match node.get_token_info(&bank.hodl_token_id).await {
             Ok(info) => {
@@ -136,10 +124,8 @@ pub async fn discover_banks(
         }
     }
 
-    // Filter out test/abandoned banks with negligible TVL
     banks.retain(|b| b.tvl_nano_erg >= constants::MIN_DISPLAY_TVL);
 
-    // Sort by TVL descending
     banks.sort_by(|a, b| b.tvl_nano_erg.cmp(&a.tvl_nano_erg));
 
     tracing::info!("Discovered {} HodlCoin banks", banks.len());
@@ -159,7 +145,6 @@ mod tests {
     use ergo_lib::ergotree_ir::types::stype::SType;
     use std::convert::TryFrom;
 
-    /// Simple P2PK ErgoTree for tests
     fn test_ergo_tree() -> ErgoTree {
         let hex = "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
         let bytes = hex::decode(hex).unwrap();
@@ -177,7 +162,6 @@ mod tests {
         }
     }
 
-    /// Build a valid hodlcoin bank box with the specified parameters
     fn make_bank_box(
         value_nano: u64,
         singleton_amount: u64,
@@ -241,24 +225,17 @@ mod tests {
         assert_eq!(state.reserve_nano_erg, reserve as i64);
         assert_eq!(state.tvl_nano_erg, reserve as i64);
 
-        // Derived: circulating = total - in_bank = 1B - 900M = 100M
         let expected_circulating = total_supply - hodl_in_bank as i64;
         assert_eq!(state.circulating_supply, expected_circulating);
 
-        // Fee percentages
         let expected_total_fee = (dev_fee + bank_fee) as f64 / FEE_DENOM as f64 * 100.0;
         assert!((state.total_fee_pct - expected_total_fee).abs() < 0.001);
         assert!((state.dev_fee_pct - 3.0).abs() < 0.001);
         assert!((state.bank_fee_pct - 2.0).abs() < 0.001);
 
-        // Price should be positive when circulating > 0
         assert!(state.price_nano_per_hodl > 0.0);
-
-        // Token IDs should be hex encoded
         assert_eq!(state.singleton_token_id.len(), 64);
         assert_eq!(state.hodl_token_id.len(), 64);
-
-        // hodl_token_name should be None (resolved later)
         assert!(state.hodl_token_name.is_none());
     }
 
@@ -296,7 +273,6 @@ mod tests {
             long_constant(20),
         ];
 
-        // Singleton with quantity 2 instead of 1
         let ergo_box = make_bank_box(1_000_000_000, 2, 900_000_000, regs);
         let result = parse_bank_box(&ergo_box);
         assert!(result.is_err());
@@ -310,7 +286,6 @@ mod tests {
 
     #[test]
     fn parse_bank_box_missing_r4() {
-        // No registers at all
         let singleton_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         let hodl_id = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
@@ -349,7 +324,6 @@ mod tests {
 
     #[test]
     fn parse_bank_box_missing_r7() {
-        // Only provide R4, R5, R6 (missing R7 dev fee and R8 bank fee)
         let regs = vec![
             long_constant(1_000_000_000),
             long_constant(1_000_000),
@@ -369,7 +343,6 @@ mod tests {
 
     #[test]
     fn parse_bank_box_zero_circulating() {
-        // All tokens still in bank (none minted), so circulating = 0
         let total_supply: i64 = 1_000_000_000;
         let hodl_in_bank: u64 = total_supply as u64;
 

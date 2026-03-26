@@ -22,12 +22,6 @@ pub struct ProtocolInteraction {
     pub token_amount_change: i64,
 }
 
-/// Trace a bank NFT backwards through the chain to find recent interactions.
-///
-/// Starting from the current bank box, we follow the chain of transactions
-/// backwards: each bank box was created by a transaction whose input contained
-/// the previous bank box. By comparing the ERG and token values between
-/// successive bank boxes, we can classify each interaction as mint or redeem.
 async fn trace_bank_nft(
     client: &NodeClient,
     bank_box_id: &str,
@@ -40,7 +34,6 @@ async fn trace_bank_nft(
     let mut current_box_id = bank_box_id.to_string();
 
     for _ in 0..count {
-        // Get the current bank box to find which tx created it
         let current_box = match client.get_blockchain_box_by_id(&current_box_id).await {
             Ok(b) => b,
             Err(_) => break,
@@ -71,7 +64,6 @@ async fn trace_bank_nft(
             })
             .unwrap_or_default();
 
-        // Get the transaction to find the previous bank box (in inputs)
         let tx = match client.get_transaction_by_id(&tx_id).await {
             Ok(t) => t,
             Err(_) => break,
@@ -80,14 +72,12 @@ async fn trace_bank_nft(
         let timestamp = tx["timestamp"].as_u64().unwrap_or(0);
         let height = tx["inclusionHeight"].as_u64().unwrap_or(current_height);
 
-        // Find which input had the bank NFT by checking each input box
         let mut found_prev_box: Option<serde_json::Value> = None;
         let mut found_prev_box_id: Option<String> = None;
 
         if let Some(inputs) = tx["inputs"].as_array() {
             for input in inputs {
                 if let Some(input_box_id) = input["boxId"].as_str() {
-                    // Skip if this is the current box (shouldn't be an input)
                     if input_box_id == current_box_id {
                         continue;
                     }
@@ -128,10 +118,8 @@ async fn trace_bank_nft(
             })
             .unwrap_or_default();
 
-        // Compare old vs new bank box to classify the interaction
         let erg_change = current_value - prev_value;
 
-        // Check each tracked token for changes
         for (token_id, token_name) in token_ids {
             let prev_amt = prev_tokens
                 .iter()
@@ -163,7 +151,6 @@ async fn trace_bank_nft(
             }
         }
 
-        // If no token change was detected but ERG changed, record it as generic
         if results.last().map(|r| &r.tx_id) != Some(&tx_id) && erg_change != 0 {
             let operation = if erg_change > 0 { "mint" } else { "redeem" };
             results.push(ProtocolInteraction {
@@ -181,7 +168,6 @@ async fn trace_bank_nft(
             });
         }
 
-        // Move to the previous bank box for the next iteration
         current_box_id = match found_prev_box_id {
             Some(id) => id,
             None => break,
@@ -191,12 +177,6 @@ async fn trace_bank_nft(
     results
 }
 
-/// Trace an LP pool NFT backwards through the chain to find recent swap/deposit/redeem activity.
-///
-/// Classifies each LP box transition:
-/// - ERG up + Dexy down (or vice versa) = swap
-/// - ERG up + Dexy up + LP tokens decrease = deposit (add liquidity)
-/// - ERG down + Dexy down + LP tokens increase = redeem (remove liquidity)
 async fn trace_lp_pool(
     client: &NodeClient,
     lp_box_id: &str,
@@ -254,7 +234,6 @@ async fn trace_lp_pool(
         let timestamp = tx["timestamp"].as_u64().unwrap_or(0);
         let height = tx["inclusionHeight"].as_u64().unwrap_or(current_height);
 
-        // Find which input had the LP NFT
         let mut found_prev_box: Option<serde_json::Value> = None;
         let mut found_prev_box_id: Option<String> = None;
 
@@ -292,7 +271,6 @@ async fn trace_lp_pool(
         let dexy_change = current_dexy - prev_dexy;
         let lp_change = current_lp - prev_lp;
 
-        // Classify the operation
         let (operation, erg_reported, token_reported) =
             if lp_change < 0 && erg_change > 0 && dexy_change > 0 {
                 // LP tokens left pool (distributed to user) + both reserves increased = deposit
@@ -335,12 +313,6 @@ async fn trace_lp_pool(
     results
 }
 
-/// Trace recent AMM (Spectrum DEX) pool activity across all N2T pools.
-///
-/// Discovers all N2T pools, traces each pool's NFT backwards to find the
-/// most recent swap/deposit/redeem interaction, resolves token names for
-/// display, and returns merged results.  Limits concurrency to avoid
-/// exhausting file descriptors on the node connection.
 async fn trace_amm_pools(client: &NodeClient, count: usize) -> Vec<ProtocolInteraction> {
     use futures::stream::{self, StreamExt};
 
@@ -352,8 +324,6 @@ async fn trace_amm_pools(client: &NodeClient, count: usize) -> Vec<ProtocolInter
         }
     };
 
-    // Trace each N2T pool's NFT backwards (depth=1 per pool = most recent interaction).
-    // Collect futures first, then use buffer_unordered to cap concurrent node requests.
     let futs: Vec<_> = pools
         .iter()
         .filter(|p| p.pool_type == PoolType::N2T)
@@ -385,11 +355,9 @@ async fn trace_amm_pools(client: &NodeClient, count: usize) -> Vec<ProtocolInter
         .collect()
         .await;
 
-    // Keep only the most recent entries to limit name resolution calls
     results.sort_by(|a, b| b.height.cmp(&a.height));
     results.truncate(count);
 
-    // Resolve token names for the tokens in the truncated results
     let unique_ids: std::collections::HashSet<String> =
         results.iter().map(|r| r.token.clone()).collect();
     let mut name_map: std::collections::HashMap<String, String> =
@@ -412,38 +380,27 @@ async fn trace_amm_pools(client: &NodeClient, count: usize) -> Vec<ProtocolInter
     results
 }
 
-/// Get recent protocol interactions by tracing bank NFTs
 #[tauri::command]
 pub async fn get_protocol_activity(
     state: State<'_, AppState>,
     count: u64,
 ) -> Result<Vec<ProtocolInteraction>, String> {
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
     let config = state.config().await;
 
-    // Get SigmaUSD state
     let nft_ids =
         NftIds::for_network(config.network).ok_or_else(|| "SigmaUSD not available".to_string())?;
     let sigma_state = fetch_sigmausd_state(&client, &capabilities, &nft_ids)
         .await
         .map_err(|e| format!("Failed to fetch SigmaUSD state: {}", e))?;
 
-    // Get Dexy states
     let dexy_gold_ids = DexyIds::for_variant(DexyVariant::Gold, config.network);
     let dexy_usd_ids = DexyIds::for_variant(DexyVariant::Usd, config.network);
 
     let count = count as usize;
 
-    // Trace SigmaUSD bank NFT
     let sigma_fut = {
         let client = &client;
         let bank_box_id = sigma_state.bank_box_id.clone();
@@ -465,7 +422,6 @@ pub async fn get_protocol_activity(
         }
     };
 
-    // Trace Dexy Gold bank NFT
     let dexy_gold_fut = async {
         if let Some(ids) = &dexy_gold_ids {
             let dexy_state = match fetch_dexy_state(&client, &capabilities, ids).await {
@@ -487,7 +443,6 @@ pub async fn get_protocol_activity(
         }
     };
 
-    // Trace Dexy USD bank NFT
     let dexy_usd_fut = async {
         if let Some(ids) = &dexy_usd_ids {
             let dexy_state = match fetch_dexy_state(&client, &capabilities, ids).await {
@@ -509,7 +464,6 @@ pub async fn get_protocol_activity(
         }
     };
 
-    // Trace Dexy LP pool NFTs for swap/deposit/redeem activity
     let dexy_gold_lp_fut = async {
         if let Some(ids) = &dexy_gold_ids {
             let dexy_state = match fetch_dexy_state(&client, &capabilities, ids).await {
@@ -554,10 +508,8 @@ pub async fn get_protocol_activity(
         }
     };
 
-    // Trace AMM (Spectrum DEX) pools for swap/deposit/redeem activity
     let amm_fut = trace_amm_pools(&client, count);
 
-    // Run all traces concurrently
     let (sigma_activity, dexy_gold_activity, dexy_usd_activity, gold_lp, usd_lp, amm_activity) =
         tokio::join!(
             sigma_fut,
@@ -568,7 +520,6 @@ pub async fn get_protocol_activity(
             amm_fut
         );
 
-    // Merge and sort by height descending
     let mut all: Vec<ProtocolInteraction> = Vec::new();
     all.extend(sigma_activity);
     all.extend(dexy_gold_activity);
@@ -582,21 +533,13 @@ pub async fn get_protocol_activity(
     Ok(all)
 }
 
-/// Get recent Dexy protocol interactions by tracing bank NFTs (mint/redeem) and LP pool NFTs (swap/deposit/redeem).
 #[tauri::command]
 pub async fn get_dexy_activity(
     state: State<'_, AppState>,
     count: u64,
 ) -> Result<Vec<ProtocolInteraction>, String> {
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
     let config = state.config().await;
 
@@ -605,7 +548,6 @@ pub async fn get_dexy_activity(
 
     let count = count as usize;
 
-    // Trace bank NFTs for mint/redeem
     let dexy_gold_bank_fut = async {
         if let Some(ids) = &dexy_gold_ids {
             let dexy_state = match fetch_dexy_state(&client, &capabilities, ids).await {
@@ -648,7 +590,6 @@ pub async fn get_dexy_activity(
         }
     };
 
-    // Trace LP pool NFTs for swap/deposit/redeem
     let dexy_gold_lp_fut = async {
         if let Some(ids) = &dexy_gold_ids {
             let dexy_state = match fetch_dexy_state(&client, &capabilities, ids).await {
@@ -711,21 +652,13 @@ pub async fn get_dexy_activity(
     Ok(all)
 }
 
-/// Get recent SigmaUSD-only protocol interactions by tracing the SigmaUSD bank NFT
 #[tauri::command]
 pub async fn get_sigmausd_activity(
     state: State<'_, AppState>,
     count: u64,
 ) -> Result<Vec<ProtocolInteraction>, String> {
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
     let config = state.config().await;
 

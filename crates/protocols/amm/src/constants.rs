@@ -46,6 +46,29 @@ pub mod fees {
     pub const DEFAULT_FEE_DENOM: i32 = 1000;
 }
 
+/// Parse fee numerator from a pool box's R4 register hex.
+///
+/// Returns `DEFAULT_FEE_NUM` if R4 is missing or not an Int.
+pub fn parse_fee_num_from_r4(
+    registers: &std::collections::HashMap<String, String>,
+) -> Result<i32, crate::AmmError> {
+    use ergo_lib::ergotree_ir::mir::constant::{Constant, Literal};
+    use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
+
+    let r4_hex = match registers.get("R4") {
+        Some(hex) => hex,
+        None => return Ok(fees::DEFAULT_FEE_NUM),
+    };
+    let r4_bytes = hex::decode(r4_hex)
+        .map_err(|e| crate::AmmError::TxBuildError(format!("Invalid R4 hex: {}", e)))?;
+    let constant = Constant::sigma_parse_bytes(&r4_bytes)
+        .map_err(|e| crate::AmmError::TxBuildError(format!("Failed to parse R4 constant: {}", e)))?;
+    match &constant.v {
+        Literal::Int(v) => Ok(*v),
+        _ => Ok(fees::DEFAULT_FEE_NUM),
+    }
+}
+
 /// LP token constants
 pub mod lp {
     /// Total LP token emission (max i64 value)

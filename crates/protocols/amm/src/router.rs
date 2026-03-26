@@ -12,21 +12,10 @@ use crate::calculator::{
 };
 use crate::state::{AmmPool, PoolType};
 
-/// Sentinel token ID for ERG in the pool graph.
 pub const ERG_TOKEN_ID: &str = "ERG";
-
-/// Minimum ERG reserves (nanoERG) for a pool to be included in routing.
-/// 10 ERG = 10_000_000_000 nanoERG.
-pub const DEFAULT_MIN_LIQUIDITY_NANO: u64 = 10_000_000_000;
-
-/// Default maximum pools retained per directed token pair to bound path search.
+pub const DEFAULT_MIN_LIQUIDITY_NANO: u64 = 10_000_000_000; // 10 ERG
 pub const DEFAULT_MAX_POOLS_PER_PAIR: usize = 3;
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/// An edge in the pool graph connecting two tokens via a specific pool.
 #[derive(Debug, Clone)]
 pub struct PoolEdge {
     pub pool: AmmPool,
@@ -36,14 +25,12 @@ pub struct PoolEdge {
     pub reserves_out: u64,
 }
 
-/// Adjacency-list pool graph.
 #[derive(Debug, Clone)]
 pub struct PoolGraph {
     pub adjacency: HashMap<String, Vec<PoolEdge>>,
     pub pool_count: usize,
 }
 
-/// A single hop in a swap route.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RouteHop {
     pub pool_id: String,
@@ -65,7 +52,6 @@ pub struct RouteHop {
     pub reserves_out: u64,
 }
 
-/// A complete route from source token to target token.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Route {
     pub hops: Vec<RouteHop>,
@@ -76,7 +62,6 @@ pub struct Route {
     pub effective_rate: f64,
 }
 
-/// Quoted route with slippage-adjusted minimum output.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RouteQuote {
     pub route: Route,
@@ -84,7 +69,6 @@ pub struct RouteQuote {
     pub slippage_percent: f64,
 }
 
-/// Split allocation across multiple routes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SplitAllocation {
     pub route_index: usize,
@@ -93,7 +77,6 @@ pub struct SplitAllocation {
     pub output_amount: u64,
 }
 
-/// Optimal split across parallel routes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SplitRoute {
     pub allocations: Vec<SplitAllocation>,
@@ -101,7 +84,6 @@ pub struct SplitRoute {
     pub total_input: u64,
 }
 
-/// Split allocation with full route details for UI display.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SplitAllocationDetail {
     pub route: Route,
@@ -110,7 +92,6 @@ pub struct SplitAllocationDetail {
     pub output_amount: u64,
 }
 
-/// Optimal split with full route details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SplitRouteDetail {
     pub allocations: Vec<SplitAllocationDetail>,
@@ -120,7 +101,6 @@ pub struct SplitRouteDetail {
     pub improvement_pct: f64,
 }
 
-/// Liquidity depth tiers for a pool edge.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DepthTiers {
     pub pool_id: String,
@@ -130,20 +110,15 @@ pub struct DepthTiers {
     pub tiers: Vec<(f64, u64)>,
 }
 
-// ---------------------------------------------------------------------------
-// Step 1: Pool Graph & Path Finding
-// ---------------------------------------------------------------------------
-
 /// Build a pool graph from discovered pools.
 ///
-/// N2T pools add edges ERG ↔ token_y. T2T pools add edges token_x ↔ token_y.
+/// N2T pools add edges ERG <-> token_y. T2T pools add edges token_x <-> token_y.
 /// Pools below `min_liquidity_nano` are excluded. Per directed pair, only the
 /// top pools by reserves are retained to bound the search space.
 pub fn build_pool_graph(pools: &[AmmPool], min_liquidity_nano: u64) -> PoolGraph {
     build_pool_graph_with_limit(pools, min_liquidity_nano, DEFAULT_MAX_POOLS_PER_PAIR)
 }
 
-/// Build a pool graph with custom per-pair limit.
 pub fn build_pool_graph_with_limit(
     pools: &[AmmPool],
     min_liquidity_nano: u64,
@@ -164,7 +139,6 @@ pub fn build_pool_graph_with_limit(
                     continue;
                 }
 
-                // ERG -> token_y
                 adjacency
                     .entry(ERG_TOKEN_ID.to_string())
                     .or_default()
@@ -176,7 +150,6 @@ pub fn build_pool_graph_with_limit(
                         reserves_out: token_reserves,
                     });
 
-                // token_y -> ERG
                 adjacency
                     .entry(pool.token_y.token_id.clone())
                     .or_default()
@@ -199,7 +172,6 @@ pub fn build_pool_graph_with_limit(
                     continue;
                 }
 
-                // token_x -> token_y
                 adjacency
                     .entry(token_x.token_id.clone())
                     .or_default()
@@ -211,7 +183,6 @@ pub fn build_pool_graph_with_limit(
                         reserves_out: pool.token_y.amount,
                     });
 
-                // token_y -> token_x
                 adjacency
                     .entry(pool.token_y.token_id.clone())
                     .or_default()
@@ -228,9 +199,7 @@ pub fn build_pool_graph_with_limit(
         }
     }
 
-    // Prune: keep top N per (token_in, token_out) pair by reserves
     for edges in adjacency.values_mut() {
-        // Group by token_out, sort each group by reserves_in desc, truncate
         let mut by_target: HashMap<&str, Vec<usize>> = HashMap::new();
         for (i, edge) in edges.iter().enumerate() {
             by_target.entry(&edge.token_out).or_default().push(i);
@@ -259,10 +228,7 @@ pub fn build_pool_graph_with_limit(
     }
 }
 
-/// Find all acyclic paths from `source_token` to `target_token`, up to `max_hops`.
-///
-/// Uses BFS with visited-token tracking. No token is revisited and no pool_id
-/// is used more than once in a path.
+/// BFS for all acyclic paths up to `max_hops`. No token or pool_id reused within a path.
 pub fn find_paths(
     graph: &PoolGraph,
     source_token: &str,
@@ -286,18 +252,15 @@ pub fn find_paths(
     while let Some((current, path, visited, used_pools)) = queue.pop_front() {
         if let Some(edges) = graph.adjacency.get(current.as_str()) {
             for edge in edges {
-                // Skip if pool already used in this path
                 if used_pools.contains(&edge.pool.pool_id) {
                     continue;
                 }
 
                 if edge.token_out == target_token {
-                    // Found a complete path
                     let mut complete_path = path.clone();
                     complete_path.push(edge.clone());
                     results.push(complete_path);
                 } else if path.len() + 1 < max_hops && !visited.contains(&edge.token_out) {
-                    // Continue searching
                     let mut new_visited = visited.clone();
                     new_visited.insert(edge.token_out.clone());
                     let mut new_pools = used_pools.clone();
@@ -313,13 +276,7 @@ pub fn find_paths(
     results
 }
 
-// ---------------------------------------------------------------------------
-// Step 2: Multi-Hop Quoting
-// ---------------------------------------------------------------------------
-
-/// Quote a route by chaining `calculate_output` through each hop.
-///
-/// Returns `None` if any hop produces zero output (insufficient liquidity).
+/// Chain `calculate_output` through each hop. Returns `None` if any hop yields zero.
 pub fn quote_route(path: &[PoolEdge], input_amount: u64) -> Option<Route> {
     if path.is_empty() || input_amount == 0 {
         return None;
@@ -381,7 +338,7 @@ pub fn quote_route(path: &[PoolEdge], input_amount: u64) -> Option<Route> {
 
     let total_output = current_amount;
 
-    // End-to-end price impact: compare actual rate to the product of spot prices
+    // Compare actual rate to product of spot prices for end-to-end impact
     let spot_product: f64 = path
         .iter()
         .map(|e| e.reserves_out as f64 / e.reserves_in as f64)
@@ -405,7 +362,6 @@ pub fn quote_route(path: &[PoolEdge], input_amount: u64) -> Option<Route> {
     })
 }
 
-/// Find and quote all routes, returning the top `max_routes` ranked by output.
 pub fn find_best_routes(
     graph: &PoolGraph,
     source_token: &str,
@@ -426,7 +382,6 @@ pub fn find_best_routes(
     routes
 }
 
-/// Create a `RouteQuote` from a `Route` with slippage applied.
 pub fn make_route_quote(route: Route, slippage_percent: f64) -> RouteQuote {
     let min_output = apply_slippage(route.total_output, slippage_percent);
     RouteQuote {
@@ -436,20 +391,13 @@ pub fn make_route_quote(route: Route, slippage_percent: f64) -> RouteQuote {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Step 2b: Reverse Quoting ("I want X output")
-// ---------------------------------------------------------------------------
-
-/// Quote a route in reverse: given the desired output, calculate the required input.
-///
-/// Works backwards through the hops, using `calculate_input` at each step.
+/// Reverse quote: given desired output, walk hops backwards via `calculate_input`.
 /// Returns `None` if any hop is infeasible (output exceeds reserves).
 pub fn quote_route_reverse(path: &[PoolEdge], desired_output: u64) -> Option<Route> {
     if path.is_empty() || desired_output == 0 {
         return None;
     }
 
-    // Work backwards to find required input at each hop
     let mut required_amounts: Vec<(u64, u64)> = Vec::with_capacity(path.len());
     let mut needed = desired_output;
 
@@ -467,7 +415,6 @@ pub fn quote_route_reverse(path: &[PoolEdge], desired_output: u64) -> Option<Rou
 
     required_amounts.reverse();
 
-    // Now build hops forward with the calculated amounts
     let total_input = required_amounts[0].0;
     let mut hops = Vec::with_capacity(path.len());
     let mut total_fees: u64 = 0;
@@ -475,7 +422,6 @@ pub fn quote_route_reverse(path: &[PoolEdge], desired_output: u64) -> Option<Rou
     for (i, edge) in path.iter().enumerate() {
         let (input_amount, _) = required_amounts[i];
 
-        // Verify forward: calculate the actual output for this input
         let output = calculate_output(
             edge.reserves_in,
             edge.reserves_out,
@@ -551,7 +497,6 @@ pub fn quote_route_reverse(path: &[PoolEdge], desired_output: u64) -> Option<Rou
     })
 }
 
-/// Find best routes for a desired output amount, ranked by lowest input needed.
 pub fn find_best_routes_by_output(
     graph: &PoolGraph,
     source_token: &str,
@@ -567,20 +512,12 @@ pub fn find_best_routes_by_output(
         .filter_map(|path| quote_route_reverse(path, desired_output))
         .collect();
 
-    // Sort by total_input ascending (cheapest first)
     routes.sort_by(|a, b| a.total_input.cmp(&b.total_input));
     routes.truncate(max_routes);
     routes
 }
 
-// ---------------------------------------------------------------------------
-// Step 3: Split Optimization
-// ---------------------------------------------------------------------------
-
-/// Find optimal split across multiple routes to maximize total output.
-///
-/// Uses grid search with 1% step size. Only considers the top `max_splits`
-/// routes by single-route output.
+/// Grid-search optimal split across up to 3 routes to maximize total output.
 pub fn optimize_split(
     paths: &[Vec<PoolEdge>],
     total_input: u64,
@@ -589,7 +526,6 @@ pub fn optimize_split(
     let max_splits = max_splits.min(paths.len()).min(3);
 
     if max_splits <= 1 || paths.is_empty() {
-        // No splitting: 100% to the best single route
         let output = paths
             .first()
             .and_then(|p| quote_route(p, total_input))
@@ -692,21 +628,16 @@ fn optimize_split_multi(
     total_input: u64,
     max_splits: usize,
 ) -> SplitRoute {
-    // Start with equal split, then iterate (using permille = 0.1% steps)
     let n = max_splits.min(paths.len());
     let mut fractions: Vec<u64> = vec![1000 / n as u64; n];
-    // Distribute remainder to first route
     let remainder = 1000 - fractions.iter().sum::<u64>();
     fractions[0] += remainder;
 
-    // Iterative refinement: for each route, try adjusting its fraction
-    // Use 10-step increments (1%) in the multi-route case to keep iteration count bounded
     for _ in 0..5 {
         for i in 0..n {
             let mut best_output: u64 = 0;
             let mut best_frac: u64 = fractions[i];
 
-            // The pool of permille points available for route i
             let other_sum: u64 = fractions.iter().enumerate()
                 .filter(|&(j, _)| j != i)
                 .map(|(_, f)| f)
@@ -717,9 +648,7 @@ fn optimize_split_multi(
             for f in (0..=max_for_i).step_by(10) {
                 let mut test_fracs = fractions.clone();
                 test_fracs[i] = f;
-                // Redistribute the difference to maintain sum = 1000
                 let diff = max_for_i - f;
-                // Spread diff proportionally across others
                 if other_sum > 0 {
                     let mut remaining_diff = diff;
                     for j in 0..n {
@@ -760,14 +689,12 @@ fn optimize_split_multi(
         }
     }
 
-    // Normalize fractions to sum to 1000
     let sum: u64 = fractions.iter().sum();
     if sum != 1000 && sum > 0 {
         let scale = 1000.0 / sum as f64;
         for f in &mut fractions {
             *f = (*f as f64 * scale).round() as u64;
         }
-        // Adjust last to hit exactly 1000
         let new_sum: u64 = fractions.iter().sum();
         if new_sum != 1000 {
             let diff = 1000i64 - new_sum as i64;
@@ -804,13 +731,7 @@ fn optimize_split_multi(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Step 3b: Detailed Split with Route Info
-// ---------------------------------------------------------------------------
-
-/// Compute the optimal split and return full route details for each allocation.
-///
-/// Only returns a split if it improves on the best single route by > 0.5%.
+/// Optimal split with full route details. Only returned if > 0.5% better than best single route.
 pub fn optimize_split_detailed(
     graph: &PoolGraph,
     source_token: &str,
@@ -825,8 +746,6 @@ pub fn optimize_split_detailed(
         return None;
     }
 
-    // Compute the true best single-route output (unfiltered) as the baseline.
-    // The split must beat THIS to be worth showing, not just the filtered subset.
     let unfiltered_best: u64 = all_paths
         .iter()
         .filter_map(|p| quote_route(p, total_input).map(|r| r.total_output))
@@ -836,9 +755,7 @@ pub fn optimize_split_detailed(
         return None;
     }
 
-    // Filter by minimum effective rate (spot rate at 0.01 ERG probe).
-    // This excludes routes where the token trades below a price floor
-    // (e.g. below oracle price) even at small amounts.
+    // Exclude routes trading below price floor (e.g. below oracle price) at small amounts
     let paths: Vec<Vec<PoolEdge>> = if let Some((min_rate, target_decimals)) = min_rate_filter {
         let probe = 10_000_000u64; // 0.01 ERG
         all_paths
@@ -857,7 +774,6 @@ pub fn optimize_split_detailed(
         return None;
     }
 
-    // Quote each path to rank them
     let mut quoted: Vec<(usize, u64)> = paths
         .iter()
         .enumerate()
@@ -879,16 +795,14 @@ pub fn optimize_split_detailed(
 
     let split = optimize_split(&top_paths, total_input, max_splits);
 
-    // Compare against the unfiltered best route, not just the filtered subset.
     let improvement = (split.total_output as f64 - unfiltered_best as f64)
         / unfiltered_best as f64
         * 100.0;
 
     if improvement < 0.5 {
-        return None; // Not worth splitting
+        return None;
     }
 
-    // Build detailed allocations with full route info
     let mut allocations = Vec::new();
     for alloc in &split.allocations {
         if alloc.input_amount == 0 {
@@ -916,16 +830,9 @@ pub fn optimize_split_detailed(
     })
 }
 
-// ---------------------------------------------------------------------------
-// Step 4: Liquidity Depth Analysis
-// ---------------------------------------------------------------------------
-
-/// Standard price impact tiers.
 const IMPACT_TIERS: [f64; 5] = [0.005, 0.01, 0.02, 0.05, 0.10];
 
-/// Calculate max input for each impact tier.
-///
-/// For constant product: `max_input = reserves_in * impact / (1 - impact)`
+/// Max input per impact tier. Constant product: `max_input = reserves_in * impact / (1 - impact)`
 pub fn calculate_depth_tiers(edge: &PoolEdge) -> DepthTiers {
     let tiers: Vec<(f64, u64)> = IMPACT_TIERS
         .iter()
@@ -943,7 +850,6 @@ pub fn calculate_depth_tiers(edge: &PoolEdge) -> DepthTiers {
     }
 }
 
-/// Calculate depth tiers for all outgoing edges from a source token.
 pub fn calculate_all_depth_tiers(graph: &PoolGraph, source_token: &str) -> Vec<DepthTiers> {
     graph
         .adjacency
@@ -952,49 +858,30 @@ pub fn calculate_all_depth_tiers(graph: &PoolGraph, source_token: &str) -> Vec<D
         .unwrap_or_default()
 }
 
-// ---------------------------------------------------------------------------
-// Step 5: Oracle Arb Snapshot
-// ---------------------------------------------------------------------------
-
-/// A route's below-oracle opportunity window.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OracleArbWindow {
-    /// Route path description, e.g. "ERG → ergopad → SigUSD"
     pub path_label: String,
-    /// Number of hops
     pub hops: usize,
-    /// Pool IDs along the route
     pub pool_ids: Vec<String>,
-    /// Spot rate at small probe (SigUSD per ERG)
     pub spot_rate_usd_per_erg: f64,
-    /// Discount vs oracle (positive = route is cheaper than oracle)
+    /// Positive = route is cheaper than oracle
     pub discount_pct: f64,
-    /// Effective rate at max input (at oracle parity breakeven)
     pub rate_at_max: f64,
-    /// Max nanoERG input before effective rate drops to oracle parity
     pub max_erg_input_nano: u64,
-    /// Total price impact (%) when swapping max_erg_input_nano
     pub price_impact_at_max: f64,
-    /// SigUSD output (raw cents) when swapping max_erg_input_nano
+    /// Raw cents
     pub sigusd_output_at_max: u64,
-    /// SigUSD output in human-readable USD (e.g. 18.50)
     pub sigusd_output_at_max_usd: f64,
 }
 
-/// Snapshot of all below-oracle opportunities across routes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OracleArbSnapshot {
     pub oracle_rate_usd_per_erg: f64,
-    /// Per-route windows (only routes with rate > oracle), sorted by discount descending
     pub windows: Vec<OracleArbWindow>,
-    /// Total SigUSD (raw cents) available below oracle across all routes
     pub total_sigusd_below_oracle_raw: u64,
-    /// Total ERG (nanoERG) needed to exhaust all arb windows
     pub total_erg_needed_nano: u64,
 }
 
-/// Compute the effective SigUSD/ERG rate for a route at a given nanoERG input.
-/// Returns None if the route fails to quote at this amount.
 fn route_rate_at_input(
     path: &[PoolEdge],
     input_nano: u64,
@@ -1009,8 +896,7 @@ fn route_rate_at_input(
     Some((rate, route.total_output))
 }
 
-/// Binary search for the max nanoERG input where the effective rate stays >= oracle_rate.
-/// Assumes rate is monotonically decreasing with input (true for constant-product AMMs).
+/// Binary search for max input where rate stays >= oracle_rate (monotone decreasing for CPMM).
 fn binary_search_breakeven(
     path: &[PoolEdge],
     oracle_rate: f64,
@@ -1024,7 +910,6 @@ fn binary_search_breakeven(
 
     for _ in 0..40 {
         if hi <= lo + 1_000_000 {
-            // Within 0.001 ERG precision
             break;
         }
         let mid = lo + (hi - lo) / 2;
@@ -1043,10 +928,6 @@ fn binary_search_breakeven(
     (best_input, best_output)
 }
 
-/// Calculate the below-oracle opportunity snapshot for all ERG → target routes.
-///
-/// Finds all paths (including multi-hop), probes each at 1 ERG, and for routes
-/// with rate > oracle, binary-searches for the max ERG input at oracle parity.
 pub fn calculate_oracle_arb_snapshot(
     graph: &PoolGraph,
     target_token_id: &str,
@@ -1072,11 +953,8 @@ pub fn calculate_oracle_arb_snapshot(
     let mut windows = Vec::new();
 
     for path in &paths {
-        // Binary search for max input at oracle parity.
-        // No probe pre-check — the binary search naturally converges from
-        // the upper bound down to the sweet spot where the route is quotable
-        // AND the rate exceeds oracle. This handles thin multi-hop routes
-        // where small probes fail due to integer rounding at intermediate hops.
+        // No probe pre-check: binary search converges even for thin multi-hop
+        // routes where small probes fail due to integer rounding.
         let upper = path[0].reserves_in;
         let (max_input, output_at_max) =
             binary_search_breakeven(path, oracle_rate_usd_per_erg, target_decimals, upper);
@@ -1085,7 +963,6 @@ pub fn calculate_oracle_arb_snapshot(
             continue;
         }
 
-        // Build path label and collect pool IDs
         let mut label_parts: Vec<String> = Vec::new();
         let mut pool_ids: Vec<String> = Vec::new();
         for (i, edge) in path.iter().enumerate() {
@@ -1099,17 +976,15 @@ pub fn calculate_oracle_arb_snapshot(
             label_parts.push(out_name);
             pool_ids.push(edge.pool.pool_id.clone());
         }
-        let path_label = label_parts.join(" \u{2192} "); // →
+        let path_label = label_parts.join(" \u{2192} ");
 
-        // Rate and impact at the breakeven input
         let divisor = 10f64.powi(target_decimals as i32);
         let rate_at_max = (output_at_max as f64 / divisor) / (max_input as f64 / 1e9);
         let impact_at_max = quote_route(path, max_input)
             .map(|r| r.total_price_impact)
             .unwrap_or(0.0);
 
-        // Spot rate: use 1/10th of max_input for a more accurate marginal rate.
-        // This gives a rate closer to the "beginning" of the arb window.
+        // 1/10th of max_input gives marginal rate near the beginning of the arb window
         let spot_probe = (max_input / 10).max(1_000_000);
         let spot_rate = route_rate_at_input(path, spot_probe, target_decimals)
             .map(|(r, _)| r)
@@ -1132,9 +1007,7 @@ pub fn calculate_oracle_arb_snapshot(
         });
     }
 
-    // Filter out dust opportunities (< $0.10) and sort by SigUSD output descending
-    // so the most actionable windows appear first.
-    windows.retain(|w| w.sigusd_output_at_max >= 10); // 10 raw cents = $0.10
+    windows.retain(|w| w.sigusd_output_at_max >= 10); // >= $0.10
     windows.sort_by(|a, b| {
         b.sigusd_output_at_max
             .cmp(&a.sigusd_output_at_max)
@@ -1151,11 +1024,6 @@ pub fn calculate_oracle_arb_snapshot(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Step 6: Circular Arb Detection
-// ---------------------------------------------------------------------------
-
-/// A single profitable circular arbitrage opportunity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CircularArb {
     pub path_label: String,
@@ -1171,7 +1039,6 @@ pub struct CircularArb {
     pub route: Route,
 }
 
-/// Snapshot of all circular arb opportunities.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CircularArbSnapshot {
     pub windows: Vec<CircularArb>,
@@ -1179,10 +1046,7 @@ pub struct CircularArbSnapshot {
     pub scan_time_ms: u64,
 }
 
-/// Find all cycles from ERG back to ERG up to max_hops.
-///
-/// Uses DFS. Does not revisit tokens within a cycle (except ERG as the
-/// start/end). Does not reuse the same pool within a cycle.
+/// DFS for all ERG->...->ERG cycles up to max_hops. No token/pool reused within a cycle.
 pub fn find_cycles(graph: &PoolGraph, max_hops: usize) -> Vec<Vec<PoolEdge>> {
     let mut results: Vec<Vec<PoolEdge>> = Vec::new();
 
@@ -1225,11 +1089,7 @@ pub fn find_cycles(graph: &PoolGraph, max_hops: usize) -> Vec<Vec<PoolEdge>> {
     results
 }
 
-/// Scan all ERG→...→ERG cycles and find profitable arb opportunities.
-///
-/// Uses ternary search to find the input that maximizes profit for each cycle.
-/// Profit = output_erg - input_erg. The function is unimodal (rises as you
-/// capture the arb, then falls as price impact dominates).
+/// Ternary search for profit-maximizing input on each cycle (unimodal: arb then impact).
 pub fn find_circular_arbs(
     graph: &PoolGraph,
     max_hops: usize,
@@ -1247,14 +1107,13 @@ pub fn find_circular_arbs(
             continue;
         }
 
-        let hi_cap = cycle[0].reserves_in.min(1_000_000_000_000); // 1000 ERG
-        let lo: u64 = 10_000_000; // 0.01 ERG
+        let hi_cap = cycle[0].reserves_in.min(1_000_000_000_000);
+        let lo: u64 = 10_000_000;
 
         if hi_cap <= lo {
             continue;
         }
 
-        // Ternary search for profit-maximizing input
         let mut a = lo;
         let mut b = hi_cap;
 
@@ -1287,13 +1146,10 @@ pub fn find_circular_arbs(
 
         let forward_output = forward_route.total_output;
 
-        // Reverse-tighten: walk backwards from the final output to find the
-        // exact minimum input per hop, then re-quote forward with that tighter
-        // input so per-hop amounts chain correctly (each output = next input).
+        // Reverse-tighten: find exact minimum input, re-quote forward for consistent hop chain
         let (optimal_input, route) =
             if let Some(tight) = quote_route_reverse(cycle, forward_output) {
                 if tight.total_input < forward_input {
-                    // Re-quote forward with tightened input for consistent hop chain
                     match quote_route(cycle, tight.total_input) {
                         Some(r) => (tight.total_input, r),
                         None => (forward_input, forward_route),
@@ -1321,14 +1177,13 @@ pub fn find_circular_arbs(
             0.0
         };
 
-        // Build path label
         let mut label_parts: Vec<String> = vec!["ERG".to_string()];
         for edge in cycle {
             let name = resolve_token_name(&edge.pool, &edge.token_out)
                 .unwrap_or_else(|| edge.token_out[..6.min(edge.token_out.len())].to_string());
             label_parts.push(name);
         }
-        let path_label = label_parts.join(" \u{2192} "); // → character
+        let path_label = label_parts.join(" \u{2192} ");
 
         let pool_ids: Vec<String> = cycle.iter().map(|e| e.pool.pool_id.clone()).collect();
 
@@ -1358,10 +1213,6 @@ pub fn find_circular_arbs(
         scan_time_ms: elapsed,
     }
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 fn resolve_token_name(pool: &AmmPool, token_id: &str) -> Option<String> {
     if token_id == ERG_TOKEN_ID {
@@ -1400,10 +1251,6 @@ fn make_pool_display_name(pool: &AmmPool, token_in: &str, token_out: &str) -> Op
         .unwrap_or_else(|| token_out[..8.min(token_out.len())].to_string());
     Some(format!("{}/{}", in_name, out_name))
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -1472,8 +1319,6 @@ mod tests {
         }
     }
 
-    // -- Graph Construction --
-
     #[test]
     fn test_build_graph_n2t_pools() {
         let pools = vec![
@@ -1483,11 +1328,9 @@ mod tests {
         let graph = build_pool_graph(&pools, DEFAULT_MIN_LIQUIDITY_NANO);
         assert_eq!(graph.pool_count, 2);
 
-        // ERG should have 2 outgoing edges (to sigusd and sigrsv)
         let erg_edges = &graph.adjacency[ERG_TOKEN_ID];
         assert_eq!(erg_edges.len(), 2);
 
-        // sigusd should have 1 edge back to ERG
         let sigusd_edges = &graph.adjacency["sigusd"];
         assert_eq!(sigusd_edges.len(), 1);
         assert_eq!(sigusd_edges[0].token_out, ERG_TOKEN_ID);
@@ -1514,7 +1357,7 @@ mod tests {
     fn test_liquidity_pruning() {
         let pools = vec![
             make_n2t_pool("deep", 100_000_000_000, "tok", "Token", 50_000, 997),
-            make_n2t_pool("shallow", 1_000_000_000, "tok", "Token", 500, 997), // 1 ERG, below threshold
+            make_n2t_pool("shallow", 1_000_000_000, "tok", "Token", 500, 997),
         ];
         let graph = build_pool_graph(&pools, DEFAULT_MIN_LIQUIDITY_NANO);
         assert_eq!(graph.pool_count, 1);
@@ -1537,15 +1380,12 @@ mod tests {
             })
             .collect();
         let graph = build_pool_graph(&pools, DEFAULT_MIN_LIQUIDITY_NANO);
-        // Should keep top 3 per pair
         let erg_to_tok: Vec<&PoolEdge> = graph.adjacency[ERG_TOKEN_ID]
             .iter()
             .filter(|e| e.token_out == "tok")
             .collect();
         assert_eq!(erg_to_tok.len(), DEFAULT_MAX_POOLS_PER_PAIR);
     }
-
-    // -- Path Finding --
 
     #[test]
     fn test_find_direct_path() {
@@ -1575,7 +1415,6 @@ mod tests {
         let graph = build_pool_graph(&pools, 0);
         let paths = find_paths(&graph, ERG_TOKEN_ID, "sigusd", 3);
 
-        // Should find: ERG -> GORT -> SigUSD (2 hops)
         assert!(!paths.is_empty());
         let two_hop = paths.iter().find(|p| p.len() == 2);
         assert!(two_hop.is_some());
@@ -1588,7 +1427,6 @@ mod tests {
 
     #[test]
     fn test_no_cycles() {
-        // A -> B -> C -> A loop, searching A -> C
         let pools = vec![
             make_n2t_pool("p1", 50_000_000_000, "b", "B", 10_000, 997),
             make_t2t_pool("p2", "b", "B", 10_000, "c", "C", 10_000, 997),
@@ -1597,7 +1435,6 @@ mod tests {
         let graph = build_pool_graph(&pools, 0);
         let paths = find_paths(&graph, ERG_TOKEN_ID, "c", 3);
 
-        // No path should revisit ERG or any token
         for path in &paths {
             let mut seen = HashSet::new();
             seen.insert(ERG_TOKEN_ID.to_string());
@@ -1613,7 +1450,6 @@ mod tests {
 
     #[test]
     fn test_max_hops_limit() {
-        // Chain: ERG -> A -> B -> C -> D
         let pools = vec![
             make_n2t_pool("p1", 50_000_000_000, "a", "A", 10_000, 997),
             make_t2t_pool("p2", "a", "A", 10_000, "b", "B", 10_000, 997),
@@ -1628,8 +1464,6 @@ mod tests {
         let paths_4 = find_paths(&graph, ERG_TOKEN_ID, "d", 4);
         assert!(!paths_4.is_empty(), "4-hop path should fit in max_hops=4");
     }
-
-    // -- Quoting --
 
     #[test]
     fn test_quote_single_hop() {
@@ -1660,7 +1494,6 @@ mod tests {
         let route = quote_route(two_hop_path, 1_000_000_000).unwrap();
         assert_eq!(route.hops.len(), 2);
         assert!(route.total_output > 0);
-        // Hop 1 output should be hop 2 input
         assert_eq!(route.hops[0].output_amount, route.hops[1].input_amount);
     }
 
@@ -1674,7 +1507,6 @@ mod tests {
 
     #[test]
     fn test_find_best_routes_ranked() {
-        // Two pools for same pair, different depths
         let pools = vec![
             make_n2t_pool("deep", 1_000_000_000_000, "tok", "Token", 1_000_000, 997),
             make_n2t_pool("shallow", 50_000_000_000, "tok", "Token", 50_000, 995),
@@ -1683,11 +1515,8 @@ mod tests {
         let routes = find_best_routes(&graph, ERG_TOKEN_ID, "tok", 10_000_000_000, 3, 5);
 
         assert!(routes.len() >= 2);
-        // Best route should give highest output
         assert!(routes[0].total_output >= routes[1].total_output);
     }
-
-    // -- Split Optimization --
 
     #[test]
     fn test_split_equal_pools() {
@@ -1698,7 +1527,6 @@ mod tests {
 
         let split = optimize_split(&paths, 50_000_000_000, 2);
         assert_eq!(split.allocations.len(), 2);
-        // With equal pools, roughly 50/50 should be optimal
         let frac_0 = split.allocations[0].fraction;
         assert!(
             (frac_0 - 0.5).abs() < 0.15,
@@ -1717,8 +1545,6 @@ mod tests {
         assert_eq!(split.allocations.len(), 1);
         assert_eq!(split.allocations[0].fraction, 1.0);
     }
-
-    // -- Depth Analysis --
 
     #[test]
     fn test_depth_tiers_formula() {
@@ -1765,8 +1591,6 @@ mod tests {
         }
     }
 
-    // -- Route Quote --
-
     #[test]
     fn test_make_route_quote_slippage() {
         let pool = make_n2t_pool("p1", 100_000_000_000, "tok", "Token", 100_000, 997);
@@ -1779,8 +1603,6 @@ mod tests {
         assert_eq!(quote.min_output, expected_min);
     }
 
-    // -- Reverse Quoting --
-
     #[test]
     fn test_reverse_quote_single_hop() {
         let pool = make_n2t_pool("p1", 100_000_000_000, "tok", "Token", 5_000_000, 997);
@@ -1788,13 +1610,8 @@ mod tests {
         let paths = find_paths(&graph, ERG_TOKEN_ID, "tok", 3);
         assert!(!paths.is_empty());
 
-        // Forward: 1 ERG -> some tokens
         let forward = quote_route(&paths[0], 1_000_000_000).unwrap();
-
-        // Reverse: ask for that many tokens -> should need ~1 ERG
         let reverse = quote_route_reverse(&paths[0], forward.total_output).unwrap();
-
-        // The reverse input should be close to 1 ERG (within 0.01% rounding)
         let diff = (reverse.total_input as i64 - 1_000_000_000i64).unsigned_abs();
         assert!(
             diff < 100_000, // < 0.01% of 1 ERG
@@ -1810,7 +1627,6 @@ mod tests {
         let graph = build_pool_graph(&[pool], DEFAULT_MIN_LIQUIDITY_NANO);
         let paths = find_paths(&graph, ERG_TOKEN_ID, "tok", 3);
 
-        // Request more tokens than the pool has
         let result = quote_route_reverse(&paths[0], 200);
         assert!(result.is_none());
     }
@@ -1826,7 +1642,6 @@ mod tests {
             find_best_routes_by_output(&graph, ERG_TOKEN_ID, "tok", 1000, 3, 5);
 
         assert!(routes.len() >= 2);
-        // Should be sorted ascending by total_input
         for i in 1..routes.len() {
             assert!(routes[i].total_input >= routes[i - 1].total_input);
         }
@@ -1845,24 +1660,16 @@ mod tests {
         let paths = find_paths(&graph, ERG_TOKEN_ID, "sigusd", 3);
         assert!(!paths.is_empty(), "Should find ERG->GORT->SigUSD path");
 
-        // Request 100 SigUSD cents
         let reverse = quote_route_reverse(&paths[0], 100);
         assert!(reverse.is_some());
         let route = reverse.unwrap();
         assert_eq!(route.hops.len(), 2);
         assert!(route.total_input > 0);
-        // Verify the last hop outputs close to 100
         assert!(route.hops[1].output_amount >= 99);
     }
 
-    // -----------------------------------------------------------------------
-    // Oracle arb snapshot tests
-    // -----------------------------------------------------------------------
-
     #[test]
     fn test_oracle_arb_snapshot_has_window() {
-        // Pool: 100 ERG, 50000 SigUSD-cents (= 500 SigUSD), fee 997/1000
-        // Spot rate at 1 ERG ≈ 4.96 SigUSD/ERG (very above oracle 4.0)
         let pool = make_n2t_pool("arb1", 100_000_000_000, "sigusd", "SigUSD", 5_000_000, 997);
         let graph = build_pool_graph(&[pool], 0);
         let snap = calculate_oracle_arb_snapshot(&graph, "sigusd", 4.0, 2);
@@ -1876,8 +1683,6 @@ mod tests {
 
     #[test]
     fn test_oracle_arb_snapshot_no_window() {
-        // Pool: 100 ERG, 100 SigUSD-cents (= 1 SigUSD), fee 997/1000
-        // Spot rate ~ 0.00997 SigUSD/ERG — well below oracle of 2.0
         let pool = make_n2t_pool("noarb", 100_000_000_000, "sigusd", "SigUSD", 100, 997);
         let graph = build_pool_graph(&[pool], 0);
         let snap = calculate_oracle_arb_snapshot(&graph, "sigusd", 2.0, 2);
@@ -1891,8 +1696,6 @@ mod tests {
         let snap = calculate_oracle_arb_snapshot(&graph, "sigusd", 2.0, 2);
         assert!(snap.windows.is_empty());
     }
-
-    // -- Circular Arb Detection --
 
     #[test]
     fn test_find_cycles_triangle() {
@@ -1943,7 +1746,6 @@ mod tests {
 
     #[test]
     fn test_circular_arb_profitable() {
-        // Mispriced triangle: ERG->A cheap, A->B fair, B->ERG expensive
         let pools = vec![
             make_n2t_pool("p1", 100_000_000_000, "aa", "TokenA", 200_000, 997),
             make_n2t_pool("p3", 200_000_000_000, "bb", "TokenB", 50_000, 997),
@@ -1990,7 +1792,6 @@ mod tests {
 
     #[test]
     fn test_circular_arb_reverse_tightened() {
-        // Verify that reverse-tightening gives tighter input for same output
         let pools = vec![
             make_n2t_pool("p1", 100_000_000_000, "aa", "TokenA", 200_000, 997),
             make_n2t_pool("p3", 200_000_000_000, "bb", "TokenB", 50_000, 997),
@@ -2000,13 +1801,9 @@ mod tests {
         let snap = find_circular_arbs(&graph, 4, 0);
 
         for arb in &snap.windows {
-            // The tightened input should be <= what forward calc would give
-            // for the same output. Verify by forward-quoting the tightened input.
             let cycle = find_cycles(&graph, 4);
             for c in &cycle {
                 if let Some(forward) = quote_route(c, arb.optimal_input_nano) {
-                    // Forward output from tightened input should be >= arb output
-                    // (tightened input is the minimum needed for that output)
                     if forward.total_output >= arb.output_nano {
                         assert!(
                             arb.optimal_input_nano <= forward.total_input,
@@ -2018,7 +1815,6 @@ mod tests {
                 }
             }
 
-            // Route per-hop amounts should be consistent
             let hops = &arb.route.hops;
             for i in 1..hops.len() {
                 assert!(

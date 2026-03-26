@@ -3,13 +3,11 @@ import { invoke } from '@tauri-apps/api/core'
 import { QRCodeSVG } from 'qrcode.react'
 import {
   buildOpenOrder,
-  startSigmaFiSign,
-  getSigmaFiTxStatus,
   getSupportedTokens,
-  formatAmount,
   type LoanToken,
 } from '../api/sigmafi'
-import { formatErg } from '../utils/format'
+import { formatAmount, formatErg } from '../utils/format'
+import { startSign, getTxStatus } from '../api/types'
 import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import type { TxStatusResponse } from '../api/types'
@@ -42,7 +40,7 @@ type ModalStep = 'input' | 'preview' | 'signing' | 'success' | 'error'
 const BLOCKS_PER_DAY = 720 // ~2 min blocks
 
 function pollSigmaFiStatus(requestId: string): Promise<TxStatusResponse> {
-  return getSigmaFiTxStatus(requestId)
+  return getTxStatus(requestId)
 }
 
 export function CreateOrderModal({
@@ -170,7 +168,7 @@ export function CreateOrderModal({
         nodeStatus.chain_height,
       )
 
-      const signResult = await startSigmaFiSign(
+      const signResult = await startSign(
         unsignedTx,
         `Create loan request: ${calculated.principal} ${selectedToken.name}`,
       )
@@ -318,7 +316,7 @@ export function CreateOrderModal({
 
               {error && <div className="message error">{error}</div>}
 
-              <div className="co-modal-actions">
+              <div className="button-group">
                 <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
                 <button
                   className="btn btn-primary"
@@ -387,7 +385,7 @@ export function CreateOrderModal({
           )}
 
           {step === 'success' && (
-            <div className="co-success-step">
+            <div className="success-step">
               <div className="success-icon">
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-400)" strokeWidth="2">
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -402,7 +400,7 @@ export function CreateOrderModal({
           )}
 
           {step === 'error' && (
-            <div className="co-error-step">
+            <div className="error-step">
               <div className="error-icon">
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--red-400)" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />
@@ -412,7 +410,7 @@ export function CreateOrderModal({
               </div>
               <h3>Transaction Failed</h3>
               <p className="error-message">{error}</p>
-              <div className="co-modal-actions">
+              <div className="button-group">
                 <button className="btn btn-secondary" onClick={onClose}>Close</button>
                 <button className="btn btn-primary" onClick={() => setStep('input')}>Try Again</button>
               </div>

@@ -83,9 +83,6 @@ pub fn run() {
             commands::get_amm_quote,
             commands::preview_swap,
             commands::build_swap_tx,
-            commands::start_swap_sign,
-            commands::get_swap_tx_status,
-            commands::get_box_by_id,
             // AMM Direct Swap
             commands::preview_direct_swap,
             commands::build_direct_swap_tx,
@@ -93,8 +90,6 @@ pub fn run() {
             commands::get_pending_orders,
             commands::get_mempool_swaps,
             commands::build_swap_refund_tx,
-            commands::start_refund_sign,
-            commands::get_refund_tx_status,
             // AMM LP Operations
             commands::preview_amm_lp_deposit,
             commands::build_amm_lp_deposit_tx,
@@ -127,8 +122,6 @@ pub fn run() {
             // Token Burn
             commands::build_burn_tx,
             commands::build_multi_burn_tx,
-            commands::start_burn_sign,
-            commands::get_burn_tx_status,
             // Address Validation
             commands::validate_ergo_address,
             // UTXO Management
@@ -146,16 +139,12 @@ pub fn run() {
             commands::preview_hodlcoin_burn,
             commands::build_hodlcoin_mint_tx,
             commands::build_hodlcoin_burn_tx,
-            commands::start_hodlcoin_sign,
-            commands::get_hodlcoin_tx_status,
             // Rosen Bridge
             commands::init_bridge_config,
             commands::get_bridge_state,
             commands::get_bridge_tokens,
             commands::get_bridge_fees,
             commands::build_bridge_lock_tx,
-            commands::start_bridge_sign,
-            commands::get_bridge_tx_status,
             // SigmaFi Bonds
             commands::sigmafi_fetch_market,
             commands::sigmafi_get_tokens,
@@ -164,15 +153,11 @@ pub fn run() {
             commands::sigmafi_build_close_order,
             commands::sigmafi_build_repay,
             commands::sigmafi_build_liquidate,
-            commands::start_sigmafi_sign,
-            commands::get_sigmafi_tx_status,
             // MewLock Timelocks
             commands::mewlock_fetch_state,
             commands::mewlock_get_durations,
             commands::mewlock_build_lock,
             commands::mewlock_build_unlock,
-            commands::start_mewlock_sign,
-            commands::get_mewlock_tx_status,
             // Node Discovery
             commands::discover_nodes,
             commands::probe_single_node,

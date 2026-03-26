@@ -28,31 +28,22 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use ergo_lib::ergotree_ir::mir::constant::{Constant, Literal};
-use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
-
 use crate::calculator;
-use crate::constants::fees;
 use crate::state::{AmmError, AmmPool, PoolType};
 use ergo_tx::{
     collect_change_tokens, collect_multi_change_tokens, select_multi_token_boxes,
     select_token_boxes, Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx,
 };
 
-/// Transaction fee in nanoERG (0.0011 ERG - standard)
 const TX_FEE: u64 = citadel_core::constants::TX_FEE_NANO as u64;
-
-/// Minimum box value in nanoERG (required for any output box)
 const MIN_BOX_VALUE: u64 = citadel_core::constants::MIN_BOX_VALUE_NANO as u64;
 
-/// Build result for a direct LP deposit
 #[derive(Debug)]
 pub struct LpDepositBuildResult {
     pub unsigned_tx: Eip12UnsignedTx,
     pub summary: LpDepositSummary,
 }
 
-/// Summary of an LP deposit transaction
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LpDepositSummary {
     pub erg_deposited: u64,
@@ -63,21 +54,6 @@ pub struct LpDepositSummary {
     pub total_erg_cost: u64,
 }
 
-/// Build a direct LP deposit EIP-12 unsigned transaction.
-///
-/// This transaction spends the pool box directly, depositing ERG and tokens
-/// into the pool and receiving LP tokens in return. The pool box must be
-/// inputs[0] and the new pool box must be outputs[0].
-///
-/// # Arguments
-///
-/// * `pool_box` - The current pool UTXO (fetched via get_eip12_box_by_id)
-/// * `pool` - Parsed pool state (reserves, token IDs, fees)
-/// * `erg_amount` - ERG to deposit (nanoERG)
-/// * `token_amount` - Token Y to deposit
-/// * `user_utxos` - User's UTXOs for funding
-/// * `user_ergo_tree` - User's ErgoTree hex (for output/change)
-/// * `current_height` - Current blockchain height
 #[allow(clippy::too_many_arguments)]
 pub fn build_lp_deposit_eip12(
     pool_box: &Eip12InputBox,
@@ -110,10 +86,7 @@ pub fn build_lp_deposit_eip12(
     }
 }
 
-/// Build a direct LP deposit for an N2T (ERG <-> Token) pool.
-///
-/// N2T pools have 3 tokens: [NFT, LP, Token_Y].
-/// ERG is the X reserve.
+/// N2T pools have 3 tokens: [NFT, LP, Token_Y]. ERG is the X reserve.
 #[allow(clippy::too_many_arguments)]
 fn build_n2t_lp_deposit(
     pool_box: &Eip12InputBox,
@@ -124,13 +97,11 @@ fn build_n2t_lp_deposit(
     user_ergo_tree: &str,
     current_height: i32,
 ) -> Result<LpDepositBuildResult, AmmError> {
-    // 1. Parse pool box values directly (ground truth for the contract)
     let pool_erg: u64 = pool_box
         .value
         .parse()
         .map_err(|_| AmmError::TxBuildError("Invalid pool box ERG value".to_string()))?;
 
-    // 2. Validate pool box has at least 3 tokens: [pool_nft, lp_token, token_y]
     if pool_box.assets.len() < 3 {
         return Err(AmmError::TxBuildError(format!(
             "Pool box has {} tokens, expected at least 3",
@@ -142,26 +113,22 @@ fn build_n2t_lp_deposit(
     let pool_lp = &pool_box.assets[1];
     let pool_token_y = &pool_box.assets[2];
 
-    // 3. Parse LP locked amount from pool box
     let lp_locked: u64 = pool_lp
         .amount
         .parse()
         .map_err(|_| AmmError::TxBuildError("Invalid pool LP amount".to_string()))?;
 
-    // 4. Parse pool token_y amount
     let pool_token_y_amount: u64 = pool_token_y
         .amount
         .parse()
         .map_err(|_| AmmError::TxBuildError("Invalid pool token Y amount".to_string()))?;
 
-    // 5. Parse fee_num from pool box R4 register (sigma-serialized Int)
-    let _fee_num = parse_fee_num_from_r4(&pool_box.additional_registers)?;
+    // Pool contract requires R4 to be valid even though we don't use the fee for LP deposits
+    let _fee_num = crate::constants::parse_fee_num_from_r4(&pool_box.additional_registers)?;
 
-    // 6. Calculate LP supply: TOTAL_EMISSION - locked
     let supply_lp =
         calculator::calculate_lp_supply(lp_locked, crate::constants::lp::TOTAL_EMISSION);
 
-    // 7. Calculate LP reward
     let lp_reward = calculator::calculate_lp_reward(
         pool_erg,
         pool_token_y_amount,
@@ -170,14 +137,12 @@ fn build_n2t_lp_deposit(
         token_amount,
     );
 
-    // 8. Validate reward > 0
     if lp_reward == 0 {
         return Err(AmmError::TxBuildError(
             "LP deposit too small: reward would be 0 LP tokens".to_string(),
         ));
     }
 
-    // 9. Build new pool box output
     let new_pool_erg = pool_erg
         .checked_add(erg_amount)
         .ok_or_else(|| AmmError::TxBuildError("Pool ERG overflow".to_string()))?;
@@ -196,7 +161,7 @@ fn build_n2t_lp_deposit(
         assets: vec![
             Eip12Asset {
                 token_id: pool_nft.token_id.clone(),
-                amount: pool_nft.amount.clone(), // same NFT count (1)
+                amount: pool_nft.amount.clone(),
             },
             Eip12Asset {
                 token_id: pool_lp.token_id.clone(),
@@ -211,25 +176,21 @@ fn build_n2t_lp_deposit(
         additional_registers: pool_box.additional_registers.clone(),
     };
 
-    // 10. Calculate user ERG needed: erg_amount (deposited) + MIN_BOX_VALUE (user output) + TX_FEE
     let user_erg_needed = erg_amount
         .checked_add(MIN_BOX_VALUE)
         .and_then(|v| v.checked_add(TX_FEE))
         .ok_or_else(|| AmmError::TxBuildError("ERG cost overflow".to_string()))?;
 
-    // 11. Select UTXOs: need both token_y and sufficient ERG
     let selected =
         select_token_boxes(user_utxos, &pool.token_y.token_id, token_amount, user_erg_needed)
             .map_err(|e| AmmError::TxBuildError(e.to_string()))?;
 
-    // 12. Build user output with LP tokens + change
     let change_erg = selected.total_erg - user_erg_needed;
     let spent_token = Some((pool.token_y.token_id.as_str(), token_amount));
     let change_tokens = collect_change_tokens(&selected.boxes, spent_token);
 
     let user_erg = MIN_BOX_VALUE + change_erg;
 
-    // LP tokens come first, then any change tokens
     let mut user_assets = vec![Eip12Asset {
         token_id: pool.lp_token_id.clone(),
         amount: lp_reward.to_string(),
@@ -244,10 +205,9 @@ fn build_n2t_lp_deposit(
         additional_registers: HashMap::new(),
     };
 
-    // 13. Miner fee output
     let fee_output = Eip12Output::fee(TX_FEE as i64, current_height);
 
-    // 14. Assemble transaction: pool box MUST be inputs[0]
+    // Pool box MUST be inputs[0] — pool contract validates SELF == INPUTS(0)
     let mut inputs = vec![pool_box.clone()];
     inputs.extend(selected.boxes);
 
@@ -259,7 +219,6 @@ fn build_n2t_lp_deposit(
         outputs,
     };
 
-    // 15. Build summary
     let token_name = pool
         .token_y
         .name
@@ -281,14 +240,8 @@ fn build_n2t_lp_deposit(
     })
 }
 
-/// Build a direct LP deposit for a T2T (Token <-> Token) pool.
-///
 /// T2T pools have 4 tokens: [NFT, LP, Token_X, Token_Y].
-/// ERG is NOT a trading reserve -- it stays unchanged (storage rent only).
-/// Both reserves are tokens at index 2 and 3.
-///
-/// The `amount_x` parameter is Token X amount to deposit (not ERG).
-/// The `amount_y` parameter is Token Y amount to deposit.
+/// ERG stays unchanged (storage rent only); both reserves are tokens.
 #[allow(clippy::too_many_arguments)]
 fn build_t2t_lp_deposit(
     pool_box: &Eip12InputBox,
@@ -299,13 +252,11 @@ fn build_t2t_lp_deposit(
     user_ergo_tree: &str,
     current_height: i32,
 ) -> Result<LpDepositBuildResult, AmmError> {
-    // 1. Parse pool box ERG (stays unchanged for T2T)
     let pool_erg: u64 = pool_box
         .value
         .parse()
         .map_err(|_| AmmError::TxBuildError("Invalid pool box ERG value".to_string()))?;
 
-    // 2. Validate 4 tokens in pool box: [NFT, LP, Token_X, Token_Y]
     if pool_box.assets.len() < 4 {
         return Err(AmmError::TxBuildError(format!(
             "T2T pool box has {} tokens, expected at least 4",
@@ -318,7 +269,6 @@ fn build_t2t_lp_deposit(
     let pool_token_x_asset = &pool_box.assets[2];
     let pool_token_y_asset = &pool_box.assets[3];
 
-    // 3. Parse all amounts from pool box
     let lp_locked: u64 = pool_lp
         .amount
         .parse()
@@ -334,19 +284,16 @@ fn build_t2t_lp_deposit(
         .parse()
         .map_err(|_| AmmError::TxBuildError("Invalid pool token Y amount".to_string()))?;
 
-    // 4. Get pool.token_x (must be Some for T2T)
     let token_x = pool.token_x.as_ref().ok_or_else(|| {
         AmmError::TxBuildError("T2T pool must have token_x defined".to_string())
     })?;
 
-    // 5. Parse fee_num from pool box R4 register
-    let _fee_num = parse_fee_num_from_r4(&pool_box.additional_registers)?;
+    let _fee_num = crate::constants::parse_fee_num_from_r4(&pool_box.additional_registers)?;
 
-    // 6. Calculate LP supply: TOTAL_EMISSION - locked
     let supply_lp =
         calculator::calculate_lp_supply(lp_locked, crate::constants::lp::TOTAL_EMISSION);
 
-    // 7. Calculate LP reward using token reserves (not ERG for T2T)
+    // T2T uses token reserves (not ERG) for LP reward calculation
     let lp_reward = calculator::calculate_lp_reward(
         pool_token_x_amount,
         pool_token_y_amount,
@@ -355,14 +302,12 @@ fn build_t2t_lp_deposit(
         amount_y,
     );
 
-    // 8. Validate reward > 0
     if lp_reward == 0 {
         return Err(AmmError::TxBuildError(
             "LP deposit too small: reward would be 0 LP tokens".to_string(),
         ));
     }
 
-    // 9. Build new pool box output: ERG unchanged, 4 tokens with updated amounts
     let new_lp_locked = lp_locked
         .checked_sub(lp_reward)
         .ok_or_else(|| AmmError::TxBuildError("Pool LP underflow".to_string()))?;
@@ -376,12 +321,12 @@ fn build_t2t_lp_deposit(
         .ok_or_else(|| AmmError::TxBuildError("Pool token Y overflow".to_string()))?;
 
     let new_pool_output = Eip12Output {
-        value: pool_erg.to_string(), // ERG unchanged for T2T
+        value: pool_erg.to_string(),
         ergo_tree: pool_box.ergo_tree.clone(),
         assets: vec![
             Eip12Asset {
                 token_id: pool_nft.token_id.clone(),
-                amount: pool_nft.amount.clone(), // same NFT count (1)
+                amount: pool_nft.amount.clone(),
             },
             Eip12Asset {
                 token_id: pool_lp.token_id.clone(),
@@ -400,12 +345,11 @@ fn build_t2t_lp_deposit(
         additional_registers: pool_box.additional_registers.clone(),
     };
 
-    // 10. User ERG needed: MIN_BOX_VALUE (user output) + TX_FEE (no ERG deposited into pool)
+    // No ERG deposited into T2T pool, only need MIN_BOX_VALUE + TX_FEE
     let user_erg_needed = MIN_BOX_VALUE
         .checked_add(TX_FEE)
         .ok_or_else(|| AmmError::TxBuildError("ERG cost overflow".to_string()))?;
 
-    // 11. Select UTXOs: user needs both Token X AND Token Y
     let required_tokens = [
         (token_x.token_id.as_str(), amount_x),
         (pool.token_y.token_id.as_str(), amount_y),
@@ -414,7 +358,6 @@ fn build_t2t_lp_deposit(
         select_multi_token_boxes(user_utxos, &required_tokens, user_erg_needed)
             .map_err(|e| AmmError::TxBuildError(e.to_string()))?;
 
-    // 12. Calculate change with both spent tokens
     let change_erg = selected.total_erg - user_erg_needed;
     let spent_tokens = [
         (token_x.token_id.as_str(), amount_x),
@@ -424,7 +367,6 @@ fn build_t2t_lp_deposit(
 
     let user_erg = MIN_BOX_VALUE + change_erg;
 
-    // 13. Build user output with LP tokens + change
     let mut user_assets = vec![Eip12Asset {
         token_id: pool.lp_token_id.clone(),
         amount: lp_reward.to_string(),
@@ -439,10 +381,8 @@ fn build_t2t_lp_deposit(
         additional_registers: HashMap::new(),
     };
 
-    // 14. Miner fee output
     let fee_output = Eip12Output::fee(TX_FEE as i64, current_height);
 
-    // 15. Assemble transaction: pool box MUST be inputs[0]
     let mut inputs = vec![pool_box.clone()];
     inputs.extend(selected.boxes);
 
@@ -454,8 +394,7 @@ fn build_t2t_lp_deposit(
         outputs,
     };
 
-    // 16. Build summary
-    // For T2T: erg_deposited is actually token_x amount (frontend interprets based on pool type)
+    // erg_deposited is actually token_x amount; frontend interprets based on pool type
     let token_name = pool
         .token_y
         .name
@@ -476,29 +415,6 @@ fn build_t2t_lp_deposit(
         summary,
     })
 }
-
-/// Parse the fee numerator (Int) from pool box R4 register hex.
-///
-/// The register value is a sigma-serialized Constant. Falls back to
-/// `DEFAULT_FEE_NUM` if R4 is missing or not an Int.
-fn parse_fee_num_from_r4(registers: &HashMap<String, String>) -> Result<i32, AmmError> {
-    let r4_hex = match registers.get("R4") {
-        Some(hex) => hex,
-        None => return Ok(fees::DEFAULT_FEE_NUM),
-    };
-    let r4_bytes = hex::decode(r4_hex)
-        .map_err(|e| AmmError::TxBuildError(format!("Invalid R4 hex: {}", e)))?;
-    let constant = Constant::sigma_parse_bytes(&r4_bytes)
-        .map_err(|e| AmmError::TxBuildError(format!("Failed to parse R4 constant: {}", e)))?;
-    match &constant.v {
-        Literal::Int(v) => Ok(*v),
-        _ => Ok(fees::DEFAULT_FEE_NUM),
-    }
-}
-
-// =============================================================================
-// Tests
-// =============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -623,24 +539,17 @@ mod tests {
         assert!(result.is_ok(), "Should build: {:?}", result.err());
         let build = result.unwrap();
 
-        // inputs[0] = pool box
         assert_eq!(build.unsigned_tx.inputs[0].box_id, "pool_box_1");
-        // inputs[1] = user utxo
         assert_eq!(build.unsigned_tx.inputs[1].box_id, "user_utxo_1");
 
-        // outputs[0] = new pool box
         let new_pool = &build.unsigned_tx.outputs[0];
-        // New pool ERG = 100 + 10 = 110 ERG
         let new_pool_erg: u64 = new_pool.value.parse().unwrap();
         assert_eq!(new_pool_erg, 100_000_000_000 + erg_amount);
-        // New pool token_y = 1_000_000 + 100_000
         let new_token_y: u64 = new_pool.assets[2].amount.parse().unwrap();
         assert_eq!(new_token_y, 1_000_000 + token_amount);
-        // New pool LP locked = old - reward
         let new_lp_locked: u64 = new_pool.assets[1].amount.parse().unwrap();
         assert_eq!(new_lp_locked, lp_locked - expected_lp_reward);
 
-        // outputs[1] = user output with LP tokens
         let user_out = &build.unsigned_tx.outputs[1];
         assert!(
             user_out.assets.iter().any(|a| a.token_id == "lp_token"),
@@ -656,7 +565,6 @@ mod tests {
             .unwrap();
         assert_eq!(lp_received, expected_lp_reward);
 
-        // Summary
         assert_eq!(build.summary.erg_deposited, erg_amount);
         assert_eq!(build.summary.token_deposited, token_amount);
         assert_eq!(build.summary.lp_reward, expected_lp_reward);
@@ -681,17 +589,11 @@ mod tests {
         .unwrap();
 
         let new_pool = &result.unsigned_tx.outputs[0];
-
-        // ErgoTree preserved
         assert_eq!(new_pool.ergo_tree, "pool_ergo_tree_hex");
-
-        // R4 register preserved
         assert_eq!(
             new_pool.additional_registers.get("R4"),
             Some(&"04ca0f".to_string())
         );
-
-        // Pool NFT preserved
         assert_eq!(
             new_pool.assets[0].token_id,
             "pool_nft_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -717,13 +619,10 @@ mod tests {
         .unwrap();
 
         let user_out = &result.unsigned_tx.outputs[1];
-
-        // User output should have LP tokens as first asset
         assert_eq!(user_out.assets[0].token_id, "lp_token");
         let lp_amount: u64 = user_out.assets[0].amount.parse().unwrap();
         assert!(lp_amount > 0, "LP reward should be positive");
 
-        // User output should also have change tokens (remaining token_y)
         let change_token = user_out
             .assets
             .iter()
@@ -818,10 +717,6 @@ mod tests {
             "Should reject zero LP reward"
         );
     }
-
-    // =========================================================================
-    // T2T Pool Fixtures
-    // =========================================================================
 
     fn test_t2t_pool() -> AmmPool {
         AmmPool {
@@ -924,10 +819,6 @@ mod tests {
         }
     }
 
-    // =========================================================================
-    // T2T LP Deposit Tests
-    // =========================================================================
-
     #[test]
     fn test_lp_deposit_t2t_basic() {
         let pool = test_t2t_pool();
@@ -969,35 +860,20 @@ mod tests {
         assert!(result.is_ok(), "Should build: {:?}", result.err());
         let build = result.unwrap();
 
-        // inputs[0] = pool box
         assert_eq!(build.unsigned_tx.inputs[0].box_id, "t2t_pool_box_1");
 
-        // outputs[0] = new pool box
         let new_pool = &build.unsigned_tx.outputs[0];
-
-        // Pool ERG unchanged for T2T
         let new_pool_erg: u64 = new_pool.value.parse().unwrap();
         assert_eq!(new_pool_erg, 10_000_000, "T2T pool ERG must stay unchanged");
-
-        // 4 tokens in new pool box
         assert_eq!(new_pool.assets.len(), 4, "T2T pool must have 4 tokens");
-
-        // NFT unchanged
         assert_eq!(new_pool.assets[0].amount, "1");
-
-        // LP locked decreased by reward
         let new_lp_locked: u64 = new_pool.assets[1].amount.parse().unwrap();
         assert_eq!(new_lp_locked, lp_locked - expected_lp_reward);
-
-        // Token X increased
         let new_token_x: u64 = new_pool.assets[2].amount.parse().unwrap();
         assert_eq!(new_token_x, 10_000_000 + amount_x);
-
-        // Token Y increased
         let new_token_y: u64 = new_pool.assets[3].amount.parse().unwrap();
         assert_eq!(new_token_y, 5_000_000 + amount_y);
 
-        // outputs[1] = user output with LP tokens
         let user_out = &build.unsigned_tx.outputs[1];
         assert!(
             user_out
@@ -1016,7 +892,6 @@ mod tests {
             .unwrap();
         assert_eq!(lp_received, expected_lp_reward);
 
-        // Summary
         assert_eq!(build.summary.erg_deposited, amount_x);
         assert_eq!(build.summary.token_deposited, amount_y);
         assert_eq!(build.summary.lp_reward, expected_lp_reward);
@@ -1042,20 +917,12 @@ mod tests {
         .unwrap();
 
         let new_pool = &result.unsigned_tx.outputs[0];
-
-        // ERG preserved (storage rent only)
         assert_eq!(new_pool.value, "10000000", "T2T pool ERG must not change");
-
-        // ErgoTree preserved
         assert_eq!(new_pool.ergo_tree, "t2t_pool_ergo_tree_hex");
-
-        // R4 register preserved
         assert_eq!(
             new_pool.additional_registers.get("R4"),
             Some(&"04ca0f".to_string())
         );
-
-        // Pool NFT preserved
         assert_eq!(
             new_pool.assets[0].token_id,
             "t2t_pool_nft_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

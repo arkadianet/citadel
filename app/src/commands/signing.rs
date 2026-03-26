@@ -8,6 +8,8 @@ use ergopay_core::{reduce_transaction, reduce_transaction_fallback};
 use ergopay_server::RequestStatus;
 use tauri::State;
 
+use super::StrErr;
+
 /// Start ErgoPay signing flow for a mint transaction
 ///
 /// This function performs transaction reduction to convert the EIP-12 transaction
@@ -19,10 +21,7 @@ pub async fn start_mint_sign(
     request: MintSignRequest,
 ) -> Result<MintSignResponse, String> {
     // Get node client for fetching boxes and state context
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
+    let client = state.require_node_client().await?;
 
     // Parse the unsigned transaction from JSON
     let eip12_tx: Eip12UnsignedTx = serde_json::from_value(request.unsigned_tx.clone())
@@ -64,7 +63,7 @@ pub async fn start_mint_sign(
         };
 
     // Get ErgoPay server from app state
-    let server = state.ergopay_server().await.map_err(|e| e.to_string())?;
+    let server = state.ergopay_server().await.str_err()?;
 
     // Create signing request with reduced bytes and unsigned tx
     let (request_id, ergopay_url) = server
@@ -89,7 +88,7 @@ pub(super) async fn fetch_boxes_by_ids(
     let mut boxes = Vec::with_capacity(box_ids.len());
     for box_id in box_ids {
         let ergo_box =
-            ergo_node_client::queries::get_box_by_id(client.inner(), &BoxId::new(box_id.as_str()))
+            client.get_box_by_id(&BoxId::new(box_id.as_str()))
                 .await
                 .map_err(|e| format!("Failed to fetch box {}: {}", box_id, e))?;
         boxes.push(ergo_box);
@@ -103,7 +102,7 @@ pub async fn get_mint_tx_status(
     state: State<'_, AppState>,
     request_id: String,
 ) -> Result<MintTxStatusResponse, String> {
-    let server = state.ergopay_server().await.map_err(|e| e.to_string())?;
+    let server = state.ergopay_server().await.str_err()?;
 
     match server.get_request_status(&request_id).await {
         Some(RequestStatus::Pending) => Ok(MintTxStatusResponse {

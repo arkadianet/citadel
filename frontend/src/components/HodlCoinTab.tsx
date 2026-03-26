@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getHodlCoinBanks, type HodlBankState, formatNanoErg } from '../api/hodlcoin'
+import { getHodlCoinBanks, type HodlBankState } from '../api/hodlcoin'
+import { formatErg } from '../utils/format'
 import { HodlCoinModal } from './HodlCoinModal'
 import './HodlCoinTab.css'
 
@@ -166,11 +167,11 @@ export function HodlCoinTab({
               <div className="hodl-bank-stats">
                 <div className="hodl-stat">
                   <span className="hodl-stat-label">Price</span>
-                  <span className="hodl-stat-value">{formatNanoErg(bank.priceNanoPerHodl * 1e9)} ERG</span>
+                  <span className="hodl-stat-value">{formatErg(bank.priceNanoPerHodl * 1e9)} ERG</span>
                 </div>
                 <div className="hodl-stat">
                   <span className="hodl-stat-label">TVL</span>
-                  <span className="hodl-stat-value">{formatNanoErg(bank.tvlNanoErg)} ERG</span>
+                  <span className="hodl-stat-value">{formatErg(bank.tvlNanoErg)} ERG</span>
                 </div>
                 <div className="hodl-stat">
                   <span className="hodl-stat-label">Circulating</span>

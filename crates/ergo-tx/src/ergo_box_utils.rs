@@ -1,19 +1,10 @@
-//! Shared utilities for parsing ErgoBox registers and tokens.
-//!
-//! Consolidates common extraction patterns used across protocol crates
-//! (sigmausd, dexy, lending, hodlcoin).
+//! ErgoBox register and token extraction utilities.
 
 use citadel_core::{NodeError, ProtocolError};
 use ergo_lib::ergotree_ir::chain::ergo_box::{ErgoBox, NonMandatoryRegisterId};
 use ergo_lib::ergotree_ir::mir::constant::{Constant, Literal};
 use ergo_lib::ergotree_ir::mir::value::{CollKind, NativeColl};
 use ergo_lib::ergotree_ir::types::stype::SType;
-
-// =============================================================================
-// Register value extractors
-// =============================================================================
-
-/// Extract an `i64` from an ergo-lib `Constant` that holds a `Long` literal.
 pub fn extract_long(constant: &Constant) -> Result<i64, String> {
     match &constant.v {
         Literal::Long(val) => Ok(*val),
@@ -21,7 +12,6 @@ pub fn extract_long(constant: &Constant) -> Result<i64, String> {
     }
 }
 
-/// Extract an `i32` from an ergo-lib `Constant` that holds an `Int` literal.
 pub fn extract_int(constant: &Constant) -> Result<i32, String> {
     match &constant.v {
         Literal::Int(val) => Ok(*val),
@@ -29,7 +19,6 @@ pub fn extract_int(constant: &Constant) -> Result<i32, String> {
     }
 }
 
-/// Extract `(i32, i32)` from a `Constant` holding a `Tup(Int, Int)`.
 pub fn extract_int_pair(constant: &Constant) -> Result<(i32, i32), String> {
     match &constant.v {
         Literal::Tup(items) if items.len() == 2 => {
@@ -47,7 +36,6 @@ pub fn extract_int_pair(constant: &Constant) -> Result<(i32, i32), String> {
     }
 }
 
-/// Extract `Vec<i64>` from an ergo-lib `Constant` that holds a `Coll[Long]`.
 pub fn extract_long_coll(constant: &Constant) -> Result<Vec<i64>, String> {
     match &constant.v {
         Literal::Coll(coll) => match coll {
@@ -70,10 +58,6 @@ pub fn extract_long_coll(constant: &Constant) -> Result<Vec<i64>, String> {
     }
 }
 
-/// Extract `Vec<Vec<u8>>` from an ergo-lib `Constant` that holds a `Coll[Coll[Byte]]`.
-///
-/// Used for registers containing arrays of byte arrays, such as token IDs or DEX NFT IDs
-/// in Duckpools parameter boxes.
 pub fn extract_byte_array_coll(constant: &Constant) -> Result<Vec<Vec<u8>>, String> {
     match &constant.v {
         Literal::Coll(coll) => match coll {
@@ -103,9 +87,6 @@ pub fn extract_byte_array_coll(constant: &Constant) -> Result<Vec<Vec<u8>>, Stri
     }
 }
 
-/// Read a Long register value from an ErgoBox, returning `None` on any failure.
-///
-/// Combines `get_constant` + `extract_long` in one call (hodlcoin pattern).
 pub fn read_register_long(ergo_box: &ErgoBox, reg: NonMandatoryRegisterId) -> Option<i64> {
     ergo_box
         .additional_registers
@@ -118,14 +99,127 @@ pub fn read_register_long(ergo_box: &ErgoBox, reg: NonMandatoryRegisterId) -> Op
         })
 }
 
-// =============================================================================
-// Token extraction
-// =============================================================================
+pub fn get_register(
+    ergo_box: &ErgoBox,
+    reg: NonMandatoryRegisterId,
+) -> Result<ergo_lib::ergotree_ir::mir::constant::Constant, ProtocolError> {
+    ergo_box
+        .additional_registers
+        .get_constant(reg)
+        .map_err(|e| ProtocolError::BoxParseError {
+            message: format!("Register {:?} error: {}", reg, e),
+        })?
+        .ok_or_else(|| ProtocolError::BoxParseError {
+            message: format!("Register {:?} not found", reg),
+        })
+}
 
-/// Find a token's amount in a box by its hex token ID.
-///
-/// Returns `None` if the box has no tokens or the token is not found.
-/// Callers decide whether missing means 0 or an error.
+pub fn get_register_long(
+    ergo_box: &ErgoBox,
+    reg: NonMandatoryRegisterId,
+) -> Result<i64, ProtocolError> {
+    let constant = get_register(ergo_box, reg)?;
+    extract_long(&constant).map_err(|msg| ProtocolError::BoxParseError {
+        message: format!("{:?}: {}", reg, msg),
+    })
+}
+
+pub fn get_register_int(
+    ergo_box: &ErgoBox,
+    reg: NonMandatoryRegisterId,
+) -> Result<i32, ProtocolError> {
+    let constant = get_register(ergo_box, reg)?;
+    extract_int(&constant).map_err(|msg| ProtocolError::BoxParseError {
+        message: format!("{:?}: {}", reg, msg),
+    })
+}
+
+/// SigmaProp(ProveDlog) serializes as `08cd` + 33-byte pubkey (70 hex chars).
+pub fn get_register_sigma_prop_hex(
+    ergo_box: &ErgoBox,
+    reg: NonMandatoryRegisterId,
+) -> Result<String, ProtocolError> {
+    use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
+
+    let constant = get_register(ergo_box, reg)?;
+    let bytes = constant
+        .sigma_serialize_bytes()
+        .map_err(|e| ProtocolError::BoxParseError {
+            message: format!("Failed to serialize {:?}: {}", reg, e),
+        })?;
+
+    let hex_str = hex::encode(&bytes);
+    if hex_str.len() >= 70 && hex_str.starts_with("08cd") {
+        Ok(hex_str[4..70].to_string())
+    } else {
+        Err(ProtocolError::BoxParseError {
+            message: format!(
+                "Unexpected SigmaProp encoding in {:?}: {}",
+                reg,
+                &hex_str[..hex_str.len().min(20)]
+            ),
+        })
+    }
+}
+
+pub fn get_register_coll_byte_hex(
+    ergo_box: &ErgoBox,
+    reg: NonMandatoryRegisterId,
+) -> Result<String, ProtocolError> {
+    let constant = get_register(ergo_box, reg)?;
+    extract_coll_byte_raw(&constant)
+        .map(hex::encode)
+        .map_err(|msg| ProtocolError::BoxParseError {
+            message: format!("{:?}: {}", reg, msg),
+        })
+}
+
+/// Also accepts Int (cast to i64). Returns `None` on any failure.
+pub fn try_register_long(ergo_box: &ErgoBox, reg: NonMandatoryRegisterId) -> Option<i64> {
+    ergo_box
+        .additional_registers
+        .get_constant(reg)
+        .ok()
+        .flatten()
+        .and_then(|c| match &c.v {
+            Literal::Long(v) => Some(*v),
+            Literal::Int(v) => Some(*v as i64),
+            _ => None,
+        })
+}
+
+pub fn try_register_coll_byte_utf8(
+    ergo_box: &ErgoBox,
+    reg: NonMandatoryRegisterId,
+) -> Option<String> {
+    let constant = ergo_box
+        .additional_registers
+        .get_constant(reg)
+        .ok()
+        .flatten()?;
+    let bytes = extract_coll_byte_raw(&constant).ok()?;
+    String::from_utf8(bytes).ok()
+}
+
+fn extract_coll_byte_raw(constant: &Constant) -> Result<Vec<u8>, String> {
+    match &constant.v {
+        Literal::Coll(CollKind::NativeColl(NativeColl::CollByte(bytes))) => {
+            Ok(bytes.iter().map(|&b| b as u8).collect())
+        }
+        Literal::Coll(CollKind::WrappedColl {
+            elem_tpe: SType::SByte,
+            items,
+        }) => Ok(items
+            .iter()
+            .filter_map(|item| match item {
+                Literal::Byte(b) => Some(*b as u8),
+                _ => None,
+            })
+            .collect()),
+        other => Err(format!("Expected Coll[Byte], got {:?}", other)),
+    }
+}
+
 pub fn find_token_amount(ergo_box: &ErgoBox, token_id: &str) -> Option<u64> {
     ergo_box.tokens.as_ref().and_then(|tokens| {
         tokens.iter().find_map(|t| {
@@ -139,9 +233,6 @@ pub fn find_token_amount(ergo_box: &ErgoBox, token_id: &str) -> Option<u64> {
     })
 }
 
-/// Get the token amount at a specific index in the box's token list.
-///
-/// Returns `None` if the box has no tokens or the index is out of bounds.
 pub fn token_at_index(ergo_box: &ErgoBox, index: usize) -> Option<u64> {
     ergo_box
         .tokens
@@ -150,14 +241,6 @@ pub fn token_at_index(ergo_box: &ErgoBox, index: usize) -> Option<u64> {
         .map(|token| *token.amount.as_u64())
 }
 
-// =============================================================================
-// Node error mapping
-// =============================================================================
-
-/// Map a `NodeError` to a `ProtocolError` with a standard pattern.
-///
-/// - `ExtraIndexRequired` → `StateUnavailable` with protocol-specific message
-/// - All others → `BoxParseError` with context
 pub fn map_node_error(err: NodeError, protocol_name: &str, context: &str) -> ProtocolError {
     match err {
         NodeError::ExtraIndexRequired { .. } => ProtocolError::StateUnavailable {

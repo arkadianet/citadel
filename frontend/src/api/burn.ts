@@ -6,7 +6,6 @@
 
 import { invoke } from '@tauri-apps/api/core'
 
-import type { SignResponse, TxStatusResponse } from './types'
 
 // =============================================================================
 // Type Definitions
@@ -38,8 +37,6 @@ export interface MultiBurnBuildResponse {
   changeErg: number
 }
 
-export type BurnSignResponse = SignResponse
-export type BurnTxStatusResponse = TxStatusResponse
 
 // =============================================================================
 // API Functions
@@ -75,18 +72,3 @@ export async function buildMultiBurnTx(
   })
 }
 
-export async function startBurnSign(
-  unsignedTx: object,
-  message: string,
-): Promise<BurnSignResponse> {
-  return await invoke<BurnSignResponse>('start_burn_sign', {
-    unsignedTx,
-    message,
-  })
-}
-
-export async function getBurnTxStatus(requestId: string): Promise<BurnTxStatusResponse> {
-  return await invoke<BurnTxStatusResponse>('get_burn_tx_status', {
-    requestId,
-  })
-}

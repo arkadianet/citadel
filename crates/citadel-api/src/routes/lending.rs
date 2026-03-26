@@ -1,14 +1,4 @@
 //! Duckpools Lending Protocol API Routes
-//!
-//! REST endpoints for the Duckpools lending protocol:
-//! - GET /lending/markets - All pools with APY, utilization, TVL
-//! - GET /lending/markets/{pool_id} - Single pool details
-//! - GET /lending/positions/{address} - User positions across all pools
-//! - POST /lending/lend/build - Build lend proxy transaction
-//! - POST /lending/withdraw/build - Build withdraw proxy transaction
-//! - POST /lending/borrow/build - Build borrow proxy transaction (stub)
-//! - POST /lending/repay/build - Build repay proxy transaction
-//! - POST /lending/refund/build - Build refund transaction
 
 use std::collections::HashMap;
 
@@ -29,18 +19,12 @@ use lending::tx_builder::{
 };
 use lending::{constants, fetch_all_markets, PoolState};
 
-// =============================================================================
-// DTOs for Lending API
-// =============================================================================
-
-/// Markets response - all pools with metrics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarketsResponse {
     pub pools: Vec<PoolInfo>,
     pub block_height: u32,
 }
 
-/// Pool information for markets endpoint
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PoolInfo {
     pub pool_id: String,
@@ -58,7 +42,6 @@ pub struct PoolInfo {
     pub collateral_options: Vec<CollateralOptionInfo>,
 }
 
-/// Collateral option info for API responses
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CollateralOptionInfo {
     pub token_id: String,
@@ -68,7 +51,6 @@ pub struct CollateralOptionInfo {
     pub dex_nft: Option<String>,
 }
 
-/// User positions response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PositionsResponse {
     pub address: String,
@@ -77,7 +59,6 @@ pub struct PositionsResponse {
     pub block_height: u32,
 }
 
-/// Lending position info
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LendPositionInfo {
     pub pool_id: String,
@@ -87,7 +68,6 @@ pub struct LendPositionInfo {
     pub unrealized_profit: String,
 }
 
-/// Borrow position info
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BorrowPositionInfo {
     pub pool_id: String,
@@ -102,7 +82,6 @@ pub struct BorrowPositionInfo {
     pub health_status: String,
 }
 
-/// Lend build request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LendBuildRequest {
     pub pool_id: String,
@@ -115,7 +94,6 @@ pub struct LendBuildRequest {
     pub slippage_bps: u16,
 }
 
-/// Withdraw build request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WithdrawBuildRequest {
     pub pool_id: String,
@@ -125,7 +103,6 @@ pub struct WithdrawBuildRequest {
     pub current_height: i32,
 }
 
-/// Borrow build request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BorrowBuildRequest {
     pub pool_id: String,
@@ -137,7 +114,6 @@ pub struct BorrowBuildRequest {
     pub current_height: i32,
 }
 
-/// Repay build request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepayBuildRequest {
     pub pool_id: String,
@@ -150,7 +126,6 @@ pub struct RepayBuildRequest {
     pub current_height: i32,
 }
 
-/// Refund build request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RefundBuildRequest {
     pub proxy_box_id: String,
@@ -159,14 +134,12 @@ pub struct RefundBuildRequest {
     pub current_height: i32,
 }
 
-/// Build response for all transaction types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LendingBuildResponse {
     pub unsigned_tx: serde_json::Value,
     pub summary: LendingTxSummary,
 }
 
-/// Transaction summary for lending operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LendingTxSummary {
     pub action: String,
@@ -184,19 +157,11 @@ pub struct LendingTxSummary {
     pub total_to_send: String,
 }
 
-// =============================================================================
-// Router
-// =============================================================================
-
-/// Create Lending router
 pub fn router() -> Router<AppState> {
     Router::new()
-        // Market endpoints
         .route("/markets", get(get_markets))
         .route("/markets/{pool_id}", get(get_market))
-        // Position endpoint
         .route("/positions/{address}", get(get_positions))
-        // Transaction build endpoints
         .route("/lend/build", post(build_lend))
         .route("/withdraw/build", post(build_withdraw))
         .route("/borrow/build", post(build_borrow))
@@ -204,15 +169,9 @@ pub fn router() -> Router<AppState> {
         .route("/refund/build", post(build_refund))
 }
 
-// =============================================================================
-// Handlers
-// =============================================================================
-
-/// GET /lending/markets - Get all lending pools with metrics
 async fn get_markets(
     State(state): State<AppState>,
 ) -> Result<Json<MarketsResponse>, (StatusCode, Json<ApiError>)> {
-    // Get node client
     let client = state.node_client().await.ok_or_else(|| {
         (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -220,7 +179,6 @@ async fn get_markets(
         )
     })?;
 
-    // Get capabilities
     let capabilities = client.capabilities().await.ok_or_else(|| {
         (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -231,7 +189,6 @@ async fn get_markets(
         )
     })?;
 
-    // Fetch all markets from the lending crate
     let markets_response = fetch_all_markets(&client, &capabilities, None)
         .await
         .map_err(|e| {
@@ -241,7 +198,6 @@ async fn get_markets(
             )
         })?;
 
-    // Convert PoolState to PoolInfo DTOs
     let pools: Vec<PoolInfo> = markets_response
         .pools
         .iter()
@@ -254,7 +210,6 @@ async fn get_markets(
     }))
 }
 
-/// Convert lending::PoolState to API PoolInfo DTO
 fn pool_state_to_info(state: &PoolState) -> PoolInfo {
     PoolInfo {
         pool_id: state.pool_id.clone(),
@@ -283,12 +238,10 @@ fn pool_state_to_info(state: &PoolState) -> PoolInfo {
     }
 }
 
-/// GET /lending/markets/{pool_id} - Get single pool details
 async fn get_market(
     State(state): State<AppState>,
     Path(pool_id): Path<String>,
 ) -> Result<Json<PoolInfo>, (StatusCode, Json<ApiError>)> {
-    // Validate pool_id exists in configuration
     let pool_config = constants::get_pool(&pool_id).ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
@@ -296,7 +249,6 @@ async fn get_market(
         )
     })?;
 
-    // Get node client
     let client = state.node_client().await.ok_or_else(|| {
         (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -304,7 +256,6 @@ async fn get_market(
         )
     })?;
 
-    // Get capabilities
     let capabilities = client.capabilities().await.ok_or_else(|| {
         (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -315,7 +266,6 @@ async fn get_market(
         )
     })?;
 
-    // Fetch the specific pool state
     let pool_state = lending::fetch::fetch_pool_state(&client, &capabilities, pool_config)
         .await
         .map_err(|e| {
@@ -328,12 +278,10 @@ async fn get_market(
     Ok(Json(pool_state_to_info(&pool_state)))
 }
 
-/// GET /lending/positions/{address} - Get user positions across all pools
 async fn get_positions(
     State(state): State<AppState>,
     Path(address): Path<String>,
 ) -> Result<Json<PositionsResponse>, (StatusCode, Json<ApiError>)> {
-    // Get node client
     let client = state.node_client().await.ok_or_else(|| {
         (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -341,7 +289,6 @@ async fn get_positions(
         )
     })?;
 
-    // Get capabilities
     let capabilities = client.capabilities().await.ok_or_else(|| {
         (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -352,7 +299,6 @@ async fn get_positions(
         )
     })?;
 
-    // Fetch all markets with user positions
     let markets_response = fetch_all_markets(&client, &capabilities, Some(&address))
         .await
         .map_err(|e| {
@@ -362,7 +308,6 @@ async fn get_positions(
             )
         })?;
 
-    // Extract lend positions from pools
     let lend_positions: Vec<LendPositionInfo> = markets_response
         .pools
         .iter()
@@ -379,7 +324,6 @@ async fn get_positions(
         })
         .collect();
 
-    // Extract borrow positions from pools
     let borrow_positions: Vec<BorrowPositionInfo> = markets_response
         .pools
         .iter()
@@ -410,10 +354,6 @@ async fn get_positions(
     }))
 }
 
-/// Convert health factor to UI status string for color coding
-/// - "green": >= 1.5 (healthy)
-/// - "amber": >= 1.2 and < 1.5 (warning)
-/// - "red": < 1.2 (danger)
 fn health_factor_to_status(health_factor: f64) -> String {
     if health_factor >= constants::health::HEALTHY_THRESHOLD {
         "green".to_string()
@@ -424,14 +364,7 @@ fn health_factor_to_status(health_factor: f64) -> String {
     }
 }
 
-// =============================================================================
-// Transaction Build Helpers
-// =============================================================================
-
-/// Parse user UTXOs from JSON to UserUtxo structs
-///
-/// The frontend sends UTXOs as EIP-12 JSON format. This function parses them
-/// into the tx_builder's UserUtxo format.
+/// Parses EIP-12 JSON UTXOs into tx_builder's UserUtxo format.
 fn parse_user_utxos(
     utxos_json: Vec<serde_json::Value>,
 ) -> Result<Vec<UserUtxo>, (StatusCode, Json<ApiError>)> {
@@ -449,12 +382,10 @@ fn parse_user_utxos(
         .collect()
 }
 
-/// Parse a single UTXO from JSON
 fn parse_single_utxo(
     v: serde_json::Value,
     idx: usize,
 ) -> Result<UserUtxo, (StatusCode, Json<ApiError>)> {
-    // Extract required fields
     let box_id = v["boxId"]
         .as_str()
         .or_else(|| v["box_id"].as_str())
@@ -487,7 +418,6 @@ fn parse_single_utxo(
         )
     })? as u16;
 
-    // Value can be string or number
     let value: i64 = match &v["value"] {
         serde_json::Value::String(s) => s.parse().map_err(|_| {
             (
@@ -542,7 +472,6 @@ fn parse_single_utxo(
             )
         })? as i32;
 
-    // Parse assets (optional)
     let assets: Vec<(String, i64)> = v["assets"]
         .as_array()
         .map(|arr| {
@@ -563,7 +492,6 @@ fn parse_single_utxo(
         })
         .unwrap_or_default();
 
-    // Parse registers (optional)
     let registers: HashMap<String, String> = v["additionalRegisters"]
         .as_object()
         .or_else(|| v["additional_registers"].as_object())
@@ -586,7 +514,6 @@ fn parse_single_utxo(
     })
 }
 
-/// Convert BuildResponse to LendingBuildResponse
 fn build_response_to_api(
     response: BuildResponse,
     _pool_config: &constants::PoolConfig,
@@ -619,7 +546,6 @@ fn build_response_to_api(
     })
 }
 
-/// Convert RefundResponse to LendingBuildResponse
 fn refund_response_to_api(
     response: RefundResponse,
     proxy_box_id: &str,
@@ -652,7 +578,6 @@ fn refund_response_to_api(
     })
 }
 
-/// Convert BuildError to API error response
 fn build_error_to_api(error: BuildError) -> (StatusCode, Json<ApiError>) {
     let status = match error.status_code() {
         400 => StatusCode::BAD_REQUEST,
@@ -666,12 +591,10 @@ fn build_error_to_api(error: BuildError) -> (StatusCode, Json<ApiError>) {
     (status, Json(ApiError::new(error.code(), error.to_string())))
 }
 
-/// POST /lending/lend/build - Build lend proxy transaction
 async fn build_lend(
     State(_state): State<AppState>,
     Json(request): Json<LendBuildRequest>,
 ) -> Result<Json<LendingBuildResponse>, (StatusCode, Json<ApiError>)> {
-    // Validate amount is non-zero
     if request.amount == 0 {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -679,7 +602,6 @@ async fn build_lend(
         ));
     }
 
-    // Validate pool_id exists
     let pool_config = constants::get_pool(&request.pool_id).ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
@@ -690,10 +612,8 @@ async fn build_lend(
         )
     })?;
 
-    // Parse user UTXOs
     let user_utxos = parse_user_utxos(request.user_utxos)?;
 
-    // Build the lend request
     let lend_request = LendRequest {
         pool_id: request.pool_id.clone(),
         amount: request.amount,
@@ -703,20 +623,16 @@ async fn build_lend(
         slippage_bps: request.slippage_bps,
     };
 
-    // Build the transaction
     let result = tx_builder::build_lend_tx(lend_request, pool_config, request.current_height)
         .map_err(build_error_to_api)?;
 
-    // Convert to API response
     build_response_to_api(result, pool_config).map(Json)
 }
 
-/// POST /lending/withdraw/build - Build withdraw proxy transaction
 async fn build_withdraw(
     State(_state): State<AppState>,
     Json(request): Json<WithdrawBuildRequest>,
 ) -> Result<Json<LendingBuildResponse>, (StatusCode, Json<ApiError>)> {
-    // Validate amount is non-zero
     if request.lp_amount == 0 {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -724,7 +640,6 @@ async fn build_withdraw(
         ));
     }
 
-    // Validate pool_id exists
     let pool_config = constants::get_pool(&request.pool_id).ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
@@ -735,10 +650,8 @@ async fn build_withdraw(
         )
     })?;
 
-    // Parse user UTXOs
     let user_utxos = parse_user_utxos(request.user_utxos)?;
 
-    // Build the withdraw request
     let withdraw_request = WithdrawRequest {
         pool_id: request.pool_id.clone(),
         lp_amount: request.lp_amount,
@@ -747,26 +660,18 @@ async fn build_withdraw(
         min_output: None, // Could add to API request later
     };
 
-    // Build the transaction
     let result =
         tx_builder::build_withdraw_tx(withdraw_request, pool_config, request.current_height)
             .map_err(build_error_to_api)?;
 
-    // Convert to API response
     build_response_to_api(result, pool_config).map(Json)
 }
 
-/// POST /lending/borrow/build - Build borrow proxy transaction
-///
-/// Note: Borrowing is currently stubbed in the protocol layer as it requires
-/// complex Sigma encoding for GroupElement (R9) that is not yet implemented.
-/// This endpoint returns a descriptive error directing users to the Duckpools
-/// web interface for borrowing functionality.
+/// Stubbed: borrowing requires GroupElement (R9) Sigma encoding not yet implemented.
 async fn build_borrow(
     State(_state): State<AppState>,
     Json(request): Json<BorrowBuildRequest>,
 ) -> Result<Json<LendingBuildResponse>, (StatusCode, Json<ApiError>)> {
-    // Validate pool_id exists (provide helpful feedback)
     let _pool_config = constants::get_pool(&request.pool_id).ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
@@ -777,11 +682,6 @@ async fn build_borrow(
         )
     })?;
 
-    // Borrow requires complex Sigma encoding not yet implemented:
-    // - R7: (Long, Long) tuple for (threshold, penalty)
-    // - R9: GroupElement for user's public key
-    //
-    // Direct users to Duckpools web interface for borrowing.
     Err((
         StatusCode::NOT_IMPLEMENTED,
         Json(ApiError::new(
@@ -796,12 +696,10 @@ async fn build_borrow(
     ))
 }
 
-/// POST /lending/repay/build - Build repay proxy transaction
 async fn build_repay(
     State(_state): State<AppState>,
     Json(request): Json<RepayBuildRequest>,
 ) -> Result<Json<LendingBuildResponse>, (StatusCode, Json<ApiError>)> {
-    // Validate amount is non-zero
     if request.repay_amount == 0 {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -809,7 +707,6 @@ async fn build_repay(
         ));
     }
 
-    // Validate pool_id exists
     let pool_config = constants::get_pool(&request.pool_id).ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
@@ -820,10 +717,8 @@ async fn build_repay(
         )
     })?;
 
-    // Parse user UTXOs
     let user_utxos = parse_user_utxos(request.user_utxos)?;
 
-    // Build the repay request
     let repay_request = RepayRequest {
         pool_id: request.pool_id.clone(),
         collateral_box_id: request.collateral_box_id,
@@ -833,34 +728,18 @@ async fn build_repay(
         user_utxos,
     };
 
-    // Build the transaction
     let result = tx_builder::build_repay_tx(repay_request, pool_config, request.current_height)
         .map_err(build_error_to_api)?;
 
-    // Convert to API response
     build_response_to_api(result, pool_config).map(Json)
 }
 
-/// POST /lending/refund/build - Build refund transaction for stuck proxy box
-///
-/// Refund allows users to reclaim funds from proxy boxes that weren't processed
-/// by the Duckpools bots (e.g., due to insufficient liquidity or other issues).
-/// The proxy contract allows refunds after the refund_height stored in R6.
+/// Proxy contract allows refunds after the refund_height stored in R6.
 async fn build_refund(
     State(_state): State<AppState>,
     Json(request): Json<RefundBuildRequest>,
 ) -> Result<Json<LendingBuildResponse>, (StatusCode, Json<ApiError>)> {
-    // The RefundBuildRequest should contain proxy box details
-    // We need to construct ProxyBoxData from the request
-
-    // For refund, we need the proxy box information. The frontend must provide:
-    // - proxy_box_id: The box ID being refunded
-    // - proxy_box data: Full box details for building the transaction
-    //
-    // The request includes user_utxos which should contain the proxy box as the first element
-    // with all necessary register data.
-
-    // Parse the proxy box from user_utxos (first element should be the proxy box)
+    // First element of user_utxos must be the proxy box to refund
     if request.user_utxos.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -870,10 +749,8 @@ async fn build_refund(
         ));
     }
 
-    // The first UTXO should be the proxy box to refund
     let proxy_utxo = &request.user_utxos[0];
 
-    // Validate it matches the proxy_box_id
     let box_id = proxy_utxo["boxId"]
         .as_str()
         .or_else(|| proxy_utxo["box_id"].as_str())
@@ -894,7 +771,6 @@ async fn build_refund(
         ));
     }
 
-    // Extract proxy box fields
     let tx_id = proxy_utxo["transactionId"]
         .as_str()
         .or_else(|| proxy_utxo["transaction_id"].as_str())
@@ -958,7 +834,6 @@ async fn build_refund(
             )
         })? as i32;
 
-    // Parse assets
     let assets: Vec<(String, i64)> = proxy_utxo["assets"]
         .as_array()
         .map(|arr| {
@@ -979,7 +854,6 @@ async fn build_refund(
         })
         .unwrap_or_default();
 
-    // Extract R4 (user's ErgoTree) and R6 (refund height) from registers
     let registers = proxy_utxo["additionalRegisters"]
         .as_object()
         .or_else(|| proxy_utxo["additional_registers"].as_object())
@@ -1034,7 +908,6 @@ async fn build_refund(
             )
         })?;
 
-    // Build ProxyBoxData
     let proxy_box = ProxyBoxData {
         box_id: request.proxy_box_id.clone(),
         tx_id,
@@ -1052,20 +925,13 @@ async fn build_refund(
             .collect(),
     };
 
-    // Build the refund transaction
     let result = tx_builder::build_refund_tx(proxy_box, request.current_height)
         .map_err(build_error_to_api)?;
 
-    // Convert to API response
     refund_response_to_api(result, &request.proxy_box_id).map(Json)
 }
 
-// =============================================================================
-// Sigma Decoding Helpers
-// =============================================================================
-
-/// Decode a Sigma Coll[Byte] from register hex string
-/// Format: 0e (type tag) + VLQ length + data bytes
+/// Decode Sigma Coll[Byte]: 0e + VLQ length + data bytes
 fn decode_sigma_byte_array(hex_str: &str) -> Result<String, String> {
     let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid hex: {}", e))?;
 
@@ -1073,7 +939,6 @@ fn decode_sigma_byte_array(hex_str: &str) -> Result<String, String> {
         return Err("Not a Coll[Byte] type (expected 0x0e prefix)".to_string());
     }
 
-    // Decode VLQ length
     let mut idx = 1;
     let mut length: usize = 0;
     let mut shift = 0;
@@ -1099,12 +964,10 @@ fn decode_sigma_byte_array(hex_str: &str) -> Result<String, String> {
         ));
     }
 
-    // Extract the data bytes and return as hex
     Ok(hex::encode(&bytes[idx..idx + length]))
 }
 
-/// Decode a Sigma Int from register hex string
-/// Format: 04 (type tag) + zigzag-encoded VLQ value
+/// Decode Sigma Int: 04 + zigzag VLQ value
 fn decode_sigma_int(hex_str: &str) -> Result<i32, String> {
     let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid hex: {}", e))?;
 
@@ -1138,8 +1001,7 @@ fn decode_sigma_int(hex_str: &str) -> Result<i32, String> {
     Ok(value)
 }
 
-/// Decode a Sigma Long from register hex string
-/// Format: 05 (type tag) + zigzag-encoded VLQ value
+/// Decode Sigma Long: 05 + zigzag VLQ value
 fn decode_sigma_long(hex_str: &str) -> Result<i64, String> {
     let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid hex: {}", e))?;
 
@@ -1147,7 +1009,6 @@ fn decode_sigma_long(hex_str: &str) -> Result<i64, String> {
         return Err("Not a Long type (expected 0x05 prefix)".to_string());
     }
 
-    // Decode VLQ
     let mut idx = 1;
     let mut zigzag: u64 = 0;
     let mut shift = 0;
@@ -1165,7 +1026,6 @@ fn decode_sigma_long(hex_str: &str) -> Result<i64, String> {
         shift += 7;
     }
 
-    // Decode zigzag to signed value
     let value = if zigzag & 1 == 0 {
         (zigzag >> 1) as i64
     } else {

@@ -6,11 +6,11 @@ import {
   getBridgeFees,
   chainDisplayName,
   addressPlaceholder,
-  formatTokenAmount,
   type RosenBridgeState,
   type BridgeTokenInfo,
   type BridgeFeeInfo,
 } from '../api/rosen'
+import { formatTokenAmount } from '../utils/format'
 import { BridgeModal } from './BridgeModal'
 import './BridgeTab.css'
 

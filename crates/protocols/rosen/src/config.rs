@@ -32,8 +32,6 @@ struct ReleaseAsset {
 /// GitHub release info
 #[derive(Debug, Deserialize)]
 struct Release {
-    #[allow(dead_code)]
-    tag_name: String,
     assets: Vec<ReleaseAsset>,
 }
 

@@ -6,7 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core'
-import type { SwapBuildResponse, SwapSignResponse, SwapTxStatusResponse } from './amm'
+import type { SwapBuildResponse } from './amm'
 
 // =============================================================================
 // Type Definitions
@@ -64,28 +64,6 @@ export async function buildSwapRefundTx(
   return await invoke<SwapBuildResponse>('build_swap_refund_tx', {
     boxId,
     userErgoTree,
-  })
-}
-
-/**
- * Start ErgoPay signing flow for a refund transaction
- */
-export async function startRefundSign(
-  unsignedTx: object,
-  message: string,
-): Promise<SwapSignResponse> {
-  return await invoke<SwapSignResponse>('start_refund_sign', {
-    unsignedTx,
-    message,
-  })
-}
-
-/**
- * Get status of a refund transaction signing request
- */
-export async function getRefundTxStatus(requestId: string): Promise<SwapTxStatusResponse> {
-  return await invoke<SwapTxStatusResponse>('get_refund_tx_status', {
-    requestId,
   })
 }
 

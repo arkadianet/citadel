@@ -9,14 +9,12 @@
  * - get_bridge_tokens: Get tokens bridgeable to a specific chain
  * - get_bridge_fees: Get fee estimate for a transfer
  * - build_bridge_lock_tx: Build the lock transaction
- * - start_bridge_sign: Start ErgoPay signing
- * - get_bridge_tx_status: Poll signing status
+ * - start_mint_sign: Start ErgoPay signing
+ * - get_mint_tx_status: Poll signing status
  */
 
 import { invoke } from '@tauri-apps/api/core'
 
-import type { SignResponse, TxStatusResponse } from './types'
-export type { SignResponse, TxStatusResponse }
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -105,25 +103,9 @@ export async function buildBridgeLockTx(
   })
 }
 
-export async function startBridgeSign(
-  unsignedTx: object,
-  message: string
-): Promise<SignResponse> {
-  return await invoke<SignResponse>('start_bridge_sign', {
-    unsignedTx,
-    message,
-  })
-}
-
-export async function getBridgeTxStatus(requestId: string): Promise<TxStatusResponse> {
-  return await invoke<TxStatusResponse>('get_bridge_tx_status', { requestId })
-}
-
 // =============================================================================
 // HELPERS
 // =============================================================================
-
-export { formatTokenAmount } from '../utils/format'
 
 const CHAIN_NAMES: Record<string, string> = {
   cardano: 'Cardano',

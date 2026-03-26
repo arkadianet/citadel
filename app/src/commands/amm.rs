@@ -1,20 +1,38 @@
-use citadel_api::dto::{
-    AmmPoolDto, AmmPoolsResponse, MintSignRequest, MintSignResponse, MintTxStatusResponse,
-    SwapQuoteResponse,
-};
+use citadel_api::dto::{AmmPoolDto, AmmPoolsResponse, SwapQuoteResponse};
 use citadel_api::AppState;
-use citadel_core::BoxId;
+use ergo_node_client::NodeClient;
 use serde::Serialize;
 use tauri::State;
 
-/// Get all AMM pools
+use super::StrErr;
+
+async fn find_pool(client: &NodeClient, pool_id: &str) -> Result<amm::AmmPool, String> {
+    amm::discover_pools(client)
+        .await
+        .str_err()?
+        .into_iter()
+        .find(|p| p.pool_id == pool_id)
+        .ok_or_else(|| format!("Pool not found: {}", pool_id))
+}
+
+fn parse_swap_input(input_type: &str, amount: u64, token_id: Option<String>) -> Result<amm::SwapInput, String> {
+    match input_type {
+        "erg" => Ok(amm::SwapInput::Erg { amount }),
+        "token" => Ok(amm::SwapInput::Token {
+            token_id: token_id.ok_or("token_id required for token input")?,
+            amount,
+        }),
+        _ => Err("Invalid input_type. Use 'erg' or 'token'".to_string()),
+    }
+}
+
 #[tauri::command]
 pub async fn get_amm_pools(state: State<'_, AppState>) -> Result<AmmPoolsResponse, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
     let pools = amm::discover_pools(&client)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let pool_dtos: Vec<AmmPoolDto> = pools.into_iter().map(Into::into).collect();
     let count = pool_dtos.len();
@@ -25,7 +43,6 @@ pub async fn get_amm_pools(state: State<'_, AppState>) -> Result<AmmPoolsRespons
     })
 }
 
-/// Get a swap quote for the given pool and input
 #[tauri::command]
 pub async fn get_amm_quote(
     state: State<'_, AppState>,
@@ -34,44 +51,21 @@ pub async fn get_amm_quote(
     amount: u64,
     token_id: Option<String>,
 ) -> Result<SwapQuoteResponse, String> {
-    // Validate amount
     if amount == 0 {
         return Err("Amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
-    // Find the pool (discover all and filter client-side)
-    let pools = amm::discover_pools(&client)
-        .await
-        .map_err(|e| e.to_string())?;
+    let pool = find_pool(&client, &pool_id).await?;
 
-    let pool = pools
-        .into_iter()
-        .find(|p| p.pool_id == pool_id)
-        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+    let input = parse_swap_input(&input_type, amount, token_id)?;
 
-    // Build the swap input
-    let input = match input_type.as_str() {
-        "erg" => amm::SwapInput::Erg { amount },
-        "token" => amm::SwapInput::Token {
-            token_id: token_id.ok_or("token_id required for token input")?,
-            amount,
-        },
-        _ => return Err("Invalid input_type. Use 'erg' or 'token'".to_string()),
-    };
-
-    // Calculate quote
     let quote = amm::quote_swap(&pool, &input).ok_or("Cannot calculate quote for this swap")?;
 
     Ok(quote.into())
 }
 
-// =============================================================================
-// AMM Swap Commands (preview, build, sign, status)
-// =============================================================================
-
-/// Response for swap preview (quote + fee breakdown)
 #[derive(Debug, Serialize)]
 pub struct SwapPreviewResponse {
     pub output_amount: u64,
@@ -87,14 +81,12 @@ pub struct SwapPreviewResponse {
     pub total_erg_cost_nano: u64,
 }
 
-/// Response for building a swap transaction
 #[derive(Debug, Serialize)]
 pub struct SwapBuildResponse {
     pub unsigned_tx: serde_json::Value,
     pub summary: SwapTxSummaryDto,
 }
 
-/// Summary DTO for swap transaction
 #[derive(Debug, Serialize)]
 pub struct SwapTxSummaryDto {
     pub input_amount: u64,
@@ -106,7 +98,6 @@ pub struct SwapTxSummaryDto {
     pub total_erg_cost: u64,
 }
 
-/// Preview a swap: get quote + fee breakdown without building a transaction
 #[tauri::command]
 pub async fn preview_swap(
     state: State<'_, AppState>,
@@ -121,43 +112,24 @@ pub async fn preview_swap(
         return Err("Amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
-    // Fetch pools and find the matching one
-    let pools = amm::discover_pools(&client)
-        .await
-        .map_err(|e| e.to_string())?;
+    let pool = find_pool(&client, &pool_id).await?;
 
-    let pool = pools
-        .into_iter()
-        .find(|p| p.pool_id == pool_id)
-        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+    let input = parse_swap_input(&input_type, amount, token_id)?;
 
-    // Build swap input
-    let input = match input_type.as_str() {
-        "erg" => amm::SwapInput::Erg { amount },
-        "token" => amm::SwapInput::Token {
-            token_id: token_id.ok_or("token_id required for token input")?,
-            amount,
-        },
-        _ => return Err("Invalid input_type. Use 'erg' or 'token'".to_string()),
-    };
-
-    // Calculate quote
     let quote = amm::quote_swap(&pool, &input).ok_or("Cannot calculate quote for this swap")?;
 
-    // Apply slippage to get min_output
     let slippage_pct = slippage.unwrap_or(0.5);
     let min_output = amm::calculator::apply_slippage(quote.output.amount, slippage_pct);
 
-    // Fee constants (match tx_builder.rs)
+    // Fee constants must match tx_builder.rs
     let base_execution_fee: u64 = 2_000_000; // 0.002 ERG
     let nitro_mult = nitro.unwrap_or(1.2_f64).max(1.0);
     let execution_fee_nano: u64 = (base_execution_fee as f64 * nitro_mult) as u64;
     let proxy_box_value: u64 = 4_000_000;
     let miner_fee_nano: u64 = 1_100_000;
 
-    // Calculate total ERG cost
     let total_erg_cost_nano = match &input {
         amm::SwapInput::Erg { amount: erg_amt } => {
             erg_amt + execution_fee_nano + proxy_box_value + miner_fee_nano
@@ -180,7 +152,6 @@ pub async fn preview_swap(
     })
 }
 
-/// Build the actual swap EIP-12 unsigned transaction
 #[tauri::command]
 pub async fn build_swap_tx(
     state: State<'_, AppState>,
@@ -199,46 +170,16 @@ pub async fn build_swap_tx(
         return Err("Amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
-    // Find pool
-    let pools = amm::discover_pools(&client)
-        .await
-        .map_err(|e| e.to_string())?;
+    let pool = find_pool(&client, &pool_id).await?;
 
-    let pool = pools
-        .into_iter()
-        .find(|p| p.pool_id == pool_id)
-        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
-
-    // Parse user UTXOs from JSON
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
-
-    // Extract user ErgoTree from first UTXO
     let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
+    let user_pk = super::extract_p2pk_pubkey(&user_ergo_tree)?;
 
-    // Extract user public key from ErgoTree
-    // P2PK trees start with "0008cd" then 33 bytes (66 hex chars) of compressed public key
-    let user_pk = if user_ergo_tree.starts_with("0008cd") && user_ergo_tree.len() >= 72 {
-        user_ergo_tree[6..72].to_string()
-    } else {
-        return Err(format!(
-            "Cannot extract public key from ErgoTree: expected P2PK tree starting with '0008cd', got '{}'",
-            &user_ergo_tree[..std::cmp::min(12, user_ergo_tree.len())]
-        ));
-    };
+    let input = parse_swap_input(&input_type, amount, token_id)?;
 
-    // Build SwapInput
-    let input = match input_type.as_str() {
-        "erg" => amm::SwapInput::Erg { amount },
-        "token" => amm::SwapInput::Token {
-            token_id: token_id.ok_or("token_id required for token input")?,
-            amount,
-        },
-        _ => return Err("Invalid input_type. Use 'erg' or 'token'".to_string()),
-    };
-
-    // Build SwapRequest
     let request = amm::SwapRequest {
         pool_id: pool.pool_id.clone(),
         input,
@@ -246,15 +187,13 @@ pub async fn build_swap_tx(
         redeemer_address: user_address,
     };
 
-    // Convert optional recipient address
     let recipient_tree = match &recipient_address {
         Some(addr) if !addr.is_empty() => {
-            Some(ergo_tx::address_to_ergo_tree(addr).map_err(|e| e.to_string())?)
+            Some(ergo_tx::address_to_ergo_tree(addr).str_err()?)
         }
         _ => None,
     };
 
-    // Build the transaction
     let result = amm::build_swap_order_eip12(
         &request,
         &pool,
@@ -265,9 +204,8 @@ pub async fn build_swap_tx(
         execution_fee_nano,
         recipient_tree.as_deref(),
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
-    // Serialize unsigned tx to JSON
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
 
@@ -285,56 +223,7 @@ pub async fn build_swap_tx(
     })
 }
 
-/// Start ErgoPay signing flow for a swap transaction
-///
-/// Delegates to the existing start_mint_sign infrastructure.
-#[tauri::command]
-pub async fn start_swap_sign(
-    state: State<'_, AppState>,
-    unsigned_tx: serde_json::Value,
-    message: String,
-) -> Result<MintSignResponse, String> {
-    super::start_mint_sign(
-        state,
-        MintSignRequest {
-            unsigned_tx,
-            message,
-        },
-    )
-    .await
-}
 
-/// Get status of a swap transaction signing request
-///
-/// Delegates to the existing get_mint_tx_status infrastructure.
-#[tauri::command]
-pub async fn get_swap_tx_status(
-    state: State<'_, AppState>,
-    request_id: String,
-) -> Result<MintTxStatusResponse, String> {
-    super::get_mint_tx_status(state, request_id).await
-}
-
-/// Get a box by its ID from the node (returns JSON-serializable box data)
-#[tauri::command]
-pub async fn get_box_by_id(
-    state: State<'_, AppState>,
-    box_id: String,
-) -> Result<serde_json::Value, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
-    let bid = BoxId::new(box_id);
-    let ergo_box = ergo_node_client::queries::get_box_by_id(client.inner(), &bid)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    serde_json::to_value(&ergo_box).map_err(|e| format!("Failed to serialize box: {}", e))
-}
-
-// =============================================================================
-// AMM Direct Swap Commands
-// =============================================================================
-
-/// Response for direct swap preview
 #[derive(Debug, Serialize)]
 pub struct DirectSwapPreviewResponse {
     pub output_amount: u64,
@@ -349,14 +238,12 @@ pub struct DirectSwapPreviewResponse {
     pub total_erg_cost_nano: u64,
 }
 
-/// Response for building a direct swap transaction
 #[derive(Debug, Serialize)]
 pub struct DirectSwapBuildResponse {
     pub unsigned_tx: serde_json::Value,
     pub summary: DirectSwapSummaryDto,
 }
 
-/// Summary DTO for direct swap transaction
 #[derive(Debug, Serialize)]
 pub struct DirectSwapSummaryDto {
     pub input_amount: u64,
@@ -368,9 +255,7 @@ pub struct DirectSwapSummaryDto {
     pub total_erg_cost: u64,
 }
 
-/// Preview a direct swap: get quote + fee breakdown without building a transaction
-///
-/// Direct swaps have no execution fee (no bot involved).
+/// No execution fee -- direct swaps have no bot involved.
 #[tauri::command]
 pub async fn preview_direct_swap(
     state: State<'_, AppState>,
@@ -384,25 +269,11 @@ pub async fn preview_direct_swap(
         return Err("Amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
-    let pools = amm::discover_pools(&client)
-        .await
-        .map_err(|e| e.to_string())?;
+    let pool = find_pool(&client, &pool_id).await?;
 
-    let pool = pools
-        .into_iter()
-        .find(|p| p.pool_id == pool_id)
-        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
-
-    let input = match input_type.as_str() {
-        "erg" => amm::SwapInput::Erg { amount },
-        "token" => amm::SwapInput::Token {
-            token_id: token_id.ok_or("token_id required for token input")?,
-            amount,
-        },
-        _ => return Err("Invalid input_type. Use 'erg' or 'token'".to_string()),
-    };
+    let input = parse_swap_input(&input_type, amount, token_id)?;
 
     let quote = amm::quote_swap(&pool, &input).ok_or("Cannot calculate quote for this swap")?;
 
@@ -431,9 +302,6 @@ pub async fn preview_direct_swap(
     })
 }
 
-/// Build a direct swap EIP-12 unsigned transaction
-///
-/// Fetches the pool box and spends it directly in the user's transaction.
 #[tauri::command]
 pub async fn build_direct_swap_tx(
     state: State<'_, AppState>,
@@ -451,48 +319,27 @@ pub async fn build_direct_swap_tx(
         return Err("Amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
-    // Find pool
-    let pools = amm::discover_pools(&client)
-        .await
-        .map_err(|e| e.to_string())?;
+    let pool = find_pool(&client, &pool_id).await?;
 
-    let pool = pools
-        .into_iter()
-        .find(|p| p.pool_id == pool_id)
-        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
-
-    // Fetch pool box in EIP-12 format
     let pool_box = client
         .get_eip12_box_by_id(&pool.box_id)
         .await
         .map_err(|e| format!("Failed to fetch pool box: {}", e))?;
 
-    // Parse user UTXOs
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
-
     let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
 
-    // Build SwapInput
-    let input = match input_type.as_str() {
-        "erg" => amm::SwapInput::Erg { amount },
-        "token" => amm::SwapInput::Token {
-            token_id: token_id.ok_or("token_id required for token input")?,
-            amount,
-        },
-        _ => return Err("Invalid input_type. Use 'erg' or 'token'".to_string()),
-    };
+    let input = parse_swap_input(&input_type, amount, token_id)?;
 
-    // Convert optional recipient address
     let recipient_tree = match &recipient_address {
         Some(addr) if !addr.is_empty() => {
-            Some(ergo_tx::address_to_ergo_tree(addr).map_err(|e| e.to_string())?)
+            Some(ergo_tx::address_to_ergo_tree(addr).str_err()?)
         }
         _ => None,
     };
 
-    // Build the direct swap transaction
     let result = amm::build_direct_swap_eip12(
         &pool_box,
         &pool,
@@ -503,7 +350,7 @@ pub async fn build_direct_swap_tx(
         current_height,
         recipient_tree.as_deref(),
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
@@ -522,11 +369,6 @@ pub async fn build_direct_swap_tx(
     })
 }
 
-// =============================================================================
-// AMM Order Discovery Commands
-// =============================================================================
-
-/// DTO for PendingSwapOrder (camelCase for frontend)
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingOrderDto {
@@ -572,7 +414,6 @@ impl PendingOrderDto {
     }
 }
 
-/// DTO for a direct swap found in the mempool
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MempoolSwapDto {
@@ -598,18 +439,17 @@ impl MempoolSwapDto {
     }
 }
 
-/// Discover pending (unspent) swap orders for the connected wallet
 #[tauri::command]
 pub async fn get_pending_orders(
     state: State<'_, AppState>,
 ) -> Result<Vec<PendingOrderDto>, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     let wallet = state.wallet().await.ok_or("Wallet not connected")?;
 
     let utxos = client
         .get_address_utxos(&wallet.address)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let user_ergo_tree = utxos
         .first()
@@ -618,15 +458,13 @@ pub async fn get_pending_orders(
 
     let orders = amm::find_pending_orders(&client, &wallet.address, &user_ergo_tree, 50)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let mut dtos: Vec<PendingOrderDto> = orders.iter().map(PendingOrderDto::from_order).collect();
 
-    // Resolve token decimals from node
     let mut token_cache: std::collections::HashMap<String, u8> = std::collections::HashMap::new();
     for dto in &mut dtos {
         // For N2T sell: input=ERG(9), output=token(?). For buy: input=token(?), output=ERG(9).
-        // Extract the token ID from the input JSON for buy orders
         let token_id = match dto.order_type.as_str() {
             "n2t_swap_buy" => dto
                 .input
@@ -650,24 +488,22 @@ pub async fn get_pending_orders(
             };
             dto.input_decimals = decimals;
         }
-        // For sell orders, output_decimals needs pool token info
-        // We don't have the pool loaded here, so leave as 0 — the frontend
-        // already formats min_output via pool data when available
+        // For sell orders, output_decimals stays 0 -- the frontend
+        // formats min_output via pool data when available
     }
 
     Ok(dtos)
 }
 
-/// Find direct swap transactions in the mempool for the connected wallet
 #[tauri::command]
 pub async fn get_mempool_swaps(state: State<'_, AppState>) -> Result<Vec<MempoolSwapDto>, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     let wallet = state.wallet().await.ok_or("Wallet not connected")?;
 
     let utxos = client
         .get_address_utxos(&wallet.address)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let user_ergo_tree = utxos
         .first()
@@ -676,11 +512,10 @@ pub async fn get_mempool_swaps(state: State<'_, AppState>) -> Result<Vec<Mempool
 
     let swaps = amm::find_mempool_swaps(&client, &wallet.address, &user_ergo_tree)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let mut dtos: Vec<MempoolSwapDto> = swaps.iter().map(MempoolSwapDto::from_swap).collect();
 
-    // Resolve token decimals
     let mut token_cache: std::collections::HashMap<String, u8> = std::collections::HashMap::new();
     for dto in &mut dtos {
         for (tid, _, decimals) in &mut dto.receiving_tokens {
@@ -702,25 +537,23 @@ pub async fn get_mempool_swaps(state: State<'_, AppState>) -> Result<Vec<Mempool
     Ok(dtos)
 }
 
-/// Build a refund transaction for a swap proxy box.
-/// Takes just the box_id -- fetches the proxy box from the node internally.
 #[tauri::command]
 pub async fn build_swap_refund_tx(
     state: State<'_, AppState>,
     box_id: String,
     user_ergo_tree: String,
 ) -> Result<SwapBuildResponse, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
     let proxy_input = client
         .get_eip12_box_by_id(&box_id)
         .await
         .map_err(|e| format!("Cannot fetch proxy box: {}. It may have been spent.", e))?;
 
-    let current_height = client.current_height().await.map_err(|e| e.to_string())? as i32;
+    let current_height = client.current_height().await.str_err()? as i32;
 
     let result = amm::build_refund_tx_eip12(&proxy_input, &user_ergo_tree, current_height, &[])
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize tx: {}", e))?;
@@ -739,37 +572,7 @@ pub async fn build_swap_refund_tx(
     })
 }
 
-/// Start ErgoPay signing flow for a refund transaction
-#[tauri::command]
-pub async fn start_refund_sign(
-    state: State<'_, AppState>,
-    unsigned_tx: serde_json::Value,
-    message: String,
-) -> Result<MintSignResponse, String> {
-    super::start_mint_sign(
-        state,
-        MintSignRequest {
-            unsigned_tx,
-            message,
-        },
-    )
-    .await
-}
 
-/// Get status of a refund transaction signing request
-#[tauri::command]
-pub async fn get_refund_tx_status(
-    state: State<'_, AppState>,
-    request_id: String,
-) -> Result<MintTxStatusResponse, String> {
-    super::get_mint_tx_status(state, request_id).await
-}
-
-// =============================================================================
-// AMM LP Deposit/Redeem Commands
-// =============================================================================
-
-/// Preview response for LP deposit
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AmmLpDepositPreviewResponse {
@@ -783,7 +586,6 @@ pub struct AmmLpDepositPreviewResponse {
     pub total_erg_cost_nano: u64,
 }
 
-/// Preview response for LP redeem
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AmmLpRedeemPreviewResponse {
@@ -796,7 +598,6 @@ pub struct AmmLpRedeemPreviewResponse {
     pub total_erg_cost_nano: u64,
 }
 
-/// Build response for LP transactions (both direct and proxy)
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AmmLpBuildResponse {
@@ -804,10 +605,6 @@ pub struct AmmLpBuildResponse {
     pub summary: serde_json::Value,
 }
 
-/// Preview an LP deposit: calculate proportional amounts and LP reward.
-///
-/// Given a pool and one side of the deposit (ERG or token amount), calculates
-/// the proportional other side and the LP tokens the user would receive.
 #[tauri::command]
 pub async fn preview_amm_lp_deposit(
     state: State<'_, AppState>,
@@ -819,16 +616,9 @@ pub async fn preview_amm_lp_deposit(
         return Err("Amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
-    let pools = amm::discover_pools(&client)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let pool = pools
-        .into_iter()
-        .find(|p| p.pool_id == pool_id)
-        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+    let pool = find_pool(&client, &pool_id).await?;
 
     let erg_reserves = pool
         .erg_reserves
@@ -883,10 +673,6 @@ pub async fn preview_amm_lp_deposit(
     })
 }
 
-/// Build a direct LP deposit transaction (spends pool box directly).
-///
-/// Fetches the pool box and builds an EIP-12 unsigned transaction that deposits
-/// ERG and tokens into the pool, receiving LP tokens in return.
 #[tauri::command]
 pub async fn build_amm_lp_deposit_tx(
     state: State<'_, AppState>,
@@ -897,16 +683,9 @@ pub async fn build_amm_lp_deposit_tx(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<AmmLpBuildResponse, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
-    let pools = amm::discover_pools(&client)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let pool = pools
-        .into_iter()
-        .find(|p| p.pool_id == pool_id)
-        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+    let pool = find_pool(&client, &pool_id).await?;
 
     let pool_box = client
         .get_eip12_box_by_id(&pool.box_id)
@@ -925,7 +704,7 @@ pub async fn build_amm_lp_deposit_tx(
         &user_ergo_tree,
         current_height,
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
@@ -938,10 +717,7 @@ pub async fn build_amm_lp_deposit_tx(
     })
 }
 
-/// Build an LP deposit proxy order (creates proxy box for Spectrum bot execution).
-///
-/// Creates a proxy box containing the deposit contract. Off-chain Spectrum bots
-/// detect and execute the deposit against the pool.
+/// Proxy order -- Spectrum bots detect and execute the deposit.
 #[tauri::command]
 pub async fn build_amm_lp_deposit_order(
     state: State<'_, AppState>,
@@ -952,28 +728,14 @@ pub async fn build_amm_lp_deposit_order(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<AmmLpBuildResponse, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
-    let pools = amm::discover_pools(&client)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let pool = pools
-        .into_iter()
-        .find(|p| p.pool_id == pool_id)
-        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+    let pool = find_pool(&client, &pool_id).await?;
 
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
     let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
 
-    let user_pk = if user_ergo_tree.starts_with("0008cd") && user_ergo_tree.len() >= 72 {
-        user_ergo_tree[6..72].to_string()
-    } else {
-        return Err(format!(
-            "Cannot extract public key from ErgoTree: expected P2PK tree starting with '0008cd', got '{}'",
-            &user_ergo_tree[..std::cmp::min(12, user_ergo_tree.len())]
-        ));
-    };
+    let user_pk = super::extract_p2pk_pubkey(&user_ergo_tree)?;
 
     let result = amm::build_lp_deposit_order_eip12(
         &pool,
@@ -985,7 +747,7 @@ pub async fn build_amm_lp_deposit_order(
         current_height,
         None,
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
@@ -998,7 +760,6 @@ pub async fn build_amm_lp_deposit_order(
     })
 }
 
-/// Preview an LP redeem: calculate the ERG and token output for a given LP amount.
 #[tauri::command]
 pub async fn preview_amm_lp_redeem(
     state: State<'_, AppState>,
@@ -1009,16 +770,9 @@ pub async fn preview_amm_lp_redeem(
         return Err("LP amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
-    let pools = amm::discover_pools(&client)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let pool = pools
-        .into_iter()
-        .find(|p| p.pool_id == pool_id)
-        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+    let pool = find_pool(&client, &pool_id).await?;
 
     let erg_reserves = pool
         .erg_reserves
@@ -1046,10 +800,6 @@ pub async fn preview_amm_lp_redeem(
     })
 }
 
-/// Build a direct LP redeem transaction (spends pool box directly).
-///
-/// Fetches the pool box and builds an EIP-12 unsigned transaction that returns
-/// LP tokens to the pool, receiving proportional ERG and tokens in return.
 #[tauri::command]
 pub async fn build_amm_lp_redeem_tx(
     state: State<'_, AppState>,
@@ -1059,16 +809,9 @@ pub async fn build_amm_lp_redeem_tx(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<AmmLpBuildResponse, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
-    let pools = amm::discover_pools(&client)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let pool = pools
-        .into_iter()
-        .find(|p| p.pool_id == pool_id)
-        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+    let pool = find_pool(&client, &pool_id).await?;
 
     let pool_box = client
         .get_eip12_box_by_id(&pool.box_id)
@@ -1086,7 +829,7 @@ pub async fn build_amm_lp_redeem_tx(
         &user_ergo_tree,
         current_height,
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
@@ -1099,10 +842,7 @@ pub async fn build_amm_lp_redeem_tx(
     })
 }
 
-/// Build an LP redeem proxy order (creates proxy box for Spectrum bot execution).
-///
-/// Creates a proxy box containing the redeem contract and LP tokens. Off-chain
-/// Spectrum bots detect and execute the redemption, sending ERG and tokens to the user.
+/// Proxy order -- Spectrum bots detect and execute the redemption.
 #[tauri::command]
 pub async fn build_amm_lp_redeem_order(
     state: State<'_, AppState>,
@@ -1112,28 +852,14 @@ pub async fn build_amm_lp_redeem_order(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<AmmLpBuildResponse, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
-    let pools = amm::discover_pools(&client)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let pool = pools
-        .into_iter()
-        .find(|p| p.pool_id == pool_id)
-        .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+    let pool = find_pool(&client, &pool_id).await?;
 
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
     let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
 
-    let user_pk = if user_ergo_tree.starts_with("0008cd") && user_ergo_tree.len() >= 72 {
-        user_ergo_tree[6..72].to_string()
-    } else {
-        return Err(format!(
-            "Cannot extract public key from ErgoTree: expected P2PK tree starting with '0008cd', got '{}'",
-            &user_ergo_tree[..std::cmp::min(12, user_ergo_tree.len())]
-        ));
-    };
+    let user_pk = super::extract_p2pk_pubkey(&user_ergo_tree)?;
 
     let result = amm::build_lp_redeem_order_eip12(
         &pool,
@@ -1144,7 +870,7 @@ pub async fn build_amm_lp_redeem_order(
         current_height,
         None,
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
@@ -1157,11 +883,6 @@ pub async fn build_amm_lp_redeem_order(
     })
 }
 
-// =============================================================================
-// AMM Pool Creation Commands
-// =============================================================================
-
-/// Preview response for pool creation
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PoolCreatePreviewResponse {
@@ -1173,9 +894,6 @@ pub struct PoolCreatePreviewResponse {
     pub total_erg_cost_nano: u64,
 }
 
-/// Preview a new pool creation: calculate LP share and cost without building a transaction.
-///
-/// Pure calculation — no node state or wallet needed.
 #[tauri::command]
 pub async fn preview_pool_create(
     pool_type: String,
@@ -1185,7 +903,7 @@ pub async fn preview_pool_create(
     y_amount: u64,
     fee_percent: f64,
 ) -> Result<PoolCreatePreviewResponse, String> {
-    // Suppress unused variable warnings for args needed by Tauri's macro
+    // Tauri macro requires all args used
     let _ = (&x_token_id, &y_token_id);
 
     let fee_num = ((1.0 - fee_percent / 100.0) * amm::constants::fees::DEFAULT_FEE_DENOM as f64)
@@ -1223,10 +941,7 @@ pub async fn preview_pool_create(
     })
 }
 
-/// Build the bootstrap transaction (TX0) for a new pool.
-///
-/// Mints LP tokens and creates a bootstrap box at the user's address.
-/// The LP token ID equals the first input box_id (Ergo minting rule).
+/// LP token ID equals the first input box_id (Ergo minting rule).
 #[tauri::command]
 pub async fn build_pool_bootstrap_tx(
     pool_type: String,
@@ -1265,7 +980,7 @@ pub async fn build_pool_bootstrap_tx(
         &user_ergo_tree,
         current_height,
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
@@ -1278,10 +993,7 @@ pub async fn build_pool_bootstrap_tx(
     })
 }
 
-/// Build the pool create transaction (TX1) that creates the on-chain pool box.
-///
-/// Takes the bootstrap box (TX0 output) as JSON. Mints a pool NFT and creates
-/// the pool box under the appropriate pool contract ErgoTree.
+/// TX1: takes the bootstrap box (TX0 output) and creates the on-chain pool box.
 #[tauri::command]
 pub async fn build_pool_create_tx(
     bootstrap_box: serde_json::Value,
@@ -1323,7 +1035,7 @@ pub async fn build_pool_create_tx(
         &user_ergo_tree,
         current_height,
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
@@ -1336,13 +1048,6 @@ pub async fn build_pool_create_tx(
     })
 }
 
-// =============================================================================
-// Smart Router Commands
-// =============================================================================
-
-/// Find best swap routes across all pools.
-///
-/// Returns routes, per-hop depth tiers, and an optimal split suggestion.
 #[tauri::command]
 pub async fn find_swap_routes(
     state: State<'_, AppState>,
@@ -1358,10 +1063,10 @@ pub async fn find_swap_routes(
         return Err("Amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     let pools = amm::discover_pools(&client)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
     let max_hops = max_hops.unwrap_or(3);
@@ -1384,8 +1089,7 @@ pub async fn find_swap_routes(
 
     let depth_tiers = amm::calculate_all_depth_tiers(&graph, &source_token);
 
-    // Compute optimal split (only returned if it improves > 0.5%).
-    // min_rate excludes routes below a price floor (e.g. oracle rate) from the split.
+    // min_rate excludes routes below a price floor (e.g. oracle rate) from the split
     let min_rate_filter = min_rate.map(|r| (r, 2u8)); // SigUSD decimals = 2
     let split = amm::optimize_split_detailed(
         &graph,
@@ -1406,7 +1110,6 @@ pub async fn find_swap_routes(
     Ok(response)
 }
 
-/// Find optimal split across multiple routes.
 #[tauri::command]
 pub async fn find_split_route(
     state: State<'_, AppState>,
@@ -1420,10 +1123,10 @@ pub async fn find_split_route(
         return Err("Amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     let pools = amm::discover_pools(&client)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
     let max_hops = 3;
@@ -1432,7 +1135,6 @@ pub async fn find_split_route(
 
     let paths = amm::find_paths(&graph, &source_token, &target_token, max_hops);
 
-    // Quote each path to rank them, then pass top ones to optimizer
     let mut quoted: Vec<(usize, u64)> = paths
         .iter()
         .enumerate()
@@ -1448,10 +1150,9 @@ pub async fn find_split_route(
 
     let split = amm::optimize_split(&top_paths, input_amount, max_splits);
 
-    serde_json::to_value(&split).map_err(|e| e.to_string())
+    serde_json::to_value(&split).str_err()
 }
 
-/// Compare SigUSD acquisition options across DEX and protocol.
 #[tauri::command]
 pub async fn compare_sigusd_options(
     state: State<'_, AppState>,
@@ -1461,15 +1162,13 @@ pub async fn compare_sigusd_options(
         return Err("Amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
 
-    // Fetch pools and build graph
     let pools = amm::discover_pools(&client)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
     let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
 
-    // Fetch SigmaUSD state (None if unavailable on this network)
     let sigmausd_params = fetch_sigmausd_params(&state).await.ok();
 
     let sigusd_token_id = sigmausd::constants::mainnet::SIGUSD_TOKEN_ID;
@@ -1482,28 +1181,23 @@ pub async fn compare_sigusd_options(
         sigmausd_params.as_ref(),
     );
 
-    serde_json::to_value(&comparison).map_err(|e| e.to_string())
+    serde_json::to_value(&comparison).str_err()
 }
 
-/// Get liquidity depth analysis for pools from a given token.
 #[tauri::command]
 pub async fn get_liquidity_depth(
     state: State<'_, AppState>,
     source_token: String,
 ) -> Result<Vec<amm::DepthTiers>, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     let pools = amm::discover_pools(&client)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
     Ok(amm::calculate_all_depth_tiers(&graph, &source_token))
 }
 
-/// Get below-oracle SigUSD opportunity snapshot.
-///
-/// Returns per-pool arbitrage windows where SigUSD is cheaper than oracle,
-/// plus totals. No input amount needed — designed for page-load display.
 #[tauri::command]
 pub async fn get_sigusd_arb_snapshot(
     state: State<'_, AppState>,
@@ -1513,10 +1207,10 @@ pub async fn get_sigusd_arb_snapshot(
         return Err("Oracle rate must be positive".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     let pools = amm::discover_pools(&client)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     // Use lower liquidity threshold (1 ERG) and higher per-pair limit (10)
     // for arb snapshot to include small pools that offer above-oracle rates.
@@ -1532,9 +1226,6 @@ pub async fn get_sigusd_arb_snapshot(
     ))
 }
 
-/// Find best routes for a desired output amount (reverse routing).
-///
-/// Returns routes ranked by lowest ERG input needed.
 #[tauri::command]
 pub async fn find_swap_routes_by_output(
     state: State<'_, AppState>,
@@ -1549,10 +1240,10 @@ pub async fn find_swap_routes_by_output(
         return Err("Amount must be greater than 0".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     let pools = amm::discover_pools(&client)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
     let max_hops = max_hops.unwrap_or(3);
@@ -1583,22 +1274,18 @@ pub async fn find_swap_routes_by_output(
     Ok(response)
 }
 
-/// Helper to fetch SigmaUSD params for cross-protocol comparison.
 async fn fetch_sigmausd_params(
     state: &State<'_, AppState>,
 ) -> Result<amm::SigmaUsdParams, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or("Node capabilities not available")?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
     let config = state.config().await;
     let nft_ids = sigmausd::constants::NftIds::for_network(config.network)
         .ok_or("SigmaUSD not available on this network")?;
 
     let sigmausd_state = sigmausd::fetch_sigmausd_state(&client, &capabilities, &nft_ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     Ok(amm::SigmaUsdParams {
         sigusd_price_nano: sigmausd_state.sigusd_price_nano,
@@ -1607,18 +1294,15 @@ async fn fetch_sigmausd_params(
     })
 }
 
-/// Scan for profitable circular arbitrage loops (ERG → ... → ERG).
-///
-/// Returns all cycles where the output ERG exceeds input + tx fees.
 #[tauri::command]
 pub async fn scan_circular_arbs(
     state: State<'_, AppState>,
     max_hops: Option<usize>,
 ) -> Result<amm::CircularArbSnapshot, String> {
-    let client = state.node_client().await.ok_or("Node not connected")?;
+    let client = state.require_node_client().await?;
     let pools = amm::discover_pools(&client)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
     let max_hops = max_hops.unwrap_or(4);

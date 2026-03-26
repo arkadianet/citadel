@@ -6,7 +6,7 @@ import {
   type PendingOrder,
   type MempoolSwap,
 } from '../api/orders'
-import { formatErg } from '../api/amm'
+import { formatErg } from '../utils/format'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
 import { SwapRefundModal } from './SwapRefundModal'
 

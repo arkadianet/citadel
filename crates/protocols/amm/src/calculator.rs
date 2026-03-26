@@ -1,13 +1,7 @@
-//! AMM Calculator
-//!
-//! Swap math using constant product formula (x * y = k).
-
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 
-/// Calculate swap output using constant product formula
-///
-/// Formula: output = (reserves_out * input * fee_num) / (reserves_in * fee_denom + input * fee_num)
+/// output = (reserves_out * input * fee_num) / (reserves_in * fee_denom + input * fee_num)
 pub fn calculate_output(
     reserves_in: u64,
     reserves_out: u64,
@@ -31,9 +25,7 @@ pub fn calculate_output(
     result.try_into().unwrap_or(0)
 }
 
-/// Calculate required input for desired output (reverse calculation)
-///
-/// Formula: input = (reserves_in * output * fee_denom) / ((reserves_out - output) * fee_num)
+/// input = (reserves_in * output * fee_denom) / ((reserves_out - output) * fee_num)
 pub fn calculate_input(
     reserves_in: u64,
     reserves_out: u64,
@@ -45,7 +37,7 @@ pub fn calculate_input(
         return None;
     }
     if output_amount >= reserves_out {
-        return None; // Can't take more than reserves
+        return None;
     }
 
     let numerator =
@@ -57,11 +49,10 @@ pub fn calculate_input(
         return None;
     }
 
-    let result = (numerator / denominator) + BigInt::from(1); // Round up
+    let result = (numerator / denominator) + BigInt::from(1);
     result.try_into().ok()
 }
 
-/// Calculate spot price (reserves_out / reserves_in)
 pub fn calculate_spot_price(reserves_in: u64, reserves_out: u64) -> f64 {
     if reserves_in == 0 {
         return 0.0;
@@ -69,7 +60,6 @@ pub fn calculate_spot_price(reserves_in: u64, reserves_out: u64) -> f64 {
     reserves_out as f64 / reserves_in as f64
 }
 
-/// Calculate price impact as percentage
 pub fn calculate_price_impact(
     reserves_in: u64,
     reserves_out: u64,
@@ -90,7 +80,6 @@ pub fn calculate_price_impact(
     ((spot_price - execution_price) / spot_price).abs() * 100.0
 }
 
-/// Calculate effective rate after fees
 pub fn calculate_effective_rate(input_amount: u64, output_amount: u64) -> f64 {
     if input_amount == 0 {
         return 0.0;
@@ -98,23 +87,19 @@ pub fn calculate_effective_rate(input_amount: u64, output_amount: u64) -> f64 {
     output_amount as f64 / input_amount as f64
 }
 
-/// Apply slippage tolerance to output amount
 pub fn apply_slippage(output: u64, slippage_percent: f64) -> u64 {
     let factor = 1.0 - (slippage_percent / 100.0);
     (output as f64 * factor) as u64
 }
 
-/// Suggest minimum output with default slippage (0.5%)
 pub fn suggest_min_output(output: u64) -> u64 {
     apply_slippage(output, 0.5)
 }
 
-/// Calculate LP token circulating supply
 pub fn calculate_lp_supply(locked_amount: u64, total_emission: i64) -> u64 {
     (total_emission as u64).saturating_sub(locked_amount)
 }
 
-/// Calculate share of pool for given LP amount
 pub fn calculate_pool_share(lp_amount: u64, lp_supply: u64) -> f64 {
     if lp_supply == 0 {
         return 0.0;
@@ -122,11 +107,9 @@ pub fn calculate_pool_share(lp_amount: u64, lp_supply: u64) -> f64 {
     (lp_amount as f64 / lp_supply as f64) * 100.0
 }
 
-/// Calculate LP token reward for a deposit.
-///
 /// reward = min(input_x * supply_lp / reserves_x, input_y * supply_lp / reserves_y)
 ///
-/// Uses BigInt to prevent overflow (reserves and supply can be up to i64::MAX).
+/// Uses BigInt to prevent overflow.
 pub fn calculate_lp_reward(
     reserves_x: u64,
     reserves_y: u64,
@@ -143,9 +126,6 @@ pub fn calculate_lp_reward(
     reward.try_into().unwrap_or(0)
 }
 
-/// Calculate proportional token needed to match a given ERG input for deposit.
-///
-/// token_needed = input_erg * reserves_y / reserves_x
 pub fn calculate_deposit_token_needed(reserves_x: u64, reserves_y: u64, input_x: u64) -> u64 {
     if reserves_x == 0 {
         return 0;
@@ -154,9 +134,6 @@ pub fn calculate_deposit_token_needed(reserves_x: u64, reserves_y: u64, input_x:
     result.try_into().unwrap_or(0)
 }
 
-/// Calculate proportional ERG needed to match a given token input for deposit.
-///
-/// erg_needed = input_token * reserves_x / reserves_y
 pub fn calculate_deposit_erg_needed(reserves_x: u64, reserves_y: u64, input_y: u64) -> u64 {
     if reserves_y == 0 {
         return 0;
@@ -165,11 +142,7 @@ pub fn calculate_deposit_erg_needed(reserves_x: u64, reserves_y: u64, input_y: u
     result.try_into().unwrap_or(0)
 }
 
-/// Calculate user's share of pool reserves when redeeming LP tokens.
-///
 /// Returns (erg_out, token_out).
-/// erg_out = lp_input * reserves_x / supply_lp
-/// token_out = lp_input * reserves_y / supply_lp
 pub fn calculate_redeem_shares(
     reserves_x: u64,
     reserves_y: u64,
@@ -189,11 +162,9 @@ pub fn calculate_redeem_shares(
 
 use crate::state::{AmmPool, PoolType, SwapInput, SwapQuote, TokenAmount};
 
-/// Calculate a swap quote for the given pool and input
 pub fn quote_swap(pool: &AmmPool, input: &SwapInput) -> Option<SwapQuote> {
     match (pool.pool_type, input) {
         (PoolType::N2T, SwapInput::Erg { amount }) => {
-            // Swap ERG for token Y
             let reserves_in = pool.erg_reserves?;
             let reserves_out = pool.token_y.amount;
             let output = calculate_output(
@@ -228,7 +199,6 @@ pub fn quote_swap(pool: &AmmPool, input: &SwapInput) -> Option<SwapQuote> {
             })
         }
         (PoolType::N2T, SwapInput::Token { token_id, amount }) => {
-            // Swap token Y for ERG
             if token_id != &pool.token_y.token_id {
                 return None;
             }
@@ -266,14 +236,11 @@ pub fn quote_swap(pool: &AmmPool, input: &SwapInput) -> Option<SwapQuote> {
             })
         }
         (PoolType::T2T, SwapInput::Token { token_id, amount }) => {
-            // T2T swap
             let token_x = pool.token_x.as_ref()?;
 
             let (reserves_in, reserves_out, output_token) = if token_id == &token_x.token_id {
-                // Swap X for Y
                 (token_x.amount, pool.token_y.amount, &pool.token_y)
             } else if token_id == &pool.token_y.token_id {
-                // Swap Y for X
                 (pool.token_y.amount, token_x.amount, token_x)
             } else {
                 return None;
@@ -314,12 +281,7 @@ pub fn quote_swap(pool: &AmmPool, input: &SwapInput) -> Option<SwapQuote> {
     }
 }
 
-/// Calculate initial LP share for pool creation using geometric mean.
-///
-/// Formula: sqrt(x_amount * y_amount)
-/// Uses BigInt to prevent overflow since x_amount * y_amount can exceed u64::MAX.
-///
-/// Returns 0 if either amount is 0.
+/// sqrt(x_amount * y_amount), using BigInt to prevent overflow.
 pub fn calculate_initial_lp_share(x_amount: u64, y_amount: u64) -> u64 {
     if x_amount == 0 || y_amount == 0 {
         return 0;

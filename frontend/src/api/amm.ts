@@ -10,7 +10,6 @@
 
 import { invoke } from '@tauri-apps/api/core'
 
-import type { SignResponse, TxStatusResponse } from './types'
 
 // =============================================================================
 // Type Definitions
@@ -121,8 +120,6 @@ export async function getAmmQuote(
 // Helper Functions
 // =============================================================================
 
-export { formatTokenAmount, formatErg } from '../utils/format'
-
 /**
  * Get pool display name
  *
@@ -172,8 +169,6 @@ export interface SwapTxSummary {
   total_erg_cost: number
 }
 
-export type SwapSignResponse = SignResponse
-export type SwapTxStatusResponse = TxStatusResponse
 
 // =============================================================================
 // Swap API Functions
@@ -299,18 +294,6 @@ export async function buildDirectSwapTx(
   })
 }
 
-export async function startSwapSign(unsignedTx: object, message: string): Promise<SwapSignResponse> {
-  return await invoke<SwapSignResponse>('start_swap_sign', {
-    unsignedTx,
-    message,
-  })
-}
-
-export async function getSwapTxStatus(requestId: string): Promise<SwapTxStatusResponse> {
-  return await invoke<SwapTxStatusResponse>('get_swap_tx_status', {
-    requestId,
-  })
-}
 
 // =============================================================================
 // LP Deposit/Redeem Types

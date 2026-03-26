@@ -634,7 +634,7 @@ export function BorrowModal({
           )}
 
           {step === 'success' && (
-            <div className="lend-success-step">
+            <div className="success-step">
               <div className="success-icon">
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2">
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -654,7 +654,7 @@ export function BorrowModal({
           )}
 
           {step === 'error' && (
-            <div className="lend-error-step">
+            <div className="error-step">
               <div className="error-icon">
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--error)" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />

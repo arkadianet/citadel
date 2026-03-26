@@ -1,14 +1,3 @@
-//! Refund Transaction Builder
-//!
-//! Builds EIP-12 unsigned transactions to refund unexecuted swap orders.
-//! Spends the proxy box via RefundProp (user's public key) and returns
-//! all contents to the user's address.
-//!
-//! # Transaction Structure
-//!
-//! Inputs:  [proxy_box, (optional extra user UTXOs for fee)]
-//! Outputs: [user_output, miner_fee]
-
 use std::collections::HashMap;
 
 use ergo_tx::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
@@ -16,17 +5,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::state::AmmError;
 
-/// Standard miner fee for refund transactions (0.0011 ERG)
 const REFUND_TX_FEE: u64 = citadel_core::constants::TX_FEE_NANO as u64;
 
-/// Result of building a refund transaction
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RefundBuildResult {
     pub unsigned_tx: Eip12UnsignedTx,
     pub summary: RefundSummary,
 }
 
-/// Summary of the refund for UI display
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RefundSummary {
     pub proxy_box_id: String,
@@ -35,24 +21,12 @@ pub struct RefundSummary {
     pub miner_fee: u64,
 }
 
-/// Build a refund transaction for an unexecuted swap order.
-///
-/// Spends the proxy box via RefundProp (user's public key) and sends
-/// all contents back to the user's address.
-///
-/// # Arguments
-///
-/// * `proxy_box` - The swap proxy box to refund
-/// * `user_ergo_tree` - User's ErgoTree hex (destination for refunded funds)
-/// * `current_height` - Current blockchain height
-/// * `additional_inputs` - Optional extra UTXOs if proxy box doesn't cover miner fee
 pub fn build_refund_tx_eip12(
     proxy_box: &Eip12InputBox,
     user_ergo_tree: &str,
     current_height: i32,
     additional_inputs: &[Eip12InputBox],
 ) -> Result<RefundBuildResult, AmmError> {
-    // 1. Calculate total input ERG
     let proxy_value: u64 = proxy_box
         .value
         .parse()
@@ -65,7 +39,6 @@ pub fn build_refund_tx_eip12(
 
     let total_input_erg = proxy_value + additional_erg;
 
-    // 2. Validate enough for miner fee
     if total_input_erg <= REFUND_TX_FEE {
         return Err(AmmError::RefundError(format!(
             "Insufficient ERG for miner fee: have {} nanoERG, need more than {}",
@@ -75,7 +48,6 @@ pub fn build_refund_tx_eip12(
 
     let user_erg = total_input_erg - REFUND_TX_FEE;
 
-    // 3. Collect all tokens from all inputs
     let mut token_totals: HashMap<String, u64> = HashMap::new();
     for input in std::iter::once(proxy_box).chain(additional_inputs.iter()) {
         for asset in &input.assets {
@@ -106,7 +78,6 @@ pub fn build_refund_tx_eip12(
         .map(|(id, &amount)| (id.clone(), amount))
         .collect();
 
-    // 4. Build user output
     let user_output = Eip12Output {
         value: user_erg.to_string(),
         ergo_tree: user_ergo_tree.to_string(),
@@ -115,14 +86,11 @@ pub fn build_refund_tx_eip12(
         additional_registers: HashMap::new(),
     };
 
-    // 5. Build fee output
     let fee_output = Eip12Output::fee(REFUND_TX_FEE as i64, current_height);
 
-    // 6. Build inputs list
     let mut inputs = vec![proxy_box.clone()];
     inputs.extend(additional_inputs.iter().cloned());
 
-    // 7. Assemble transaction
     let unsigned_tx = Eip12UnsignedTx {
         inputs,
         data_inputs: vec![],
@@ -191,18 +159,15 @@ mod tests {
         assert_eq!(tx.inputs.len(), 1);
         assert!(tx.data_inputs.is_empty());
 
-        // User output: proxy value - fee
         let user_output = &tx.outputs[0];
         let user_value: u64 = user_output.value.parse().unwrap();
         assert_eq!(user_value, 1_006_000_000 - REFUND_TX_FEE);
         assert_eq!(user_output.ergo_tree, USER_ERGO_TREE);
         assert!(user_output.assets.is_empty());
 
-        // Fee output
         let fee_output = &tx.outputs[1];
         assert_eq!(fee_output.value, REFUND_TX_FEE.to_string());
 
-        // Summary
         assert_eq!(result.summary.proxy_box_id, "proxy_box_1");
         assert_eq!(result.summary.refunded_erg, 1_006_000_000 - REFUND_TX_FEE);
         assert!(result.summary.refunded_tokens.is_empty());
@@ -217,7 +182,6 @@ mod tests {
         let tx = &result.unsigned_tx;
         assert_eq!(tx.outputs.len(), 2);
 
-        // User output should have the token
         let user_output = &tx.outputs[0];
         let user_value: u64 = user_output.value.parse().unwrap();
         assert_eq!(user_value, 6_000_000 - REFUND_TX_FEE);
@@ -228,7 +192,6 @@ mod tests {
         );
         assert_eq!(user_output.assets[0].amount, "10000");
 
-        // Summary
         assert_eq!(result.summary.refunded_tokens.len(), 1);
     }
 
@@ -264,7 +227,6 @@ mod tests {
         let user_output = &result.unsigned_tx.outputs[0];
         assert_eq!(user_output.assets.len(), 3);
 
-        // Check all tokens are present
         let mut token_ids: Vec<&str> = user_output
             .assets
             .iter()
@@ -323,7 +285,6 @@ mod tests {
             extension: HashMap::new(),
         };
 
-        // But user provides an extra UTXO with enough ERG
         let extra_utxo = Eip12InputBox {
             box_id: "extra_utxo".to_string(),
             transaction_id: "tx_extra".to_string(),
@@ -340,12 +301,10 @@ mod tests {
             build_refund_tx_eip12(&proxy, USER_ERGO_TREE, 1_000_000, &[extra_utxo]).unwrap();
 
         let tx = &result.unsigned_tx;
-        // inputs = [proxy_box, user_utxo]
         assert_eq!(tx.inputs.len(), 2);
         assert_eq!(tx.inputs[0].box_id, "low_erg_proxy");
         assert_eq!(tx.inputs[1].box_id, "extra_utxo");
 
-        // User gets 1M + 5M - 1.1M fee = 4.9M ERG + the token
         let user_output = &tx.outputs[0];
         let user_value: u64 = user_output.value.parse().unwrap();
         assert_eq!(user_value, 6_000_000 - REFUND_TX_FEE);

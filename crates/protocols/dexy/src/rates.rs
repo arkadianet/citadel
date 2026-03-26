@@ -1,43 +1,23 @@
-//! Dexy Rates Calculator
-//!
-//! Calculates rates and availability for all three minting paths:
-//! - ArbMint: Arbitrage minting when LP rate > oracle rate
-//! - FreeMint: Daily allocation from protocol (0.5% fee)
-//! - LP Swap: Direct swap through liquidity pool (0% fee)
-
 use serde::{Deserialize, Serialize};
 
 use crate::state::DexyState;
 
-// DexyVariant is used through state.variant in from_state()
-
-/// Bank fee percentage (0.5% total: 0.3% bank + 0.2% buyback)
+/// 0.5% total: 0.3% bank + 0.2% buyback
 const BANK_FEE_PERCENT: f64 = 0.5;
-/// LP swap fee percentage (0%)
 const LP_FEE_PERCENT: f64 = 0.0;
 
-/// Rates and availability for all minting paths
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DexyRates {
     pub variant: String,
     pub token_name: String,
     pub token_decimals: u8,
-
-    /// Oracle rate in nanoERG per token (adjusted)
     pub oracle_rate_nano: i64,
-    /// ERG per display token
     pub erg_per_token: f64,
-    /// Display tokens per ERG
     pub tokens_per_erg: f64,
-
-    /// Peg description
     pub peg_description: String,
-
-    /// All three minting paths
     pub paths: MintPaths,
 }
 
-/// Container for all three minting paths
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MintPaths {
     pub arb_mint: MintPath,
@@ -45,54 +25,37 @@ pub struct MintPaths {
     pub lp_swap: MintPath,
 }
 
-/// A single minting path with availability and rate information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MintPath {
     pub name: String,
     pub available: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
-
-    /// ERG per display token (None if unavailable)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub erg_per_token: Option<f64>,
-    /// Display tokens per ERG
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tokens_per_erg: Option<f64>,
-    /// Effective rate after fees (ERG per token)
+    /// After fees (ERG per token)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effective_rate: Option<f64>,
-
-    /// Max tokens for this path (raw units)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_tokens: Option<i64>,
-    /// Remaining today (FreeMint only, raw units)
+    /// FreeMint only, raw units
     #[serde(skip_serializing_if = "Option::is_none")]
     pub remaining_today: Option<i64>,
-
-    /// Fee percentage (0.5 for bank paths, 0 for LP)
     pub fee_percent: f64,
-    /// Is this the best rate among available paths?
     pub is_best_rate: bool,
 }
 
 impl DexyRates {
-    /// Calculate rates from DexyState
-    ///
-    /// This computes availability and rates for all three minting paths:
-    /// - ArbMint: Available when LP rate > oracle rate (arbitrage opportunity)
-    /// - FreeMint: Available when free_mint_available > 0
-    /// - LP Swap: Always available if LP has reserves
     pub fn from_state(state: &DexyState) -> Self {
         let variant = state.variant;
         let decimals = variant.decimals();
         let multiplier = 10_f64.powi(decimals as i32);
 
-        // Oracle rate: convert nanoERG per raw token to ERG per display token
-        // oracle_erg_per_display = (oracle_rate_nano / 1e9) * multiplier
+        // Convert nanoERG per raw token to ERG per display token
         let oracle_erg_per_display = (state.oracle_rate_nano as f64 / 1e9) * multiplier;
 
-        // LP rate: calculate from reserves
         let lp_rate_nano = if state.lp_dexy_reserves > 0 {
             state.lp_erg_reserves as f64 / state.lp_dexy_reserves as f64
         } else {
@@ -100,7 +63,6 @@ impl DexyRates {
         };
         let lp_erg_per_display = (lp_rate_nano / 1e9) * multiplier;
 
-        // Calculate paths
         let arb_mint = Self::calculate_arb_mint(
             state,
             oracle_erg_per_display,
@@ -110,7 +72,6 @@ impl DexyRates {
         let free_mint = Self::calculate_free_mint(state, oracle_erg_per_display);
         let lp_swap = Self::calculate_lp_swap(state, lp_erg_per_display);
 
-        // Determine best rate among available paths
         let mut paths = MintPaths {
             arb_mint,
             free_mint,
@@ -118,7 +79,6 @@ impl DexyRates {
         };
         Self::mark_best_rate(&mut paths);
 
-        // Tokens per ERG (using oracle rate as reference)
         let tokens_per_erg = if oracle_erg_per_display > 0.0 {
             1.0 / oracle_erg_per_display
         } else {
@@ -137,10 +97,7 @@ impl DexyRates {
         }
     }
 
-    /// Calculate ArbMint path availability
-    ///
-    /// ArbMint is available when LP rate > oracle rate, allowing arbitrage:
-    /// mint at oracle rate, sell on LP at higher rate.
+    /// Available when LP rate > oracle rate (arbitrage: mint at oracle, sell on LP).
     fn calculate_arb_mint(
         state: &DexyState,
         oracle_erg_per_display: f64,
@@ -150,7 +107,6 @@ impl DexyRates {
         let available = lp_rate_nano > oracle_rate_nano && state.dexy_in_bank > 0;
 
         let (erg_per_token, tokens_per_erg, effective_rate, reason) = if available {
-            // Effective rate includes 0.5% fee
             let effective = oracle_erg_per_display * (1.0 + BANK_FEE_PERCENT / 100.0);
             let tpe = if oracle_erg_per_display > 0.0 {
                 1.0 / oracle_erg_per_display
@@ -174,7 +130,6 @@ impl DexyRates {
             )
         };
 
-        // Max tokens is limited by bank supply
         let max_tokens = if available {
             Some(state.dexy_in_bank)
         } else {
@@ -195,14 +150,10 @@ impl DexyRates {
         }
     }
 
-    /// Calculate FreeMint path availability
-    ///
-    /// FreeMint is available when free_mint_available > 0 (daily allocation).
     fn calculate_free_mint(state: &DexyState, oracle_erg_per_display: f64) -> MintPath {
         let available = state.free_mint_available > 0 && state.dexy_in_bank > 0;
 
         let (erg_per_token, tokens_per_erg, effective_rate, reason) = if available {
-            // Effective rate includes 0.5% fee
             let effective = oracle_erg_per_display * (1.0 + BANK_FEE_PERCENT / 100.0);
             let tpe = if oracle_erg_per_display > 0.0 {
                 1.0 / oracle_erg_per_display
@@ -226,7 +177,6 @@ impl DexyRates {
             )
         };
 
-        // Max tokens is the minimum of bank supply and free_mint_available
         let max_tokens = if available {
             Some(state.free_mint_available.min(state.dexy_in_bank))
         } else {
@@ -247,14 +197,10 @@ impl DexyRates {
         }
     }
 
-    /// Calculate LP Swap path availability
-    ///
-    /// LP Swap is always available if LP has reserves (no fee).
     fn calculate_lp_swap(state: &DexyState, lp_erg_per_display: f64) -> MintPath {
         let available = state.lp_dexy_reserves > 0 && state.lp_erg_reserves > 0;
 
         let (erg_per_token, tokens_per_erg, effective_rate, reason) = if available {
-            // LP has no protocol fee (effective rate = base rate)
             let tpe = if lp_erg_per_display > 0.0 {
                 1.0 / lp_erg_per_display
             } else {
@@ -270,7 +216,6 @@ impl DexyRates {
             (None, None, None, Some("LP has no liquidity".to_string()))
         };
 
-        // Max tokens is limited by LP reserves (simplified - actual AMM would have slippage)
         let max_tokens = if available {
             Some(state.lp_dexy_reserves)
         } else {
@@ -291,14 +236,11 @@ impl DexyRates {
         }
     }
 
-    /// Mark the path with the best effective rate as is_best_rate
-    ///
-    /// Best rate means lowest ERG cost per token (lowest effective_rate).
+    /// Best = lowest ERG cost per token.
     fn mark_best_rate(paths: &mut MintPaths) {
         let mut best_rate: Option<f64> = None;
         let mut best_path: Option<&str> = None;
 
-        // Find best rate among available paths
         for (name, path) in [
             ("arb_mint", &paths.arb_mint),
             ("free_mint", &paths.free_mint),
@@ -314,7 +256,6 @@ impl DexyRates {
             }
         }
 
-        // Mark the best path
         if let Some(best) = best_path {
             match best {
                 "arb_mint" => paths.arb_mint.is_best_rate = true,
@@ -377,14 +318,12 @@ mod tests {
 
     #[test]
     fn test_rates_basic() {
-        // Oracle: 1_000_000_000_000 nanoERG/kg -> 1_000_000 nanoERG/mg (after divisor)
-        // LP: 1000 ERG / 1M tokens = 1_000_000 nanoERG/token
         let state = create_test_state(
-            1_000_000_000_000, // Oracle raw (nanoERG per kg)
-            1_000_000_000_000, // LP ERG reserves (1000 ERG)
-            1_000_000,         // LP dexy reserves
-            50_000,            // FreeMint available
-            9_999_999_000_000, // Bank tokens
+            1_000_000_000_000,
+            1_000_000_000_000,
+            1_000_000,
+            50_000,
+            9_999_999_000_000,
         );
 
         let rates = DexyRates::from_state(&state);
@@ -392,20 +331,18 @@ mod tests {
         assert_eq!(rates.variant, "gold");
         assert_eq!(rates.token_name, "DexyGold");
         assert_eq!(rates.token_decimals, 0);
-        assert_eq!(rates.oracle_rate_nano, 1_000_000); // Adjusted rate
+        assert_eq!(rates.oracle_rate_nano, 1_000_000);
     }
 
     #[test]
     fn test_arb_mint_available() {
-        // LP rate > oracle rate -> arb mint available
-        // Oracle: 1_000_000 nanoERG/token
-        // LP: 1100 ERG / 1M tokens = 1_100_000 nanoERG/token (10% higher)
+        // LP rate 10% higher than oracle -> arb mint available
         let state = create_test_state(
-            1_000_000_000_000, // Oracle raw
-            1_100_000_000_000, // LP ERG (1100 ERG - higher than oracle)
-            1_000_000,         // LP dexy
-            50_000,            // FreeMint available
-            9_999_999_000_000, // Bank tokens
+            1_000_000_000_000,
+            1_100_000_000_000,
+            1_000_000,
+            50_000,
+            9_999_999_000_000,
         );
 
         let rates = DexyRates::from_state(&state);
@@ -418,15 +355,13 @@ mod tests {
 
     #[test]
     fn test_arb_mint_unavailable_no_arbitrage() {
-        // LP rate <= oracle rate -> arb mint unavailable
-        // Oracle: 1_000_000 nanoERG/token
-        // LP: 900 ERG / 1M tokens = 900_000 nanoERG/token (lower)
+        // LP rate lower than oracle -> no arbitrage
         let state = create_test_state(
-            1_000_000_000_000, // Oracle raw
-            900_000_000_000,   // LP ERG (900 ERG - lower than oracle)
-            1_000_000,         // LP dexy
-            50_000,            // FreeMint available
-            9_999_999_000_000, // Bank tokens
+            1_000_000_000_000,
+            900_000_000_000,
+            1_000_000,
+            50_000,
+            9_999_999_000_000,
         );
 
         let rates = DexyRates::from_state(&state);
@@ -447,7 +382,7 @@ mod tests {
             1_000_000_000_000,
             1_000_000_000_000,
             1_000_000,
-            50_000, // FreeMint available
+            50_000,
             9_999_999_000_000,
         );
 
@@ -464,7 +399,7 @@ mod tests {
             1_000_000_000_000,
             1_000_000_000_000,
             1_000_000,
-            0, // FreeMint exhausted
+            0,
             9_999_999_000_000,
         );
 
@@ -495,7 +430,6 @@ mod tests {
 
         assert!(rates.paths.lp_swap.available);
         assert_eq!(rates.paths.lp_swap.fee_percent, 0.0);
-        // LP swap effective rate should equal base rate (no fee)
         assert_eq!(
             rates.paths.lp_swap.effective_rate,
             rates.paths.lp_swap.erg_per_token
@@ -506,8 +440,8 @@ mod tests {
     fn test_lp_swap_unavailable_no_liquidity() {
         let state = create_test_state(
             1_000_000_000_000,
-            0, // No LP ERG
-            0, // No LP dexy
+            0,
+            0,
             50_000,
             9_999_999_000_000,
         );
@@ -526,18 +460,16 @@ mod tests {
 
     #[test]
     fn test_best_rate_lp_when_cheaper() {
-        // LP rate < oracle rate -> LP is cheaper (best rate)
         let state = create_test_state(
-            1_000_000_000_000, // Oracle
-            800_000_000_000,   // LP ERG (800 ERG - cheaper)
-            1_000_000,         // LP dexy
-            50_000,            // FreeMint available
-            9_999_999_000_000, // Bank tokens
+            1_000_000_000_000,
+            800_000_000_000,
+            1_000_000,
+            50_000,
+            9_999_999_000_000,
         );
 
         let rates = DexyRates::from_state(&state);
 
-        // LP swap should be best (cheaper than oracle + fee)
         assert!(rates.paths.lp_swap.is_best_rate);
         assert!(!rates.paths.free_mint.is_best_rate);
         assert!(!rates.paths.arb_mint.is_best_rate);
@@ -545,19 +477,16 @@ mod tests {
 
     #[test]
     fn test_best_rate_bank_when_cheaper() {
-        // LP rate > oracle rate -> bank paths are cheaper
         let state = create_test_state(
-            1_000_000_000_000, // Oracle
-            1_200_000_000_000, // LP ERG (1200 ERG - more expensive)
-            1_000_000,         // LP dexy
-            50_000,            // FreeMint available
-            9_999_999_000_000, // Bank tokens
+            1_000_000_000_000,
+            1_200_000_000_000,
+            1_000_000,
+            50_000,
+            9_999_999_000_000,
         );
 
         let rates = DexyRates::from_state(&state);
 
-        // Bank paths (arb_mint or free_mint) should be best
-        // Both have same rate, so either could be marked
         let bank_is_best = rates.paths.arb_mint.is_best_rate || rates.paths.free_mint.is_best_rate;
         assert!(bank_is_best);
     }
@@ -574,7 +503,6 @@ mod tests {
 
         let rates = DexyRates::from_state(&state);
 
-        // FreeMint effective rate should be base rate * 1.005 (0.5% fee)
         if let (Some(base), Some(effective)) = (
             rates.paths.free_mint.erg_per_token,
             rates.paths.free_mint.effective_rate,
@@ -588,15 +516,14 @@ mod tests {
     fn test_bank_empty() {
         let state = create_test_state(
             1_000_000_000_000,
-            1_100_000_000_000, // Would be arb opportunity
+            1_100_000_000_000,
             1_000_000,
-            50_000, // FreeMint available
-            0,      // Bank empty
+            50_000,
+            0,
         );
 
         let rates = DexyRates::from_state(&state);
 
-        // Both bank paths should be unavailable
         assert!(!rates.paths.arb_mint.available);
         assert!(!rates.paths.free_mint.available);
         assert!(rates
@@ -617,23 +544,20 @@ mod tests {
 
     #[test]
     fn test_dexy_usd_decimals() {
-        // Test with DexyUSD (3 decimals)
         let bank = DexyBankBoxData {
             box_id: "bank123".to_string(),
             erg_value: 1_000_000_000_000,
             dexy_tokens: 9_999_999_000_000,
             ergo_tree: "tree".to_string(),
         };
-        // USD oracle: nanoERG per USD, divide by 1000 for per-token
-        // Raw: 1_850_000_000 nanoERG/USD -> 1_850_000 nanoERG per 0.001 USE
         let oracle = DexyOracleBoxData {
             box_id: "oracle456".to_string(),
-            rate_nano: 1_850_000_000, // 1.85 ERG per USD
+            rate_nano: 1_850_000_000,
         };
         let lp = DexyLpBoxData {
             box_id: "lp789".to_string(),
-            erg_reserves: 1_850_000_000_000, // 1850 ERG
-            dexy_reserves: 1_000_000,        // 1M tokens
+            erg_reserves: 1_850_000_000_000,
+            dexy_reserves: 1_000_000,
             lp_token_reserves: 0,
         };
         let free_mint = DexyFreeMintBoxData {
@@ -658,8 +582,7 @@ mod tests {
         assert_eq!(rates.variant, "usd");
         assert_eq!(rates.token_name, "DexyUSD");
         assert_eq!(rates.token_decimals, 3);
-        // 1.85 ERG per USD = 0.00185 ERG per 0.001 USE
-        // erg_per_token = (1_850_000 / 1e9) * 1000 = 0.00185 * 1000 = 1.85 ERG per display token (1 USE = 1000 raw)
+        // erg_per_token = (1_850_000 / 1e9) * 1000 = 1.85 ERG per display token
         assert!((rates.erg_per_token - 1.85).abs() < 0.01);
     }
 }

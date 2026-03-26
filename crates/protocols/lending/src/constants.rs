@@ -1,9 +1,3 @@
-//! Duckpools Lending Protocol Constants
-//!
-//! Pool configurations for all Duckpools lending markets.
-//! All pools defined as configuration data for easy extension.
-
-/// Type of proxy operation (for stuck box discovery)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProxyOperationType {
     Lend,
@@ -25,14 +19,12 @@ impl ProxyOperationType {
     }
 }
 
-/// A unique proxy address with its operation type
 #[derive(Debug, Clone)]
 pub struct ProxyAddressInfo {
     pub address: &'static str,
     pub operation: ProxyOperationType,
 }
 
-/// Proxy contract addresses for Duckpools operations
 #[derive(Debug, Clone)]
 pub struct ProxyContracts {
     pub lend_address: &'static str,
@@ -42,7 +34,6 @@ pub struct ProxyContracts {
     pub partial_repay_address: &'static str,
 }
 
-/// Market configuration
 #[derive(Debug, Clone)]
 pub struct PoolConfig {
     pub id: &'static str,
@@ -52,31 +43,27 @@ pub struct PoolConfig {
     pub currency_id: Option<&'static str>,
     pub lend_token_id: &'static str,
     pub is_erg_pool: bool,
-    /// Asset decimals (e.g., 9 for ERG/nanoERG, 2 for SigUSD cents, 0 for SigRSV)
     pub decimals: u8,
     pub child_nft: &'static str,
     pub parent_nft: &'static str,
     pub parameter_nft: &'static str,
-    /// Borrow token ID (pool box tokens[2]). Used to find collateral boxes on-chain.
     /// Empty string if borrowing not supported for this pool.
     pub borrow_token_id: &'static str,
     pub collateral_address: &'static str,
     pub repayment_address: &'static str,
     pub proxy_contracts: ProxyContracts,
-    /// Liquidation threshold for ERG collateral (e.g. 1250 = 125% LTV). 0 = no borrowing.
+    /// e.g. 1250 = 125% LTV. 0 = no borrowing.
     pub liquidation_threshold: u64,
-    /// DEX pool NFT used for price discovery of this token against ERG. None for ERG pool.
+    /// DEX pool NFT for price discovery against ERG. None for ERG pool.
     pub collateral_dex_nft: Option<&'static str>,
 }
 
-/// Interest rate calculation constants
 pub mod interest {
     pub const INTEREST_MULTIPLIER: u64 = 100_000_000;
     pub const BLOCKS_PER_YEAR: u64 = 262_800;
     pub const UPDATE_FREQUENCY_BLOCKS: u32 = 120;
 }
 
-/// Token supply constants
 pub mod supply {
     pub const MAX_LEND_TOKENS_ERG: u64 = 9_000_000_001_000_000;
     pub const MAX_LEND_TOKENS_TOKEN: u64 = 9_000_000_000_000_010;
@@ -91,26 +78,23 @@ pub mod supply {
     }
 }
 
-/// Fee configuration
 pub mod fees {
     pub const MIN_BOX_VALUE: u64 = citadel_core::constants::MIN_BOX_VALUE_NANO as u64;
-    /// Duckpools bot uses 1M nanoERG miner fee (differs from the standard 1.1M)
+    /// Duckpools bot uses 1M nanoERG (differs from the standard 1.1M)
     pub const DUCKPOOLS_MINER_FEE: u64 = 1_000_000;
-    /// TX_FEE kept as alias for DUCKPOOLS_MINER_FEE for backward compatibility in calculator
     pub const TX_FEE: u64 = DUCKPOOLS_MINER_FEE;
     pub const MIN_LOAN_VALUE: u64 = 50_000_000;
     pub const REFUND_HEIGHT_OFFSET: i32 = 720;
 
     pub const ERG_THRESHOLDS: (u64, u64) = (20_000_000_000, 200_000_000_000);
-    /// Token fee thresholds (in token base units, not ERG)
-    /// These are lower than ERG_THRESHOLDS because they're measured in different units
+    /// In token base units (not ERG)
     pub const TOKEN_THRESHOLDS: (u64, u64) = (2000, 200_000);
 
     pub const DIVISOR_ONE: u64 = 160;
     pub const DIVISOR_TWO: u64 = 200;
     pub const DIVISOR_THREE: u64 = 250;
 
-    /// Calculate service fee matching Duckpools platform_functions.py
+    /// Matches Duckpools platform_functions.py
     pub fn calculate_service_fee(amount: u64, thresholds: (u64, u64)) -> u64 {
         let (step_one, step_two) = thresholds;
 
@@ -129,21 +113,11 @@ pub mod fees {
     }
 }
 
-/// Health factor thresholds for UI color coding
-///
-/// Health factor = (collateral_value * 1000) / (total_owed * liquidation_threshold)
-/// - >= HEALTHY_THRESHOLD (1.5): Safe position, displayed in green
-/// - >= WARNING_THRESHOLD (1.2): At risk, displayed in amber/yellow
-/// - < WARNING_THRESHOLD: Danger of liquidation, displayed in red
 pub mod health {
     pub const HEALTHY_THRESHOLD: f64 = 1.5;
     pub const WARNING_THRESHOLD: f64 = 1.2;
 }
 
-/// Mainnet pool configurations
-///
-/// Note: Token pools (non-ERG) have empty collateral_address because
-/// collateral handling differs from the ERG pool structure.
 pub mod mainnet {
     use super::{PoolConfig, ProxyContracts};
 
@@ -155,7 +129,6 @@ pub mod mainnet {
         partial_repay_address: "21oVVJWKo1R7NvYL5pSTkLpKR89QHizFoXzgrA87ecoVtRBXJWhf8ZKfUrQHU4NQ97fY6W17yifLGPWCwLhQ85vmwiwGDx2njfspUDmRt1RvBRAiKHYXYbu6mBaNUEUSPzL7ZsyYNLv2aV1NfeWympbEf3jDmZUDs1Dg8A9s31LCmV2aJxJb2P5P3FS8d7sSBcQUNbtZ1Ch3aYihL6HDX1Xc6HhFFrjyzxCUQ6d2ZfecvWQCbKHQ1zasA2TuPnHchmcEgJBvP4n7xC3kby3o4xxw8bPfNaLEaqWZFbJ8DS513dsU8udpKEStXM3ze6p68ktx9PpYKZREmt4M3MFKvxVkzQKmQbuxPsKsT6D6kxbuL1yeEb",
     };
 
-    // Token pools share common lend/withdraw/repay proxies, borrow differs per market
     const TOKEN_PROXY_BASE: ProxyContracts = ProxyContracts {
         lend_address: "KeFZdXyRkmbbDumvWSR1sijFcEbnqF7EL3YprErvspPHs3wmQ3qcD64X5JdjYARbxF4SAYivys3FgqfDgdjQNoa5ULahXEY4SAQNPPK6VLZFMGHjBmzgo7CS5MTDxcuxLvrFUZVHthy2y5DK7Bf7TqUC5TQoVFQxEgsLNpHSd5eG7s9KoGdVY2H1s4HhiEgAzUTmTqiQSaeUr4qpn8erxg8ajR74W4bVyBzovJ8oduDiHPznnrCZnZBhU3NdjLre3MDBHqEkrHnpR9hkEgACDxDLaS8cvaLXsRdejY9qaohVs",
         withdraw_address: "3rEnDaoVvvfRygpGSe76qKfAi1AHLHH8xH28rWysgHDT1TwUEcY87z8NhN7TPjshdUXCXmSxfqH3U9VTH7PoSnfVp9J9CCKKUWWtb4SQbz4SetmN7qk2JNNrMoBUfaqY2YwyVJyvjx3hszibW8wJhc8eCECpCRGUTTmrjFRvQHUYRhP47DBAVWPVgkQeMDU46rw6jYBR2aooRtyjHZKsbc8WAoNjPpdmNYjv9JtJmrMNDnsX7rWqmWWsGuv953SipQsAsAZhxezGLHGEuPKKAFruJn1Pbus2N6qT3ZkP",
@@ -164,7 +137,6 @@ pub mod mainnet {
         partial_repay_address: "3X8eZkShyZ9u5h9Mid1Voz2RKgEQnWWgMtRJkqwjcWvGY5mBkwqUxQoPYzbFCSV5UhQTU3HnnwfjjUTfbaPQxUBt5yaRSzer9qHrFpYGn4M5XrwUkUuYaBd5i1LKwBd2teDz2j5iGS8myhd2MivCVzGBFcHkC4n4ry3VfxEnsqA4wtZEHecXmy9D6DPnK5yKaQkGSkUrgiFk5hL9HnW9Ae4NR29iKM4SgiSvxTYYi1oh6JUp5S5gBeR1LYNBL9VoxakABL9Pa9JHYBFzXW9YW16wWdLbh3t7a3KmtKGALgePWU6LszCPrZrXCgWZ9qMz4FB1arngGELjQ3jex",
     };
 
-    // Per-market borrow proxies
     const SIGUSD_BORROW: &str = "5hz4vVihRAd3zGRdVa9s4scCZwZXrMBT95kNhPKRr7pyNm8CcjuyE8biuyFwKbE6f5kQT9Q2w3Fg6Jx1tk1xziDydvCPaqC19x6h5YtP2ZFYFat4bfspbsPhw52KeX8qpQbv84AJ7ZhoVvZa9aZ2w85B3tyuZNBQHipbyzFirts5UtKz7pad2savs8D9N5xrk9yoZB4vLU39Kx5fgbE48EE5au3Ze79YA6L2HiVH8GQpjyPcbE2L7kxHp88dfGg4Xarj3AqSktPb7PCdZFqa1oNLQPs8HWSdh9jpYiFtksWQvEfPkhCcedNSe7EWYB8XowyWHd9euxvXRFfeVRgSxj23hcoDGQJK9Dx58ov1gPVWTMq5T2VCA3zwMXU4emDf7rzTMPHpLud2q3a9MgFjFc5s7GhxF4Mmb2V3Wge4ZuMJN71Y4aZ1gEh6U73NMuDuUGD1eCKFHRMVZ5udXJh7SQT7m7A5dEakgYokPjLi56oNPXdSEjiqC3C85PbsJJoHyBuyCf2yrAM26wiFpRNXyJkuquW8ra66jhqdupiVYyZBzohfbyTy9ykhkiikZDJv5gUjCXCQpPkMHccNdSWBP69yioqfunS5PPdj1xfJN7xfLga8a";
     const SIGRSV_BORROW: &str = "5hz4vVihRAd3zGRdVa9s4scCZwZY4f3jsrhadauHNxMrqCBqAXeak2MVp2ig35iv7pL32WQX2K2J4xCRKa9yWDdo41x8R5gkjkPCkBpZN1eyFkqseqg1yt6mtmSxQyKt2o3ikR5VhS2HBFFy5TcRxdaj2yySWV83XCjPXvCstJLCevdoroYPbC5NbTukcgqrDuaiYaYqX6DPweNDamFJC7SUSnmWKf5ALdMUoqF5XsuewEMoTGvJvEZzS5TwXpVyxtjwoaFvPK9FJK22KAo9Ed26gUw1C727RDbQWAvirT7fPiMuoxaLSEDFv5RW3ZGUYvcPPpfJXMf7Jj7w6ZJYbpMVzi9g29deWhD5qPgf5mRR7iRWs2GUeVJEFvJAGx5ZxMp4kgGia8gFYAhEVGiAwCFPTETWokRfhrc3c8TsuV7nn42meqUkyBsDNjgXHWhjJGN7iWM4qVQEiRRKkXhaYckW4GD3PbvPZ2Au61wCL6oQNW8nBZUg2bcTZQRWaUrcKpr6n7DMHiRL9jjUGZfnDB8DhM9JviGUDp83LXM9UviremuU4aUZzX14eici4bhkyVJ7cakWY5SqxS8KfFAmpFPKtaHjFmniFvLVnTgdvCSaCfndh";
     const RSN_BORROW: &str = "5hz4vVihRAd3zGRdVa9s4scCZwZY6BCGVpPxJr9rLhVq8Gh5jMeYgR23ohyCWaDiWkHBz6kx3yGcK4tESubJyJyhgbeTq8SVQVMZWLu4yqmwLSyQJXVgVpZL1piNTazoRpyei5kyaxpwc9d7yFUDdWAySsfYYAYQoKmmkdtwUJVJks8jy5xaQZo6SxDgmKsHwkKGNkGAupntLTXDSVjb2MGJywUzSwGsWoKV67wQdNiEvjztiwuaKEqEDb8zZkFCGMaSoYcmaYEZzhuJyZartVukoUHou9SFKb11t1kuuqjcBEFMSTkmYSbncQgoizTepDUfkhQEYGtaoD6vzEFcb3c2cUvrfWp6bh6X4Zxb59iXSnEX3XzajF1HHfkEjKD5EPgawauZaZQfhQZVueHyU5UjBeYESQmxgu4FattCgEuJtBc7o4MNCG2S4f2WhDBHaR253TA8AfxLrfGmsQQXLUPVzQWNxCQ9cf2u5Lcbf7JebRxufiSrEw5zi3iEWqzNAq47wFhhTC2vihceErpWsKJvsHkbL8nQ5YSjLGi6c16nYAwWcrwuFsM34pQMtc4VN1HULce8p2N5QvX6MCc3EG1X13a3yYNyVwkXa9SSqjQsxZ7du";
@@ -387,20 +359,14 @@ pub mod mainnet {
     ];
 }
 
-/// Get all pool configs (mainnet only for MVP)
 pub fn get_pools() -> &'static [PoolConfig] {
     mainnet::ALL_POOLS
 }
 
-/// Get a specific pool by ID
 pub fn get_pool(pool_id: &str) -> Option<&'static PoolConfig> {
     get_pools().iter().find(|p| p.id == pool_id)
 }
 
-/// Collect unique proxy contract addresses across all pools.
-///
-/// Deduplicates shared addresses (token pools share lend/withdraw/repay/partial_repay).
-/// Returns ~16 unique addresses tagged with their operation type.
 pub fn unique_proxy_addresses() -> Vec<ProxyAddressInfo> {
     let mut seen = std::collections::HashSet::new();
     let mut result = Vec::new();
@@ -435,14 +401,12 @@ mod tests {
 
     #[test]
     fn test_get_pool_by_id() {
-        // Verify all 8 pools can be retrieved
         let pool_ids = [
             "erg", "sigusd", "sigrsv", "rsn", "rsada", "spf", "rsbtc", "quacks",
         ];
         for id in pool_ids {
             assert!(get_pool(id).is_some(), "Pool '{}' should exist", id);
         }
-        // Verify invalid pool returns None
         assert!(get_pool("invalid").is_none());
     }
 
@@ -455,9 +419,7 @@ mod tests {
 
     #[test]
     fn test_service_fee_calculation() {
-        // Small amount: tier 1 only
         assert_eq!(fees::calculate_service_fee(1000, fees::TOKEN_THRESHOLDS), 6);
-        // Large amount: all tiers
         assert_eq!(
             fees::calculate_service_fee(300000, fees::TOKEN_THRESHOLDS),
             1402
@@ -467,12 +429,8 @@ mod tests {
     #[test]
     fn test_unique_proxy_addresses() {
         let addrs = unique_proxy_addresses();
-        // ERG pool: 5 unique addresses
-        // Token pools: 4 shared (lend, withdraw, repay, partial_repay) + 7 unique borrow = 11
-        // Total: 5 + 11 = 16
+        // 5 ERG-specific + 4 shared token + 7 per-market borrow = 16
         assert_eq!(addrs.len(), 16);
-
-        // Verify no duplicates
         let unique: std::collections::HashSet<&str> = addrs.iter().map(|a| a.address).collect();
         assert_eq!(unique.len(), addrs.len());
     }
@@ -490,15 +448,11 @@ mod tests {
     fn test_service_fee_tier_boundaries() {
         let (t1, t2) = fees::TOKEN_THRESHOLDS;
 
-        // At tier 1 boundary - fee switches to tier 2 calculation
-        // Need to go past by DIVISOR_TWO for integer division to show increase
         let fee_at_t1 = fees::calculate_service_fee(t1, fees::TOKEN_THRESHOLDS);
         let fee_past_t1 =
             fees::calculate_service_fee(t1 + fees::DIVISOR_TWO, fees::TOKEN_THRESHOLDS);
         assert!(fee_past_t1 > fee_at_t1, "Fee should increase past tier 1");
 
-        // At tier 2 boundary - fee switches to tier 3 calculation
-        // Need to go past by DIVISOR_THREE for integer division to show increase
         let fee_at_t2 = fees::calculate_service_fee(t2, fees::TOKEN_THRESHOLDS);
         let fee_past_t2 =
             fees::calculate_service_fee(t2 + fees::DIVISOR_THREE, fees::TOKEN_THRESHOLDS);

@@ -1,35 +1,20 @@
 //! SigmaFi transaction builders (EIP-12 format)
-//!
-//! Five transaction types:
-//! 1. Open Order - Borrower creates a collateralized loan request
-//! 2. Cancel Order - Borrower withdraws an unfilled order
-//! 3. Close Order - Lender fills an order, creating a bond
-//! 4. Repay - Borrower repays loan before maturity
-//! 5. Liquidate - Lender claims collateral after maturity
 
 use std::collections::HashMap;
 
 use ergo_tx::eip12::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
 use ergo_tx::sigma::{encode_sigma_coll_byte, encode_sigma_int, encode_sigma_long};
-use ergo_tx::{collect_change_tokens, select_erg_boxes, select_token_boxes};
+use ergo_tx::{append_change_output, select_erg_boxes, select_inputs_for_spend};
 
 use crate::calculator;
 use crate::constants::{self, OrderType, SAFE_MIN_BOX_VALUE, STORAGE_PERIOD};
 
-/// Standard miner fee (1.1 mERG)
 const MINER_FEE: i64 = 1_100_000;
-
-/// Minimum box value for change outputs
 const MIN_CHANGE_VALUE: i64 = 1_000_000;
 
-/// Encode a SigmaProp(ProveDlog) register value from a P2PK ErgoTree hex.
-///
-/// P2PK ErgoTree: "0008cd" + 33-byte-compressed-pubkey
-/// SigmaProp register: "08cd" + 33-byte-compressed-pubkey
+/// P2PK ErgoTree "0008cd{pubkey}" -> SigmaProp register "08cd{pubkey}"
 fn encode_sigma_prop_from_ergo_tree(p2pk_ergo_tree: &str) -> Result<String, SigmaFiTxError> {
-    // P2PK ErgoTree starts with "0008cd" followed by 66 hex chars (33 bytes pubkey)
     if p2pk_ergo_tree.len() >= 72 && p2pk_ergo_tree.starts_with("0008cd") {
-        // Register encoding: "08cd" + pubkey (skip "00" prefix from ErgoTree)
         Ok(format!("08cd{}", &p2pk_ergo_tree[6..72]))
     } else {
         Err(SigmaFiTxError::InvalidAddress(
@@ -38,56 +23,35 @@ fn encode_sigma_prop_from_ergo_tree(p2pk_ergo_tree: &str) -> Result<String, Sigm
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SigmaFiTxError {
+    #[error("Invalid address: {0}")]
     InvalidAddress(String),
+    #[error("Invalid amount: {0}")]
     InvalidAmount(String),
+    #[error("Invalid maturity: {0}")]
     InvalidMaturity(String),
+    #[error("Box selection failed: {0}")]
     BoxSelection(String),
+    #[error("Insufficient funds: {0}")]
     InsufficientFunds(String),
 }
 
-impl std::fmt::Display for SigmaFiTxError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::InvalidAddress(msg) => write!(f, "Invalid address: {}", msg),
-            Self::InvalidAmount(msg) => write!(f, "Invalid amount: {}", msg),
-            Self::InvalidMaturity(msg) => write!(f, "Invalid maturity: {}", msg),
-            Self::BoxSelection(msg) => write!(f, "Box selection failed: {}", msg),
-            Self::InsufficientFunds(msg) => write!(f, "Insufficient funds: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for SigmaFiTxError {}
-
-// =============================================================================
-// Tx 1: Open Order
-// =============================================================================
-
 pub struct OpenOrderRequest {
-    /// Borrower's P2PK ErgoTree hex
     pub borrower_ergo_tree: String,
-    /// Loan token ID ("ERG" for native)
+    /// "ERG" for native
     pub loan_token_id: String,
-    /// Principal amount in raw units
     pub principal: u64,
-    /// Total repayment amount in raw units
     pub repayment: u64,
-    /// Maturity duration in blocks
     pub maturity_blocks: i32,
-    /// Collateral ERG in nanoERG (0 if token-only with SAFE_MIN_BOX_VALUE)
+    /// nanoERG (0 if token-only with SAFE_MIN_BOX_VALUE)
     pub collateral_erg: u64,
-    /// Collateral tokens: [(token_id, amount)]
     pub collateral_tokens: Vec<(String, u64)>,
-    /// User's available UTXOs
     pub user_inputs: Vec<Eip12InputBox>,
-    /// Current blockchain height
     pub current_height: i32,
 }
 
 pub fn build_open_order(req: &OpenOrderRequest) -> Result<Eip12UnsignedTx, SigmaFiTxError> {
-    // Validate
     if req.principal == 0 {
         return Err(SigmaFiTxError::InvalidAmount(
             "Principal must be positive".to_string(),
@@ -113,19 +77,13 @@ pub fn build_open_order(req: &OpenOrderRequest) -> Result<Eip12UnsignedTx, Sigma
 
     let order_ergo_tree = constants::build_order_contract(&req.loan_token_id, OrderType::OnClose);
 
-    // Register values
     let r4 = encode_sigma_prop_from_ergo_tree(&req.borrower_ergo_tree)?;
     let r5 = encode_sigma_long(req.principal as i64);
     let r6 = encode_sigma_long(req.repayment as i64);
     let r7 = encode_sigma_int(req.maturity_blocks);
 
-    let mut registers = HashMap::new();
-    registers.insert("R4".to_string(), r4);
-    registers.insert("R5".to_string(), r5);
-    registers.insert("R6".to_string(), r6);
-    registers.insert("R7".to_string(), r7);
+    let registers = ergo_tx::sigma_registers!("R4" => r4, "R5" => r5, "R6" => r6, "R7" => r7);
 
-    // Order box value: collateral ERG or SAFE_MIN_BOX_VALUE
     let order_value = if req.collateral_erg > 0 {
         req.collateral_erg as i64
     } else {
@@ -146,70 +104,48 @@ pub fn build_open_order(req: &OpenOrderRequest) -> Result<Eip12UnsignedTx, Sigma
         additional_registers: registers,
     };
 
-    // Calculate required ERG
     let required_erg = (order_value + MINER_FEE + MIN_CHANGE_VALUE) as u64;
 
-    // Select inputs
-    let selected = if req.collateral_tokens.is_empty() {
-        select_erg_boxes(&req.user_inputs, required_erg)
-            .map_err(|e| SigmaFiTxError::BoxSelection(e.to_string()))?
-    } else {
-        // For the first collateral token, use select_token_boxes
-        let (ref first_token_id, first_amount) = req.collateral_tokens[0];
-        select_token_boxes(&req.user_inputs, first_token_id, first_amount, required_erg)
-            .map_err(|e| SigmaFiTxError::BoxSelection(e.to_string()))?
-    };
+    let first_token = req
+        .collateral_tokens
+        .first()
+        .map(|(tid, amt)| (tid.as_str(), *amt));
+    let selected = select_inputs_for_spend(&req.user_inputs, required_erg, first_token)
+        .map_err(|e| SigmaFiTxError::BoxSelection(e.to_string()))?;
 
-    // Change
-    let change_erg = selected.total_erg as i64 - order_value - MINER_FEE;
-    if change_erg < 0 {
-        return Err(SigmaFiTxError::InsufficientFunds(format!(
-            "Need {} more nanoERG",
-            -change_erg
-        )));
-    }
-
+    let erg_used = (order_value + MINER_FEE) as u64;
     let spent_tokens: Vec<(&str, u64)> = req
         .collateral_tokens
         .iter()
         .map(|(tid, amt)| (tid.as_str(), *amt))
         .collect();
-    let change_tokens = if spent_tokens.len() == 1 {
-        collect_change_tokens(
-            &selected.boxes,
-            Some((spent_tokens[0].0, spent_tokens[0].1)),
-        )
-    } else {
-        ergo_tx::collect_multi_change_tokens(&selected.boxes, &spent_tokens)
-    };
 
-    let change_output = Eip12Output::change(
-        change_erg,
+    let mut outputs = vec![order_output];
+
+    append_change_output(
+        &mut outputs,
+        &selected,
+        erg_used,
+        &spent_tokens,
         &req.borrower_ergo_tree,
-        change_tokens,
         req.current_height,
-    );
-    let fee_output = Eip12Output::fee(MINER_FEE, req.current_height);
+        MIN_CHANGE_VALUE as u64,
+    )
+    .map_err(|e| SigmaFiTxError::InsufficientFunds(e.to_string()))?;
+
+    outputs.push(Eip12Output::fee(MINER_FEE, req.current_height));
 
     Ok(Eip12UnsignedTx {
         inputs: selected.boxes,
         data_inputs: vec![],
-        outputs: vec![order_output, change_output, fee_output],
+        outputs,
     })
 }
 
-// =============================================================================
-// Tx 2: Cancel Order
-// =============================================================================
-
 pub struct CancelOrderRequest {
-    /// The order box to cancel (as EIP-12 input)
     pub order_box: Eip12InputBox,
-    /// Borrower's P2PK ErgoTree hex
     pub borrower_ergo_tree: String,
-    /// User's available UTXOs (for miner fee)
     pub user_inputs: Vec<Eip12InputBox>,
-    /// Current blockchain height
     pub current_height: i32,
 }
 
@@ -220,12 +156,10 @@ pub fn build_cancel_order(req: &CancelOrderRequest) -> Result<Eip12UnsignedTx, S
         .parse()
         .map_err(|_| SigmaFiTxError::InvalidAmount("Invalid order box value".to_string()))?;
 
-    // Select user inputs for miner fee
     let fee_required = (MINER_FEE + MIN_CHANGE_VALUE) as u64;
     let selected = select_erg_boxes(&req.user_inputs, fee_required)
         .map_err(|e| SigmaFiTxError::BoxSelection(e.to_string()))?;
 
-    // Return collateral to borrower
     let return_output = Eip12Output {
         value: order_erg.to_string(),
         ergo_tree: req.borrower_ergo_tree.clone(),
@@ -234,51 +168,45 @@ pub fn build_cancel_order(req: &CancelOrderRequest) -> Result<Eip12UnsignedTx, S
         additional_registers: HashMap::new(),
     };
 
-    // Change from fee inputs
-    let change_erg = selected.total_erg as i64 - MINER_FEE;
-    let change_tokens = collect_change_tokens(&selected.boxes, None);
-    let change_output = Eip12Output::change(
-        change_erg,
-        &req.borrower_ergo_tree,
-        change_tokens,
-        req.current_height,
-    );
-    let fee_output = Eip12Output::fee(MINER_FEE, req.current_height);
+    let mut outputs = vec![return_output];
 
-    // Order box is first input
+    append_change_output(
+        &mut outputs,
+        &selected,
+        MINER_FEE as u64,
+        &[],
+        &req.borrower_ergo_tree,
+        req.current_height,
+        MIN_CHANGE_VALUE as u64,
+    )
+    .map_err(|e| SigmaFiTxError::InsufficientFunds(e.to_string()))?;
+
+    outputs.push(Eip12Output::fee(MINER_FEE, req.current_height));
+
     let mut inputs = vec![req.order_box.clone()];
     inputs.extend(selected.boxes);
 
     Ok(Eip12UnsignedTx {
         inputs,
         data_inputs: vec![],
-        outputs: vec![return_output, change_output, fee_output],
+        outputs,
     })
 }
 
-// =============================================================================
-// Tx 3: Close Order (Lender fills)
-// =============================================================================
-
 pub struct CloseOrderRequest {
-    /// The order box to fill (as EIP-12 input)
     pub order_box: Eip12InputBox,
-    /// Lender's P2PK ErgoTree hex
     pub lender_ergo_tree: String,
-    /// UI implementor's P2PK ErgoTree hex (for UI fee)
+    /// UI implementor's ErgoTree for fee output
     pub ui_fee_ergo_tree: String,
-    /// Loan token ID ("ERG" for native)
+    /// "ERG" for native
     pub loan_token_id: String,
-    /// Lender's available UTXOs
     pub user_inputs: Vec<Eip12InputBox>,
-    /// Current blockchain height
     pub current_height: i32,
 }
 
 pub fn build_close_order(req: &CloseOrderRequest) -> Result<Eip12UnsignedTx, SigmaFiTxError> {
     let is_erg = req.loan_token_id == "ERG";
 
-    // Parse order registers
     let r5_hex = req
         .order_box
         .additional_registers
@@ -304,12 +232,10 @@ pub fn build_close_order(req: &CloseOrderRequest) -> Result<Eip12UnsignedTx, Sig
             SigmaFiTxError::InvalidAddress("Order missing R4 (borrower PK)".to_string())
         })?;
 
-    // Decode principal from R5
     let principal = ergo_tx::sigma::decode_sigma_long(r5_hex)
         .map_err(|e| SigmaFiTxError::InvalidAmount(format!("Cannot decode R5: {}", e)))?
         as u64;
 
-    // Decode maturity from R7 (Int type 0x04)
     let maturity_blocks = decode_sigma_int(r7_hex)?;
 
     if maturity_blocks >= STORAGE_PERIOD {
@@ -319,31 +245,19 @@ pub fn build_close_order(req: &CloseOrderRequest) -> Result<Eip12UnsignedTx, Sig
         )));
     }
 
-    // Fees
     let dev_fee = calculator::calculate_dev_fee(principal);
     let ui_fee = calculator::calculate_ui_fee(principal);
-
-    // Build bond contract
     let bond_ergo_tree = constants::build_bond_contract(&req.loan_token_id);
 
-    // Output 0: Bond box (preserve collateral from order)
     let order_box_id_bytes = hex::decode(&req.order_box.box_id)
         .map_err(|_| SigmaFiTxError::InvalidAmount("Invalid order box ID hex".to_string()))?;
 
-    let mut bond_registers = HashMap::new();
-    bond_registers.insert(
-        "R4".to_string(),
-        encode_sigma_coll_byte(&order_box_id_bytes),
-    );
-    bond_registers.insert("R5".to_string(), r4_hex.clone()); // Borrower PK from order R4
-    bond_registers.insert("R6".to_string(), r6_hex.clone()); // Repayment from order R6
-    bond_registers.insert(
-        "R7".to_string(),
-        encode_sigma_int(req.current_height + maturity_blocks),
-    );
-    bond_registers.insert(
-        "R8".to_string(),
-        encode_sigma_prop_from_ergo_tree(&req.lender_ergo_tree)?,
+    let bond_registers = ergo_tx::sigma_registers!(
+        "R4" => encode_sigma_coll_byte(&order_box_id_bytes),
+        "R5" => r4_hex.clone(),
+        "R6" => r6_hex.clone(),
+        "R7" => encode_sigma_int(req.current_height + maturity_blocks),
+        "R8" => encode_sigma_prop_from_ergo_tree(&req.lender_ergo_tree)?,
     );
 
     let bond_output = Eip12Output {
@@ -354,8 +268,6 @@ pub fn build_close_order(req: &CloseOrderRequest) -> Result<Eip12UnsignedTx, Sig
         additional_registers: bond_registers,
     };
 
-    // Output 1: Principal to borrower
-    // Borrower ErgoTree from order R4: SigmaProp "08cd{pubkey}" -> P2PK "0008cd{pubkey}"
     let borrower_ergo_tree = sigma_prop_to_ergo_tree(r4_hex)?;
 
     let loan_output = if is_erg {
@@ -370,7 +282,6 @@ pub fn build_close_order(req: &CloseOrderRequest) -> Result<Eip12UnsignedTx, Sig
         }
     };
 
-    // Output 2: Dev fee
     let dev_fee_output = if is_erg {
         Eip12Output::simple(
             dev_fee as i64,
@@ -391,7 +302,6 @@ pub fn build_close_order(req: &CloseOrderRequest) -> Result<Eip12UnsignedTx, Sig
         }
     };
 
-    // Output 3: UI fee
     let ui_fee_output = if is_erg {
         Eip12Output::simple(ui_fee as i64, &req.ui_fee_ergo_tree, req.current_height)
     } else {
@@ -408,98 +318,65 @@ pub fn build_close_order(req: &CloseOrderRequest) -> Result<Eip12UnsignedTx, Sig
         }
     };
 
-    // Calculate required ERG from lender
+    // Bond preserves order ERG; lender provides loan + fees
     let outputs_erg: i64 = if is_erg {
-        // Bond preserves order ERG, loan + dev_fee + ui_fee come from lender
         principal as i64 + dev_fee as i64 + ui_fee as i64 + MINER_FEE
     } else {
-        // Bond preserves order ERG; loan/dev/ui need SAFE_MIN_BOX_VALUE each + miner fee
         SAFE_MIN_BOX_VALUE * 3 + MINER_FEE
     };
     let required_erg = (outputs_erg + MIN_CHANGE_VALUE) as u64;
 
-    // Select lender inputs
-    let selected = if is_erg {
-        select_erg_boxes(&req.user_inputs, required_erg)
-            .map_err(|e| SigmaFiTxError::BoxSelection(e.to_string()))?
-    } else {
-        let total_tokens_needed = principal + dev_fee + ui_fee;
-        select_token_boxes(
-            &req.user_inputs,
-            &req.loan_token_id,
-            total_tokens_needed,
-            required_erg,
-        )
-        .map_err(|e| SigmaFiTxError::BoxSelection(e.to_string()))?
-    };
-
-    // Change
-    let change_erg = selected.total_erg as i64 - outputs_erg;
-    if change_erg < 0 {
-        return Err(SigmaFiTxError::InsufficientFunds(format!(
-            "Need {} more nanoERG",
-            -change_erg
-        )));
-    }
-
-    let spent_token = if is_erg {
+    let token_needed = if is_erg {
         None
     } else {
         Some((req.loan_token_id.as_str(), principal + dev_fee + ui_fee))
     };
-    let change_tokens = collect_change_tokens(&selected.boxes, spent_token);
-    let change_output = Eip12Output::change(
-        change_erg,
-        &req.lender_ergo_tree,
-        change_tokens,
-        req.current_height,
-    );
-    let fee_output = Eip12Output::fee(MINER_FEE, req.current_height);
+    let selected = select_inputs_for_spend(&req.user_inputs, required_erg, token_needed)
+        .map_err(|e| SigmaFiTxError::BoxSelection(e.to_string()))?;
 
-    // Set context extension on order input: var 0 = UI fee SigmaProp
+    let spent_tokens: Vec<(&str, u64)> = token_needed.into_iter().collect();
+    let mut outputs = vec![bond_output, loan_output, dev_fee_output, ui_fee_output];
+
+    append_change_output(
+        &mut outputs,
+        &selected,
+        outputs_erg as u64,
+        &spent_tokens,
+        &req.lender_ergo_tree,
+        req.current_height,
+        MIN_CHANGE_VALUE as u64,
+    )
+    .map_err(|e| SigmaFiTxError::InsufficientFunds(e.to_string()))?;
+
+    outputs.push(Eip12Output::fee(MINER_FEE, req.current_height));
+
+    // Context var 0 = UI fee recipient SigmaProp (required by order contract)
     let mut order_input = req.order_box.clone();
     let ui_sigma_prop = encode_sigma_prop_from_ergo_tree(&req.ui_fee_ergo_tree)?;
     order_input.extension.insert("0".to_string(), ui_sigma_prop);
 
-    // Assemble inputs: order first, then lender's boxes
     let mut inputs = vec![order_input];
     inputs.extend(selected.boxes);
 
     Ok(Eip12UnsignedTx {
         inputs,
         data_inputs: vec![],
-        outputs: vec![
-            bond_output,
-            loan_output,
-            dev_fee_output,
-            ui_fee_output,
-            change_output,
-            fee_output,
-        ],
+        outputs,
     })
 }
 
-// =============================================================================
-// Tx 4: Repay Bond
-// =============================================================================
-
 pub struct RepayRequest {
-    /// The bond box to repay
     pub bond_box: Eip12InputBox,
-    /// Loan token ID ("ERG" for native)
+    /// "ERG" for native
     pub loan_token_id: String,
-    /// Borrower's P2PK ErgoTree hex
     pub borrower_ergo_tree: String,
-    /// Borrower's available UTXOs
     pub user_inputs: Vec<Eip12InputBox>,
-    /// Current blockchain height
     pub current_height: i32,
 }
 
 pub fn build_repay(req: &RepayRequest) -> Result<Eip12UnsignedTx, SigmaFiTxError> {
     let is_erg = req.loan_token_id == "ERG";
 
-    // Parse repayment from R6
     let r6_hex =
         req.bond_box.additional_registers.get("R6").ok_or_else(|| {
             SigmaFiTxError::InvalidAmount("Bond missing R6 (repayment)".to_string())
@@ -508,21 +385,17 @@ pub fn build_repay(req: &RepayRequest) -> Result<Eip12UnsignedTx, SigmaFiTxError
         .map_err(|e| SigmaFiTxError::InvalidAmount(format!("Cannot decode R6: {}", e)))?
         as u64;
 
-    // Get lender ErgoTree from R8
     let r8_hex =
         req.bond_box.additional_registers.get("R8").ok_or_else(|| {
             SigmaFiTxError::InvalidAddress("Bond missing R8 (lender PK)".to_string())
         })?;
     let lender_ergo_tree = sigma_prop_to_ergo_tree(r8_hex)?;
 
-    // Bond box ID for R4 of repayment output
     let bond_box_id_bytes = hex::decode(&req.bond_box.box_id)
         .map_err(|_| SigmaFiTxError::InvalidAmount("Invalid bond box ID hex".to_string()))?;
     let r4_coll = encode_sigma_coll_byte(&bond_box_id_bytes);
 
-    // Output 0: Repayment to lender
-    let mut repay_registers = HashMap::new();
-    repay_registers.insert("R4".to_string(), r4_coll);
+    let repay_registers = ergo_tx::sigma_registers!("R4" => r4_coll);
 
     let repay_output = if is_erg {
         Eip12Output {
@@ -542,7 +415,6 @@ pub fn build_repay(req: &RepayRequest) -> Result<Eip12UnsignedTx, SigmaFiTxError
         }
     };
 
-    // Output 1: Collateral returned to borrower
     let bond_erg: i64 = req.bond_box.value.parse().unwrap_or(0);
     let collateral_output = Eip12Output {
         value: bond_erg.to_string(),
@@ -552,87 +424,63 @@ pub fn build_repay(req: &RepayRequest) -> Result<Eip12UnsignedTx, SigmaFiTxError
         additional_registers: HashMap::new(),
     };
 
-    // Calculate required ERG from borrower
     let outputs_erg = if is_erg {
         repayment as i64 + MINER_FEE
     } else {
         SAFE_MIN_BOX_VALUE + MINER_FEE
     };
-    // Bond box contributes its ERG to collateral output, so lender doesn't need to cover that
+    // Bond box ERG covers collateral output, borrower only needs repayment + fee
     let required_erg = (outputs_erg + MIN_CHANGE_VALUE) as u64;
 
-    let selected = if is_erg {
-        select_erg_boxes(&req.user_inputs, required_erg)
-            .map_err(|e| SigmaFiTxError::BoxSelection(e.to_string()))?
-    } else {
-        select_token_boxes(
-            &req.user_inputs,
-            &req.loan_token_id,
-            repayment,
-            required_erg,
-        )
-        .map_err(|e| SigmaFiTxError::BoxSelection(e.to_string()))?
-    };
-
-    let change_erg = selected.total_erg as i64 - outputs_erg;
-    if change_erg < 0 {
-        return Err(SigmaFiTxError::InsufficientFunds(format!(
-            "Need {} more nanoERG",
-            -change_erg
-        )));
-    }
-
-    let spent_token = if is_erg {
+    let token_needed = if is_erg {
         None
     } else {
         Some((req.loan_token_id.as_str(), repayment))
     };
-    let change_tokens = collect_change_tokens(&selected.boxes, spent_token);
-    let change_output = Eip12Output::change(
-        change_erg,
-        &req.borrower_ergo_tree,
-        change_tokens,
-        req.current_height,
-    );
-    let fee_output = Eip12Output::fee(MINER_FEE, req.current_height);
+    let selected = select_inputs_for_spend(&req.user_inputs, required_erg, token_needed)
+        .map_err(|e| SigmaFiTxError::BoxSelection(e.to_string()))?;
 
-    // Bond box is first input
+    let spent_tokens: Vec<(&str, u64)> = token_needed.into_iter().collect();
+    let mut outputs = vec![repay_output, collateral_output];
+
+    append_change_output(
+        &mut outputs,
+        &selected,
+        outputs_erg as u64,
+        &spent_tokens,
+        &req.borrower_ergo_tree,
+        req.current_height,
+        MIN_CHANGE_VALUE as u64,
+    )
+    .map_err(|e| SigmaFiTxError::InsufficientFunds(e.to_string()))?;
+
+    outputs.push(Eip12Output::fee(MINER_FEE, req.current_height));
+
     let mut inputs = vec![req.bond_box.clone()];
     inputs.extend(selected.boxes);
 
     Ok(Eip12UnsignedTx {
         inputs,
         data_inputs: vec![],
-        outputs: vec![repay_output, collateral_output, change_output, fee_output],
+        outputs,
     })
 }
 
-// =============================================================================
-// Tx 5: Liquidate Bond
-// =============================================================================
-
 pub struct LiquidateRequest {
-    /// The bond box to liquidate
     pub bond_box: Eip12InputBox,
-    /// Lender's P2PK ErgoTree hex
     pub lender_ergo_tree: String,
-    /// Lender's available UTXOs (for miner fee)
     pub user_inputs: Vec<Eip12InputBox>,
-    /// Current blockchain height
     pub current_height: i32,
 }
 
 pub fn build_liquidate(req: &LiquidateRequest) -> Result<Eip12UnsignedTx, SigmaFiTxError> {
     let bond_erg: i64 = req.bond_box.value.parse().unwrap_or(0);
 
-    // Bond box ID for R4
     let bond_box_id_bytes = hex::decode(&req.bond_box.box_id)
         .map_err(|_| SigmaFiTxError::InvalidAmount("Invalid bond box ID hex".to_string()))?;
 
-    let mut liquidate_registers = HashMap::new();
-    liquidate_registers.insert("R4".to_string(), encode_sigma_coll_byte(&bond_box_id_bytes));
+    let liquidate_registers = ergo_tx::sigma_registers!("R4" => encode_sigma_coll_byte(&bond_box_id_bytes));
 
-    // Output 0: All collateral to lender
     let liquidate_output = Eip12Output {
         value: bond_erg.to_string(),
         ergo_tree: req.lender_ergo_tree.clone(),
@@ -641,37 +489,36 @@ pub fn build_liquidate(req: &LiquidateRequest) -> Result<Eip12UnsignedTx, SigmaF
         additional_registers: liquidate_registers,
     };
 
-    // Select inputs for miner fee
     let fee_required = (MINER_FEE + MIN_CHANGE_VALUE) as u64;
     let selected = select_erg_boxes(&req.user_inputs, fee_required)
         .map_err(|e| SigmaFiTxError::BoxSelection(e.to_string()))?;
 
-    let change_erg = selected.total_erg as i64 - MINER_FEE;
-    let change_tokens = collect_change_tokens(&selected.boxes, None);
-    let change_output = Eip12Output::change(
-        change_erg,
-        &req.lender_ergo_tree,
-        change_tokens,
-        req.current_height,
-    );
-    let fee_output = Eip12Output::fee(MINER_FEE, req.current_height);
+    let mut outputs = vec![liquidate_output];
 
-    // Bond box first, then lender's fee inputs
+    append_change_output(
+        &mut outputs,
+        &selected,
+        MINER_FEE as u64,
+        &[],
+        &req.lender_ergo_tree,
+        req.current_height,
+        MIN_CHANGE_VALUE as u64,
+    )
+    .map_err(|e| SigmaFiTxError::InsufficientFunds(e.to_string()))?;
+
+    outputs.push(Eip12Output::fee(MINER_FEE, req.current_height));
+
     let mut inputs = vec![req.bond_box.clone()];
     inputs.extend(selected.boxes);
 
     Ok(Eip12UnsignedTx {
         inputs,
         data_inputs: vec![],
-        outputs: vec![liquidate_output, change_output, fee_output],
+        outputs,
     })
 }
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
-/// Convert a SigmaProp register hex ("08cd{pubkey}") to a P2PK ErgoTree hex ("0008cd{pubkey}")
+/// SigmaProp register "08cd{pubkey}" -> P2PK ErgoTree "0008cd{pubkey}"
 fn sigma_prop_to_ergo_tree(sigma_prop_hex: &str) -> Result<String, SigmaFiTxError> {
     if sigma_prop_hex.len() >= 70 && sigma_prop_hex.starts_with("08cd") {
         Ok(format!("0008cd{}", &sigma_prop_hex[4..70]))
@@ -683,7 +530,6 @@ fn sigma_prop_to_ergo_tree(sigma_prop_hex: &str) -> Result<String, SigmaFiTxErro
     }
 }
 
-/// Decode a Sigma Int (type tag 0x04) from register hex
 fn decode_sigma_int(hex_str: &str) -> Result<i32, SigmaFiTxError> {
     let bytes =
         hex::decode(hex_str).map_err(|_| SigmaFiTxError::InvalidAmount("Invalid hex".into()))?;
@@ -693,7 +539,6 @@ fn decode_sigma_int(hex_str: &str) -> Result<i32, SigmaFiTxError> {
             bytes.first().copied().unwrap_or(0)
         )));
     }
-    // VLQ decode
     let mut result: u32 = 0;
     let mut shift = 0;
     for &byte in &bytes[1..] {
@@ -703,7 +548,6 @@ fn decode_sigma_int(hex_str: &str) -> Result<i32, SigmaFiTxError> {
         }
         shift += 7;
     }
-    // Zigzag decode
     let value = if result & 1 == 0 {
         (result >> 1) as i32
     } else {
@@ -801,14 +645,12 @@ mod tests {
 
     #[test]
     fn test_build_cancel_order() {
-        let mut order_regs = HashMap::new();
-        order_regs.insert(
-            "R4".to_string(),
-            encode_sigma_prop_from_ergo_tree(TEST_ERGO_TREE).unwrap(),
+        let order_regs = ergo_tx::sigma_registers!(
+            "R4" => encode_sigma_prop_from_ergo_tree(TEST_ERGO_TREE).unwrap(),
+            "R5" => encode_sigma_long(10_000_000_000),
+            "R6" => encode_sigma_long(10_500_000_000),
+            "R7" => encode_sigma_int(21600),
         );
-        order_regs.insert("R5".to_string(), encode_sigma_long(10_000_000_000));
-        order_regs.insert("R6".to_string(), encode_sigma_long(10_500_000_000));
-        order_regs.insert("R7".to_string(), encode_sigma_int(21600));
 
         let order_box = Eip12InputBox {
             box_id: "cccc".repeat(16),
@@ -837,17 +679,12 @@ mod tests {
 
     #[test]
     fn test_build_liquidate() {
-        let mut bond_regs = HashMap::new();
-        bond_regs.insert("R4".to_string(), encode_sigma_coll_byte(&[0u8; 32]));
-        bond_regs.insert(
-            "R5".to_string(),
-            encode_sigma_prop_from_ergo_tree(TEST_ERGO_TREE).unwrap(),
-        );
-        bond_regs.insert("R6".to_string(), encode_sigma_long(10_500_000_000));
-        bond_regs.insert("R7".to_string(), encode_sigma_int(900));
-        bond_regs.insert(
-            "R8".to_string(),
-            encode_sigma_prop_from_ergo_tree(TEST_ERGO_TREE).unwrap(),
+        let bond_regs = ergo_tx::sigma_registers!(
+            "R4" => encode_sigma_coll_byte(&[0u8; 32]),
+            "R5" => encode_sigma_prop_from_ergo_tree(TEST_ERGO_TREE).unwrap(),
+            "R6" => encode_sigma_long(10_500_000_000),
+            "R7" => encode_sigma_int(900),
+            "R8" => encode_sigma_prop_from_ergo_tree(TEST_ERGO_TREE).unwrap(),
         );
 
         let bond_box = Eip12InputBox {

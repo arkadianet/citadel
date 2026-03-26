@@ -9,10 +9,9 @@ import {
   previewHodlCoinBurn,
   buildHodlCoinMintTx,
   buildHodlCoinBurnTx,
-  startHodlCoinSign,
-  getHodlCoinTxStatus,
-  formatNanoErg,
 } from '../api/hodlcoin'
+import { formatErg } from '../utils/format'
+import { startSign, getTxStatus } from '../api/types'
 import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import './HodlCoinModal.css'
@@ -68,7 +67,7 @@ export function HodlCoinModal({
   const [loading, setLoading] = useState(false)
 
   const flow = useTransactionFlow({
-    pollStatus: getHodlCoinTxStatus,
+    pollStatus: getTxStatus,
     isOpen,
     onSuccess: () => { setStep('success'); onSuccess() },
     onError: (err) => { setError(err); setStep('error') },
@@ -135,7 +134,7 @@ export function HodlCoinModal({
           utxos as object[],
           nodeStatus.chain_height,
         )
-        message = `Mint ${bankName}: deposit ${formatNanoErg(mintNanoErg)} ERG`
+        message = `Mint ${bankName}: deposit ${formatErg(mintNanoErg)} ERG`
       } else {
         unsignedTx = await buildHodlCoinBurnTx(
           bank.singletonTokenId,
@@ -146,7 +145,7 @@ export function HodlCoinModal({
         message = `Burn ${burnAmount} ${bankName}`
       }
 
-      const signResult = await startHodlCoinSign(unsignedTx, message)
+      const signResult = await startSign(unsignedTx, message)
 
       flow.startSigning(signResult.request_id, signResult.ergopay_url, signResult.nautilus_url)
       setStep('signing')
@@ -225,12 +224,12 @@ export function HodlCoinModal({
                   </button>
                 </div>
                 <div className="hodl-input-hint">
-                  Balance: {formatNanoErg(ergBalance)} ERG
+                  Balance: {formatErg(ergBalance)} ERG
                 </div>
               </div>
               <div className="hodl-info-row">
                 <span>Price</span>
-                <span>{formatNanoErg(bank.priceNanoPerHodl * 1e9)} ERG per token</span>
+                <span>{formatErg(bank.priceNanoPerHodl * 1e9)} ERG per token</span>
               </div>
               <div className="hodl-info-row">
                 <span>Est. tokens</span>
@@ -267,7 +266,7 @@ export function HodlCoinModal({
               </div>
               <div className="hodl-info-row">
                 <span>Price</span>
-                <span>{formatNanoErg(bank.priceNanoPerHodl * 1e9)} ERG per token</span>
+                <span>{formatErg(bank.priceNanoPerHodl * 1e9)} ERG per token</span>
               </div>
               <div className="hodl-info-row">
                 <span>Total fee</span>
@@ -276,7 +275,7 @@ export function HodlCoinModal({
               <div className="hodl-info-row">
                 <span>Est. ERG received</span>
                 <span>{burnAmount > 0
-                  ? formatNanoErg(Math.floor(burnAmount * bank.priceNanoPerHodl * 1e9 * (1 - bank.totalFeePct / 100)))
+                  ? formatErg(Math.floor(burnAmount * bank.priceNanoPerHodl * 1e9 * (1 - bank.totalFeePct / 100)))
                   : '0'
                 } ERG</span>
               </div>
@@ -302,7 +301,7 @@ export function HodlCoinModal({
                 <h3>Mint Preview</h3>
                 <div className="hodl-info-row">
                   <span>Deposit</span>
-                  <span>{formatNanoErg(mintPreview.ergDeposited)} ERG</span>
+                  <span>{formatErg(mintPreview.ergDeposited)} ERG</span>
                 </div>
                 <div className="hodl-info-row highlight">
                   <span>You Receive</span>
@@ -310,15 +309,15 @@ export function HodlCoinModal({
                 </div>
                 <div className="hodl-info-row">
                   <span>Price</span>
-                  <span>{formatNanoErg(mintPreview.pricePerToken * 1e9)} ERG</span>
+                  <span>{formatErg(mintPreview.pricePerToken * 1e9)} ERG</span>
                 </div>
                 <div className="hodl-info-row">
                   <span>Miner Fee</span>
-                  <span>{formatNanoErg(mintPreview.minerFee)} ERG</span>
+                  <span>{formatErg(mintPreview.minerFee)} ERG</span>
                 </div>
                 <div className="hodl-info-row total">
                   <span>Total Cost</span>
-                  <span>{formatNanoErg(mintPreview.totalErgCost)} ERG</span>
+                  <span>{formatErg(mintPreview.totalErgCost)} ERG</span>
                 </div>
               </div>
               <div className="button-group">
@@ -340,23 +339,23 @@ export function HodlCoinModal({
                 </div>
                 <div className="hodl-info-row">
                   <span>Gross Value</span>
-                  <span>{formatNanoErg(burnPreview.ergBeforeFees)} ERG</span>
+                  <span>{formatErg(burnPreview.ergBeforeFees)} ERG</span>
                 </div>
                 <div className="hodl-info-row fee">
                   <span>Bank Fee ({bank.bankFeePct.toFixed(1)}%)</span>
-                  <span>-{formatNanoErg(burnPreview.bankFeeNano)} ERG</span>
+                  <span>-{formatErg(burnPreview.bankFeeNano)} ERG</span>
                 </div>
                 <div className="hodl-info-row fee">
                   <span>Dev Fee ({bank.devFeePct.toFixed(1)}%)</span>
-                  <span>-{formatNanoErg(burnPreview.devFeeNano)} ERG</span>
+                  <span>-{formatErg(burnPreview.devFeeNano)} ERG</span>
                 </div>
                 <div className="hodl-info-row highlight">
                   <span>You Receive</span>
-                  <span>{formatNanoErg(burnPreview.ergReceived)} ERG</span>
+                  <span>{formatErg(burnPreview.ergReceived)} ERG</span>
                 </div>
                 <div className="hodl-info-row">
                   <span>Miner Fee</span>
-                  <span>{formatNanoErg(burnPreview.minerFee)} ERG</span>
+                  <span>{formatErg(burnPreview.minerFee)} ERG</span>
                 </div>
               </div>
               <div className="button-group">

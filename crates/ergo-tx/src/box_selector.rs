@@ -1,16 +1,9 @@
 //! UTXO selection utilities
-//!
-//! Provides strategies for selecting input boxes to cover required amounts.
 
 use std::fmt;
 
 use crate::eip12::{Eip12Asset, Eip12InputBox};
 
-// =============================================================================
-// Error type
-// =============================================================================
-
-/// Error returned when UTXO selection cannot satisfy requirements
 #[derive(Debug, Clone)]
 pub enum BoxSelectorError {
     InsufficientErg {
@@ -22,7 +15,6 @@ pub enum BoxSelectorError {
         required: u64,
         available: u64,
     },
-    /// One or more tokens had insufficient balance: (token_id, required, available)
     InsufficientMultiTokens {
         shortfalls: Vec<(String, u64, u64)>,
     },
@@ -74,11 +66,6 @@ impl fmt::Display for BoxSelectorError {
 
 impl std::error::Error for BoxSelectorError {}
 
-// =============================================================================
-// Selected inputs result
-// =============================================================================
-
-/// Result of UTXO selection: the minimum set of boxes needed
 #[derive(Debug, Clone)]
 pub struct SelectedInputs {
     pub boxes: Vec<Eip12InputBox>,
@@ -86,18 +73,11 @@ pub struct SelectedInputs {
     pub token_amount: u64,
 }
 
-// =============================================================================
-// Selection functions
-// =============================================================================
-
-/// Select minimum ERG-only boxes to cover the required amount.
-///
-/// Sorts by value descending (largest first) to minimize the number of inputs.
+/// Sorts by value descending (largest first) to minimize input count.
 pub fn select_erg_boxes(
     utxos: &[Eip12InputBox],
     required_erg: u64,
 ) -> Result<SelectedInputs, BoxSelectorError> {
-    // Sort indices by ERG value descending
     let mut indices: Vec<usize> = (0..utxos.len()).collect();
     indices.sort_by(|&a, &b| {
         let va = utxos[a].value.parse::<u64>().unwrap_or(0);
@@ -135,18 +115,13 @@ pub fn select_erg_boxes(
     })
 }
 
-/// Select minimum boxes to cover a required token amount, plus enough ERG.
-///
-/// Two-pass strategy:
-/// 1. Select boxes containing the token (largest token amount first)
-/// 2. If selected boxes don't have enough ERG, add pure-ERG boxes
+/// Pass 1: select boxes with the token (largest first). Pass 2: top up ERG if needed.
 pub fn select_token_boxes(
     utxos: &[Eip12InputBox],
     token_id: &str,
     required_tokens: u64,
     min_erg: u64,
 ) -> Result<SelectedInputs, BoxSelectorError> {
-    // Pass 1: select boxes containing the required token (largest token amount first)
     let mut token_indices: Vec<(usize, u64)> = utxos
         .iter()
         .enumerate()
@@ -188,7 +163,6 @@ pub fn select_token_boxes(
         });
     }
 
-    // Pass 2: if we need more ERG, add non-token boxes (largest first)
     if total_erg < min_erg {
         let mut erg_indices: Vec<(usize, u64)> = utxos
             .iter()
@@ -218,7 +192,6 @@ pub fn select_token_boxes(
         }
     }
 
-    // Build result preserving original order
     selected_indices.sort();
     let boxes: Vec<Eip12InputBox> = selected_indices.iter().map(|&i| utxos[i].clone()).collect();
 
@@ -229,11 +202,7 @@ pub fn select_token_boxes(
     })
 }
 
-/// Select minimum boxes to cover multiple token requirements, plus enough ERG.
-///
-/// Two-pass strategy (same as `select_token_boxes`):
-/// 1. Select boxes containing any required token, tracking remaining needs per token
-/// 2. If selected boxes don't have enough ERG, add pure-ERG boxes
+/// Like `select_token_boxes` but for multiple token requirements simultaneously.
 pub fn select_multi_token_boxes(
     utxos: &[Eip12InputBox],
     required_tokens: &[(&str, u64)],
@@ -241,14 +210,12 @@ pub fn select_multi_token_boxes(
 ) -> Result<SelectedInputs, BoxSelectorError> {
     use std::collections::HashMap;
 
-    // Build remaining needs map
     let mut remaining: HashMap<&str, u64> = required_tokens.iter().cloned().collect();
 
     let mut selected_indices: Vec<usize> = Vec::new();
     let mut total_erg: u64 = 0;
 
-    // Pass 1: greedily pick boxes that contain any needed token
-    // Sort by number of required tokens they contain (most useful first)
+    // Sort by number of required tokens present (most useful first)
     let mut scored_indices: Vec<(usize, usize)> = utxos
         .iter()
         .enumerate()
@@ -291,7 +258,6 @@ pub fn select_multi_token_boxes(
         }
     }
 
-    // Check if all token requirements are met
     if !remaining.is_empty() {
         let mut shortfalls: Vec<(String, u64, u64)> = Vec::new();
         for (token_id, still_need) in &remaining {
@@ -306,7 +272,6 @@ pub fn select_multi_token_boxes(
         return Err(BoxSelectorError::InsufficientMultiTokens { shortfalls });
     }
 
-    // Pass 2: if we need more ERG, add non-selected boxes (largest first)
     if total_erg < min_erg {
         let mut erg_indices: Vec<(usize, u64)> = utxos
             .iter()
@@ -336,20 +301,16 @@ pub fn select_multi_token_boxes(
         }
     }
 
-    // Build result preserving original order
     selected_indices.sort();
     let boxes: Vec<Eip12InputBox> = selected_indices.iter().map(|&i| utxos[i].clone()).collect();
 
     Ok(SelectedInputs {
         boxes,
         total_erg,
-        token_amount: 0, // not meaningful for multi-token
+        token_amount: 0,
     })
 }
 
-/// Collect change tokens from selected input boxes, subtracting multiple spent tokens.
-///
-/// Returns all tokens from the selected boxes minus each specified spent token.
 pub fn collect_multi_change_tokens(
     selected: &[Eip12InputBox],
     spent_tokens: &[(&str, u64)],
@@ -384,11 +345,7 @@ pub fn collect_multi_change_tokens(
         .collect()
 }
 
-/// Collect change tokens from selected input boxes.
-///
-/// Returns all tokens from the selected boxes minus the specified spent token.
-/// This consolidates the duplicated `collect_change_tokens` / `collect_user_tokens`
-/// logic across AMM, SigmaUSD, and Dexy builders.
+/// Single-token variant of `collect_multi_change_tokens`.
 pub fn collect_change_tokens(
     selected: &[Eip12InputBox],
     spent_token: Option<(&str, u64)>,
@@ -423,13 +380,6 @@ pub fn collect_change_tokens(
         .collect()
 }
 
-// =============================================================================
-// Legacy functions (backward compat)
-// =============================================================================
-
-/// Select inputs to cover required ERG and optionally tokens
-///
-/// Strategy: First select boxes containing required tokens, then add more for ERG.
 pub fn select_inputs<'a>(
     utxos: &'a [Eip12InputBox],
     required_erg: i64,
@@ -439,7 +389,6 @@ pub fn select_inputs<'a>(
     let mut total_erg: i64 = 0;
     let mut total_token: i64 = 0;
 
-    // First, select boxes with required tokens
     if let Some((token_id, token_amount)) = required_token {
         for utxo in utxos {
             let has_token = utxo.assets.iter().any(|a| a.token_id == token_id);
@@ -459,7 +408,6 @@ pub fn select_inputs<'a>(
         }
     }
 
-    // Add more boxes for ERG if needed
     for utxo in utxos {
         if selected.iter().any(|u| u.box_id == utxo.box_id) {
             continue;
@@ -474,7 +422,6 @@ pub fn select_inputs<'a>(
     selected
 }
 
-/// Calculate total ERG value of selected inputs
 pub fn total_erg_value(inputs: &[&Eip12InputBox]) -> i64 {
     inputs
         .iter()
@@ -482,7 +429,6 @@ pub fn total_erg_value(inputs: &[&Eip12InputBox]) -> i64 {
         .sum()
 }
 
-/// Calculate total token amount for a specific token
 pub fn total_token_amount(inputs: &[&Eip12InputBox], token_id: &str) -> i64 {
     inputs
         .iter()
@@ -516,10 +462,6 @@ mod tests {
             extension: HashMap::new(),
         }
     }
-
-    // =========================================================================
-    // Legacy select_inputs tests
-    // =========================================================================
 
     #[test]
     fn test_select_erg_only() {
@@ -556,10 +498,6 @@ mod tests {
         assert_eq!(selected.len(), 2);
         assert_eq!(total_erg_value(&selected), 2_500_000_000);
     }
-
-    // =========================================================================
-    // New select_erg_boxes tests
-    // =========================================================================
 
     #[test]
     fn test_select_erg_boxes_single() {
@@ -615,10 +553,6 @@ mod tests {
         assert_eq!(result.boxes.len(), 1);
         assert_eq!(result.total_erg, 5_000_000_000);
     }
-
-    // =========================================================================
-    // New select_token_boxes tests
-    // =========================================================================
 
     #[test]
     fn test_select_token_boxes_basic() {
@@ -695,10 +629,6 @@ mod tests {
         assert_eq!(result.total_erg, 3_000_000_000);
     }
 
-    // =========================================================================
-    // collect_change_tokens tests
-    // =========================================================================
-
     #[test]
     fn test_collect_change_tokens_no_spent() {
         let boxes = vec![mock_utxo(
@@ -758,10 +688,6 @@ mod tests {
         assert_eq!(token_b, 30);
     }
 
-    // =========================================================================
-    // BoxSelectorError Display tests
-    // =========================================================================
-
     #[test]
     fn test_error_display() {
         let err = BoxSelectorError::InsufficientErg {
@@ -782,10 +708,6 @@ mod tests {
         assert!(msg.contains("Insufficient token"));
         assert!(msg.contains("abc123"));
     }
-
-    // =========================================================================
-    // select_multi_token_boxes tests
-    // =========================================================================
 
     #[test]
     fn test_select_multi_token_basic() {
@@ -848,10 +770,6 @@ mod tests {
             _ => panic!("Wrong error type"),
         }
     }
-
-    // =========================================================================
-    // collect_multi_change_tokens tests
-    // =========================================================================
 
     #[test]
     fn test_collect_multi_change_basic() {

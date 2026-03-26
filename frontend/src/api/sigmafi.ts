@@ -6,8 +6,6 @@
 
 import { invoke } from '@tauri-apps/api/core'
 
-import type { SignResponse, TxStatusResponse } from './types'
-export type { SignResponse, TxStatusResponse }
 
 // =============================================================================
 // Type Definitions
@@ -173,50 +171,4 @@ export async function buildLiquidate(
   })
 }
 
-export async function startSigmaFiSign(
-  unsignedTx: object,
-  message?: string,
-): Promise<SignResponse> {
-  return await invoke<SignResponse>('start_sigmafi_sign', {
-    unsignedTx,
-    message,
-  })
-}
 
-export async function getSigmaFiTxStatus(requestId: string): Promise<TxStatusResponse> {
-  return await invoke<TxStatusResponse>('get_sigmafi_tx_status', { requestId })
-}
-
-// =============================================================================
-// Formatting Helpers
-// =============================================================================
-
-export function formatAmount(amount: number, decimals: number): string {
-  const divisor = Math.pow(10, decimals)
-  return (amount / divisor).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: Math.min(decimals, 6),
-  })
-}
-
-export function formatPercent(value: number): string {
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 2,
-  }) + '%'
-}
-
-export function blocksToTimeString(blocks: number): string {
-  const minutes = blocks * 2
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
-
-  if (days > 0) return `${days}d ${hours % 24}h`
-  if (hours > 0) return `${hours}h ${minutes % 60}m`
-  return `${minutes}m`
-}
-
-export function truncateAddress(addr: string, chars = 8): string {
-  if (addr.length <= chars * 2 + 3) return addr
-  return `${addr.slice(0, chars)}...${addr.slice(-chars)}`
-}

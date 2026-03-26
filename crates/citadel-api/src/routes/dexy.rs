@@ -1,5 +1,3 @@
-//! Dexy Protocol API Routes
-
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -21,7 +19,6 @@ use dexy::{
     tx_builder::{build_mint_dexy_tx, validate_mint_dexy, MintDexyRequest},
 };
 
-/// Create Dexy router
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/state/{variant}", get(get_state))
@@ -30,7 +27,6 @@ pub fn router() -> Router<AppState> {
         .route("/mint/build", post(build_mint))
 }
 
-/// Get Dexy protocol state for a variant
 async fn get_state(
     State(state): State<AppState>,
     Path(variant_str): Path<String>,
@@ -103,7 +99,6 @@ async fn get_state(
     }))
 }
 
-/// Get Dexy rates for all minting paths
 async fn get_rates(
     State(state): State<AppState>,
     Path(variant_str): Path<String>,
@@ -156,7 +151,6 @@ async fn get_rates(
     Ok(Json(rates))
 }
 
-/// Preview mint operation
 async fn mint_preview(
     State(state): State<AppState>,
     Json(request): Json<DexyPreviewRequest>,
@@ -214,7 +208,6 @@ async fn mint_preview(
             )
         })?;
 
-    // Check if can mint
     if !dexy_state.can_mint {
         return Ok(Json(DexyPreviewResponse {
             erg_cost_nano: "0".to_string(),
@@ -227,7 +220,6 @@ async fn mint_preview(
         }));
     }
 
-    // Check amount against available
     if request.amount > dexy_state.dexy_in_bank {
         return Ok(Json(DexyPreviewResponse {
             erg_cost_nano: "0".to_string(),
@@ -243,7 +235,6 @@ async fn mint_preview(
         }));
     }
 
-    // Calculate cost
     let calc = cost_to_mint_dexy(
         request.amount,
         dexy_state.oracle_rate_nano,
@@ -264,7 +255,6 @@ async fn mint_preview(
     }))
 }
 
-/// Build mint transaction
 async fn build_mint(
     State(state): State<AppState>,
     Json(request): Json<DexyBuildRequest>,
@@ -301,7 +291,6 @@ async fn build_mint(
         )
     })?;
 
-    // Fetch state and context
     let dexy_state = fetch_dexy_state(&client, &capabilities, &ids)
         .await
         .map_err(|e| {
@@ -311,7 +300,6 @@ async fn build_mint(
             )
         })?;
 
-    // Validate
     validate_mint_dexy(request.amount, &dexy_state).map_err(|e| {
         (
             StatusCode::BAD_REQUEST,
@@ -328,7 +316,6 @@ async fn build_mint(
             )
         })?;
 
-    // Parse user UTXOs
     let user_inputs: Vec<ergo_tx::Eip12InputBox> = request
         .user_utxos
         .into_iter()
@@ -345,8 +332,6 @@ async fn build_mint(
 
     let user_ergo_tree = user_inputs[0].ergo_tree.clone();
 
-    // Use fresh height from node to ensure R4 calculation is accurate
-    // This minimizes the delay between fetching height and transaction validation
     let fresh_height = capabilities.chain_height as i32;
 
     let mint_request = MintDexyRequest {

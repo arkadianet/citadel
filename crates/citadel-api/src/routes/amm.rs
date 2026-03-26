@@ -1,5 +1,3 @@
-//! AMM Protocol Routes
-
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -13,7 +11,6 @@ use crate::dto::{
 };
 use crate::AppState;
 
-/// Create AMM routes
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/pools", get(get_pools))
@@ -22,7 +19,6 @@ pub fn router() -> Router<AppState> {
         .route("/swap/build", post(build_swap))
 }
 
-/// GET /amm/pools - Get all AMM pools
 async fn get_pools(
     State(state): State<AppState>,
 ) -> Result<Json<AmmPoolsResponse>, (StatusCode, Json<ApiError>)> {
@@ -49,7 +45,6 @@ async fn get_pools(
     }))
 }
 
-/// GET /amm/pools/:pool_id - Get a specific pool
 async fn get_pool(
     State(state): State<AppState>,
     Path(pool_id): Path<String>,
@@ -61,8 +56,6 @@ async fn get_pool(
         )
     })?;
 
-    // For now, fetch all pools and find the one we need
-    // (get_pool_by_id is a stub in the AMM crate)
     let pools = amm::discover_pools(&client).await.map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -83,7 +76,6 @@ async fn get_pool(
     Ok(Json(pool.into()))
 }
 
-/// POST /amm/quote - Get a swap quote
 async fn get_quote(
     State(state): State<AppState>,
     Json(request): Json<SwapQuoteRequest>,
@@ -95,7 +87,6 @@ async fn get_quote(
         )
     })?;
 
-    // Find the pool
     let pools = amm::discover_pools(&client).await.map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -116,13 +107,11 @@ async fn get_quote(
             )
         })?;
 
-    // Convert input
     let input = match request.input {
         SwapInputDto::Erg { amount } => amm::SwapInput::Erg { amount },
         SwapInputDto::Token { token_id, amount } => amm::SwapInput::Token { token_id, amount },
     };
 
-    // Calculate quote
     let quote = amm::quote_swap(&pool, &input).ok_or_else(|| {
         (
             StatusCode::BAD_REQUEST,
@@ -135,7 +124,6 @@ async fn get_quote(
     Ok(Json(quote.into()))
 }
 
-/// POST /amm/swap/build - Build a swap transaction
 async fn build_swap(
     State(state): State<AppState>,
     Json(request): Json<SwapBuildApiRequest>,
@@ -147,7 +135,6 @@ async fn build_swap(
         )
     })?;
 
-    // Find the pool
     let pools = amm::discover_pools(&client).await.map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -168,13 +155,11 @@ async fn build_swap(
             )
         })?;
 
-    // Convert input
     let input = match request.input {
         SwapInputDto::Erg { amount } => amm::SwapInput::Erg { amount },
         SwapInputDto::Token { token_id, amount } => amm::SwapInput::Token { token_id, amount },
     };
 
-    // Build swap request
     let swap_request = amm::SwapRequest {
         pool_id: request.pool_id,
         input,
@@ -182,7 +167,6 @@ async fn build_swap(
         redeemer_address: request.user_address,
     };
 
-    // Parse user UTXOs
     let user_utxos: Vec<ergo_tx::Eip12InputBox> = request
         .user_utxos
         .into_iter()
@@ -196,7 +180,6 @@ async fn build_swap(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    // Build transaction
     let result = amm::build_swap_order_eip12(
         &swap_request,
         &pool,
@@ -214,7 +197,6 @@ async fn build_swap(
         )
     })?;
 
-    // Serialize
     let tx_json = serde_json::to_value(&result.unsigned_tx).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,

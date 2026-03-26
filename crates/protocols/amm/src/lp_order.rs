@@ -1,18 +1,4 @@
-//! LP Proxy Order Transaction Builder
-//!
-//! Builds EIP-12 unsigned transactions for LP deposit and redeem proxy orders.
-//! The proxy box contains the LP contract ErgoTree with substituted constants,
-//! and is detected and executed by off-chain Spectrum bots.
-//!
-//! # Transaction Structure
-//!
-//! Inputs:  [user UTXOs]
-//! Outputs: [LP proxy box, miner fee, change (optional)]
-//!
-//! The LP proxy box contains:
-//! - The LP deposit/redeem contract ErgoTree (template with user-specific constants)
-//! - Input funds (ERG + tokens for deposit, LP tokens for redeem)
-//! - Execution fee for the bot
+//! LP deposit/redeem proxy order builder for Spectrum bots.
 
 use std::collections::HashMap;
 
@@ -26,39 +12,21 @@ use serde::{Deserialize, Serialize};
 use crate::constants::lp_templates;
 use crate::state::{AmmError, AmmPool, PoolType};
 use ergo_tx::{
-    collect_change_tokens, select_token_boxes, Eip12Asset, Eip12InputBox, Eip12Output,
+    append_change_output, select_token_boxes, Eip12Asset, Eip12InputBox, Eip12Output,
     Eip12UnsignedTx,
 };
 
-// =============================================================================
-// Constants
-// =============================================================================
-
-/// Minimum proxy box value in nanoERG (0.004 ERG)
-/// This covers the minimum box value plus overhead for the bot
 const PROXY_BOX_VALUE: u64 = 4_000_000;
-
-/// Transaction fee in nanoERG (0.0011 ERG - standard)
 const TX_FEE: u64 = citadel_core::constants::TX_FEE_NANO as u64;
-
-/// Bot execution fee in nanoERG (0.002 ERG)
 const EXECUTION_FEE: u64 = lp_templates::EXECUTION_FEE;
-
-/// Minimum box value for change output in nanoERG
 const MIN_CHANGE_VALUE: u64 = 1_000_000;
 
-// =============================================================================
-// Public Types
-// =============================================================================
-
-/// Build result containing the unsigned transaction and a summary
 #[derive(Debug)]
 pub struct LpOrderBuildResult {
     pub unsigned_tx: Eip12UnsignedTx,
     pub summary: LpOrderSummary,
 }
 
-/// Summary of the LP proxy order transaction for the UI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LpOrderSummary {
     pub operation: String,
@@ -71,30 +39,6 @@ pub struct LpOrderSummary {
     pub total_erg_cost: u64,
 }
 
-// =============================================================================
-// Deposit Order Builder
-// =============================================================================
-
-/// Build an LP deposit proxy order EIP-12 unsigned transaction.
-///
-/// Creates a proxy box containing the deposit contract with user-specific constants.
-/// Off-chain Spectrum bots will detect this proxy box, execute the deposit against
-/// the pool, and send LP tokens to the user.
-///
-/// # Arguments
-///
-/// * `pool` - Current pool state
-/// * `erg_amount` - ERG to deposit (nanoERG)
-/// * `token_amount` - Token Y to deposit
-/// * `user_utxos` - User's available UTXOs for funding
-/// * `user_ergo_tree` - User's ErgoTree hex (for change output)
-/// * `user_pk` - User's compressed public key hex (33 bytes, for RefundProp)
-/// * `current_height` - Current blockchain height
-/// * `execution_fee` - Optional execution fee in nanoERG (defaults to EXECUTION_FEE constant)
-///
-/// # Returns
-///
-/// `LpOrderBuildResult` with the unsigned transaction and a summary for UI display
 #[allow(clippy::too_many_arguments)]
 pub fn build_lp_deposit_order_eip12(
     pool: &AmmPool,
@@ -106,7 +50,6 @@ pub fn build_lp_deposit_order_eip12(
     current_height: i32,
     execution_fee: Option<u64>,
 ) -> Result<LpOrderBuildResult, AmmError> {
-    // 0. Reject T2T pools
     match pool.pool_type {
         PoolType::N2T => {}
         PoolType::T2T => {
@@ -118,7 +61,6 @@ pub fn build_lp_deposit_order_eip12(
 
     let ex_fee = execution_fee.unwrap_or(EXECUTION_FEE);
 
-    // 1. Calculate proxy box value: ERG deposit + execution fee + proxy overhead
     let proxy_box_value = erg_amount
         .checked_add(ex_fee)
         .and_then(|v| v.checked_add(PROXY_BOX_VALUE))
@@ -128,20 +70,16 @@ pub fn build_lp_deposit_order_eip12(
             )
         })?;
 
-    // 2. Total ERG needed from user: proxy box + miner fee
     let total_erg_needed = proxy_box_value.checked_add(TX_FEE).ok_or_else(|| {
         AmmError::TxBuildError("Arithmetic overflow calculating total ERG needed".to_string())
     })?;
 
-    // 3. Select minimum UTXOs: need token_y + enough ERG
     let selected =
         select_token_boxes(user_utxos, &pool.token_y.token_id, token_amount, total_erg_needed)
             .map_err(|e| AmmError::TxBuildError(e.to_string()))?;
 
-    // 4. Build the deposit ErgoTree with substituted constants
     let deposit_ergo_tree_hex = build_deposit_ergo_tree(pool, erg_amount, user_pk, ex_fee)?;
 
-    // 5. Build proxy box output: holds ERG + token_y for the bot to deposit
     let proxy_output = Eip12Output {
         value: proxy_box_value.to_string(),
         ergo_tree: deposit_ergo_tree_hex,
@@ -153,43 +91,27 @@ pub fn build_lp_deposit_order_eip12(
         additional_registers: HashMap::new(),
     };
 
-    // 6. Build miner fee output
     let fee_output = Eip12Output::fee(TX_FEE as i64, current_height);
 
-    // 7. Build change output
     let mut outputs = vec![proxy_output, fee_output];
+    let spent = [(pool.token_y.token_id.as_str(), token_amount)];
+    append_change_output(
+        &mut outputs,
+        &selected,
+        total_erg_needed,
+        &spent,
+        user_ergo_tree,
+        current_height,
+        MIN_CHANGE_VALUE,
+    )
+    .map_err(|e| AmmError::TxBuildError(e.to_string()))?;
 
-    let change_erg = selected.total_erg - total_erg_needed;
-    let spent_token = Some((pool.token_y.token_id.as_str(), token_amount));
-    let change_tokens = collect_change_tokens(&selected.boxes, spent_token);
-
-    // Error if we have change tokens but not enough ERG for a box
-    if !change_tokens.is_empty() && change_erg < MIN_CHANGE_VALUE {
-        return Err(AmmError::TxBuildError(format!(
-            "Change tokens exist but not enough ERG for change box (need {}, have {})",
-            MIN_CHANGE_VALUE, change_erg
-        )));
-    }
-
-    // Create change output if we have sufficient ERG or any tokens
-    if change_erg >= MIN_CHANGE_VALUE || !change_tokens.is_empty() {
-        outputs.push(Eip12Output::change(
-            change_erg as i64,
-            user_ergo_tree,
-            change_tokens,
-            current_height,
-        ));
-    }
-
-    // 8. Build the transaction
     let unsigned_tx = Eip12UnsignedTx {
         inputs: selected.boxes,
         data_inputs: vec![],
         outputs,
     };
 
-    // 9. Build the summary
-    // Calculate estimated LP reward for display purposes
     let lp_reward = if let Some(erg_reserves) = pool.erg_reserves {
         crate::calculator::calculate_lp_reward(
             erg_reserves,
@@ -225,29 +147,6 @@ pub fn build_lp_deposit_order_eip12(
     })
 }
 
-// =============================================================================
-// Redeem Order Builder
-// =============================================================================
-
-/// Build an LP redeem proxy order EIP-12 unsigned transaction.
-///
-/// Creates a proxy box containing the redeem contract with user-specific constants.
-/// Off-chain Spectrum bots will detect this proxy box, execute the redemption against
-/// the pool, and send ERG + tokens to the user.
-///
-/// # Arguments
-///
-/// * `pool` - Current pool state
-/// * `lp_amount` - Number of LP tokens to redeem
-/// * `user_utxos` - User's available UTXOs for funding (must contain LP tokens)
-/// * `user_ergo_tree` - User's ErgoTree hex (for change output)
-/// * `user_pk` - User's compressed public key hex (33 bytes, for RefundProp)
-/// * `current_height` - Current blockchain height
-/// * `execution_fee` - Optional execution fee in nanoERG (defaults to EXECUTION_FEE constant)
-///
-/// # Returns
-///
-/// `LpOrderBuildResult` with the unsigned transaction and a summary for UI display
 #[allow(clippy::too_many_arguments)]
 pub fn build_lp_redeem_order_eip12(
     pool: &AmmPool,
@@ -258,7 +157,6 @@ pub fn build_lp_redeem_order_eip12(
     current_height: i32,
     execution_fee: Option<u64>,
 ) -> Result<LpOrderBuildResult, AmmError> {
-    // 0. Reject T2T pools
     match pool.pool_type {
         PoolType::N2T => {}
         PoolType::T2T => {
@@ -270,26 +168,21 @@ pub fn build_lp_redeem_order_eip12(
 
     let ex_fee = execution_fee.unwrap_or(EXECUTION_FEE);
 
-    // 1. Calculate proxy box value: execution fee + proxy overhead
-    // (no ERG deposit for redeem -- user just sends LP tokens)
+    // No ERG deposit for redeem -- user just sends LP tokens
     let proxy_box_value = ex_fee.checked_add(PROXY_BOX_VALUE).ok_or_else(|| {
         AmmError::TxBuildError("Arithmetic overflow calculating proxy box value".to_string())
     })?;
 
-    // 2. Total ERG needed from user: proxy box + miner fee
     let total_erg_needed = proxy_box_value.checked_add(TX_FEE).ok_or_else(|| {
         AmmError::TxBuildError("Arithmetic overflow calculating total ERG needed".to_string())
     })?;
 
-    // 3. Select minimum UTXOs: need LP tokens + enough ERG
     let selected =
         select_token_boxes(user_utxos, &pool.lp_token_id, lp_amount, total_erg_needed)
             .map_err(|e| AmmError::TxBuildError(e.to_string()))?;
 
-    // 4. Build the redeem ErgoTree with substituted constants
     let redeem_ergo_tree_hex = build_redeem_ergo_tree(pool, user_pk, ex_fee)?;
 
-    // 5. Build proxy box output: holds LP tokens for the bot to redeem
     let proxy_output = Eip12Output {
         value: proxy_box_value.to_string(),
         ergo_tree: redeem_ergo_tree_hex,
@@ -301,43 +194,27 @@ pub fn build_lp_redeem_order_eip12(
         additional_registers: HashMap::new(),
     };
 
-    // 6. Build miner fee output
     let fee_output = Eip12Output::fee(TX_FEE as i64, current_height);
 
-    // 7. Build change output
     let mut outputs = vec![proxy_output, fee_output];
+    let spent = [(pool.lp_token_id.as_str(), lp_amount)];
+    append_change_output(
+        &mut outputs,
+        &selected,
+        total_erg_needed,
+        &spent,
+        user_ergo_tree,
+        current_height,
+        MIN_CHANGE_VALUE,
+    )
+    .map_err(|e| AmmError::TxBuildError(e.to_string()))?;
 
-    let change_erg = selected.total_erg - total_erg_needed;
-    let spent_token = Some((pool.lp_token_id.as_str(), lp_amount));
-    let change_tokens = collect_change_tokens(&selected.boxes, spent_token);
-
-    // Error if we have change tokens but not enough ERG for a box
-    if !change_tokens.is_empty() && change_erg < MIN_CHANGE_VALUE {
-        return Err(AmmError::TxBuildError(format!(
-            "Change tokens exist but not enough ERG for change box (need {}, have {})",
-            MIN_CHANGE_VALUE, change_erg
-        )));
-    }
-
-    // Create change output if we have sufficient ERG or any tokens
-    if change_erg >= MIN_CHANGE_VALUE || !change_tokens.is_empty() {
-        outputs.push(Eip12Output::change(
-            change_erg as i64,
-            user_ergo_tree,
-            change_tokens,
-            current_height,
-        ));
-    }
-
-    // 8. Build the transaction
     let unsigned_tx = Eip12UnsignedTx {
         inputs: selected.boxes,
         data_inputs: vec![],
         outputs,
     };
 
-    // 9. Build the summary
-    // Calculate estimated redeem shares for display purposes
     let (erg_share, token_share) = if let Some(erg_reserves) = pool.erg_reserves {
         crate::calculator::calculate_redeem_shares(
             erg_reserves,
@@ -372,11 +249,6 @@ pub fn build_lp_redeem_order_eip12(
     })
 }
 
-// =============================================================================
-// ErgoTree Construction
-// =============================================================================
-
-/// Build the deposit proxy ErgoTree by substituting constants into the template
 fn build_deposit_ergo_tree(
     pool: &AmmPool,
     erg_amount: u64,
@@ -409,7 +281,6 @@ fn build_deposit_ergo_tree(
     serialize_ergo_tree(&tree)
 }
 
-/// Build the redeem proxy ErgoTree by substituting constants into the template
 fn build_redeem_ergo_tree(
     pool: &AmmPool,
     user_pk: &str,
@@ -435,11 +306,6 @@ fn build_redeem_ergo_tree(
     serialize_ergo_tree(&tree)
 }
 
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-/// Parse an ErgoTree from hex string
 fn parse_ergo_tree(hex_str: &str) -> Result<ErgoTree, AmmError> {
     let bytes = hex::decode(hex_str)
         .map_err(|e| AmmError::TxBuildError(format!("Invalid ErgoTree hex: {}", e)))?;
@@ -447,7 +313,6 @@ fn parse_ergo_tree(hex_str: &str) -> Result<ErgoTree, AmmError> {
         .map_err(|e| AmmError::TxBuildError(format!("Failed to parse ErgoTree: {}", e)))
 }
 
-/// Serialize an ErgoTree to hex string
 fn serialize_ergo_tree(tree: &ErgoTree) -> Result<String, AmmError> {
     let bytes = tree
         .sigma_serialize_bytes()
@@ -455,13 +320,11 @@ fn serialize_ergo_tree(tree: &ErgoTree) -> Result<String, AmmError> {
     Ok(hex::encode(bytes))
 }
 
-/// Decode hex string to bytes
 fn hex_to_bytes(hex_str: &str) -> Result<Vec<u8>, AmmError> {
     hex::decode(hex_str)
         .map_err(|e| AmmError::TxBuildError(format!("Invalid hex string '{}': {}", hex_str, e)))
 }
 
-/// Build a ProveDlog constant from a compressed public key hex
 fn build_prove_dlog(pk_hex: &str) -> Result<ProveDlog, AmmError> {
     let pk_bytes = hex_to_bytes(pk_hex)?;
     if pk_bytes.len() != 33 {
@@ -478,10 +341,6 @@ fn build_prove_dlog(pk_hex: &str) -> Result<ProveDlog, AmmError> {
     })?;
     Ok(ProveDlog::new(ec_point))
 }
-
-// =============================================================================
-// Tests
-// =============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -555,10 +414,6 @@ mod tests {
         }
     }
 
-    // =========================================================================
-    // Template parsing tests
-    // =========================================================================
-
     #[test]
     fn test_parse_deposit_template() {
         let result = parse_ergo_tree(lp_templates::N2T_DEPOSIT_TEMPLATE);
@@ -595,10 +450,6 @@ mod tests {
         );
     }
 
-    // =========================================================================
-    // Deposit order tests
-    // =========================================================================
-
     #[test]
     fn test_build_deposit_order() {
         let pool = test_n2t_pool();
@@ -619,45 +470,34 @@ mod tests {
         assert!(result.is_ok(), "Should build deposit order: {:?}", result.err());
         let build = result.unwrap();
 
-        // Should have 3 outputs: proxy box, miner fee, change
         assert_eq!(build.unsigned_tx.outputs.len(), 3);
 
-        // Output 0: proxy box
         let proxy = &build.unsigned_tx.outputs[0];
-        // Proxy box value = erg_amount + EXECUTION_FEE + PROXY_BOX_VALUE
         let proxy_value: u64 = proxy.value.parse().unwrap();
         assert_eq!(
             proxy_value,
             1_000_000_000 + EXECUTION_FEE + PROXY_BOX_VALUE
         );
-        // Proxy box should contain token_y
         assert_eq!(proxy.assets.len(), 1);
         assert_eq!(
             proxy.assets[0].token_id,
             "0000000000000000000000000000000000000000000000000000000000000002"
         );
         assert_eq!(proxy.assets[0].amount, "100000");
-        // Proxy box ErgoTree should NOT be the user's tree
         assert_ne!(
             proxy.ergo_tree,
             "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
         );
 
-        // Output 1: miner fee
         let fee_output = &build.unsigned_tx.outputs[1];
         assert_eq!(fee_output.value, TX_FEE.to_string());
 
-        // Summary
         assert_eq!(build.summary.operation, "Deposit");
         assert_eq!(build.summary.erg_amount, 1_000_000_000);
         assert_eq!(build.summary.token_amount, 100_000);
         assert_eq!(build.summary.execution_fee, EXECUTION_FEE);
         assert_eq!(build.summary.miner_fee, TX_FEE);
     }
-
-    // =========================================================================
-    // Redeem order tests
-    // =========================================================================
 
     #[test]
     fn test_build_redeem_order() {
@@ -678,41 +518,30 @@ mod tests {
         assert!(result.is_ok(), "Should build redeem order: {:?}", result.err());
         let build = result.unwrap();
 
-        // Should have 3 outputs: proxy box, miner fee, change
         assert_eq!(build.unsigned_tx.outputs.len(), 3);
 
-        // Output 0: proxy box
         let proxy = &build.unsigned_tx.outputs[0];
-        // Proxy box value = EXECUTION_FEE + PROXY_BOX_VALUE (no ERG deposit for redeem)
         let proxy_value: u64 = proxy.value.parse().unwrap();
         assert_eq!(proxy_value, EXECUTION_FEE + PROXY_BOX_VALUE);
-        // Proxy box should contain LP tokens
         assert_eq!(proxy.assets.len(), 1);
         assert_eq!(
             proxy.assets[0].token_id,
             "0000000000000000000000000000000000000000000000000000000000000003"
         );
         assert_eq!(proxy.assets[0].amount, "100");
-        // Proxy box ErgoTree should NOT be the user's tree
         assert_ne!(
             proxy.ergo_tree,
             "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
         );
 
-        // Output 1: miner fee
         let fee_output = &build.unsigned_tx.outputs[1];
         assert_eq!(fee_output.value, TX_FEE.to_string());
 
-        // Summary
         assert_eq!(build.summary.operation, "Redeem");
         assert_eq!(build.summary.lp_amount, 100);
         assert_eq!(build.summary.execution_fee, EXECUTION_FEE);
         assert_eq!(build.summary.miner_fee, TX_FEE);
     }
-
-    // =========================================================================
-    // Error tests
-    // =========================================================================
 
     #[test]
     fn test_deposit_order_insufficient_erg() {
@@ -802,10 +631,6 @@ mod tests {
         assert!(result.unwrap_err().to_string().contains("T2T"));
     }
 
-    // =========================================================================
-    // ErgoTree roundtrip tests
-    // =========================================================================
-
     #[test]
     fn test_build_deposit_ergo_tree_roundtrip() {
         let pool = test_n2t_pool();
@@ -818,7 +643,6 @@ mod tests {
             result.err()
         );
 
-        // Verify result is valid hex that can be parsed back
         let hex = result.unwrap();
         let roundtrip = parse_ergo_tree(&hex);
         assert!(

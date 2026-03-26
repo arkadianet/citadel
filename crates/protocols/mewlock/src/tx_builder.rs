@@ -1,9 +1,3 @@
-//! MewLock transaction builders (EIP-12 format)
-//!
-//! Two transaction types:
-//! 1. Lock   — Create a timelock box with ERG/tokens
-//! 2. Unlock — Withdraw from a timelock box (with 3% fee)
-
 use std::collections::HashMap;
 
 use ergo_tx::eip12::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
@@ -11,66 +5,40 @@ use ergo_tx::sigma::{
     encode_sigma_coll_byte, encode_sigma_group_element, encode_sigma_int,
     extract_pk_from_p2pk_ergo_tree,
 };
-use ergo_tx::{collect_change_tokens, select_erg_boxes, select_token_boxes};
+use ergo_tx::{
+    append_change_output, collect_change_tokens, select_erg_boxes, select_inputs_for_spend,
+};
 
 use crate::constants::{self, MEWLOCK_ERGO_TREE};
 
-/// Standard miner fee (1.1 mERG)
 const MINER_FEE: i64 = 1_100_000;
-
-/// Minimum box value for change outputs
 const MIN_CHANGE_VALUE: i64 = 1_000_000;
-
-/// Minimum box value (for dev fee box)
 const MIN_BOX_VALUE: i64 = 1_000_000;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum MewLockTxError {
+    #[error("Invalid address: {0}")]
     InvalidAddress(String),
+    #[error("Invalid amount: {0}")]
     InvalidAmount(String),
+    #[error("Box selection failed: {0}")]
     BoxSelection(String),
+    #[error("Insufficient funds: {0}")]
     InsufficientFunds(String),
 }
 
-impl std::fmt::Display for MewLockTxError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::InvalidAddress(msg) => write!(f, "Invalid address: {}", msg),
-            Self::InvalidAmount(msg) => write!(f, "Invalid amount: {}", msg),
-            Self::BoxSelection(msg) => write!(f, "Box selection failed: {}", msg),
-            Self::InsufficientFunds(msg) => write!(f, "Insufficient funds: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for MewLockTxError {}
-
-// =============================================================================
-// Lock Transaction
-// =============================================================================
-
 pub struct LockRequest {
-    /// User's P2PK ErgoTree hex (0008cd + pubkey)
     pub user_ergo_tree: String,
-    /// ERG to lock (nanoERG)
     pub lock_erg: u64,
-    /// Tokens to lock: [(token_id, amount)]
     pub lock_tokens: Vec<(String, u64)>,
-    /// Block height at which lock becomes withdrawable
     pub unlock_height: i32,
-    /// Optional Unix timestamp (seconds)
     pub timestamp: Option<i64>,
-    /// Optional lock name
     pub lock_name: Option<String>,
-    /// Optional lock description
     pub lock_description: Option<String>,
-    /// User's available UTXOs
     pub user_inputs: Vec<Eip12InputBox>,
-    /// Current blockchain height
     pub current_height: i32,
 }
 
-/// Build a lock transaction that creates a MewLock box.
 pub fn build_lock_tx(req: &LockRequest) -> Result<Eip12UnsignedTx, MewLockTxError> {
     if req.lock_erg == 0 && req.lock_tokens.is_empty() {
         return Err(MewLockTxError::InvalidAmount(
@@ -84,42 +52,33 @@ pub fn build_lock_tx(req: &LockRequest) -> Result<Eip12UnsignedTx, MewLockTxErro
         ));
     }
 
-    // Extract 33-byte pubkey from P2PK ErgoTree
     let pubkey = extract_pubkey(&req.user_ergo_tree)?;
 
-    // Build registers
-    let mut registers = HashMap::new();
+    let mut registers = ergo_tx::sigma_registers!(
+        "R4" => encode_sigma_group_element(&pubkey),
+        "R5" => encode_sigma_int(req.unlock_height),
+    );
 
-    // R4: GroupElement (depositor pubkey)
-    registers.insert("R4".to_string(), encode_sigma_group_element(&pubkey));
-
-    // R5: Int (unlock height)
-    registers.insert("R5".to_string(), encode_sigma_int(req.unlock_height));
-
-    // R6: Optional Int (timestamp)
     if let Some(ts) = req.timestamp {
         registers.insert("R6".to_string(), encode_sigma_int(ts as i32));
     }
 
-    // R7: Optional Coll[Byte] (name)
     if let Some(ref name) = req.lock_name {
         if !name.is_empty() {
             registers.insert("R7".to_string(), encode_sigma_coll_byte(name.as_bytes()));
         }
     }
 
-    // R8: Optional Coll[Byte] (description)
     if let Some(ref desc) = req.lock_description {
         if !desc.is_empty() {
             registers.insert("R8".to_string(), encode_sigma_coll_byte(desc.as_bytes()));
         }
     }
 
-    // Lock box value
     let lock_value = if req.lock_erg > 0 {
         req.lock_erg as i64
     } else {
-        MIN_BOX_VALUE // Minimum box value for token-only locks
+        MIN_BOX_VALUE
     };
 
     let lock_assets: Vec<Eip12Asset> = req
@@ -136,79 +95,53 @@ pub fn build_lock_tx(req: &LockRequest) -> Result<Eip12UnsignedTx, MewLockTxErro
         additional_registers: registers,
     };
 
-    // Calculate required ERG
     let required_erg = (lock_value + MINER_FEE + MIN_CHANGE_VALUE) as u64;
 
-    // Select inputs
-    let selected = if req.lock_tokens.is_empty() {
-        select_erg_boxes(&req.user_inputs, required_erg)
-            .map_err(|e| MewLockTxError::BoxSelection(e.to_string()))?
-    } else {
-        let (ref first_token_id, first_amount) = req.lock_tokens[0];
-        select_token_boxes(&req.user_inputs, first_token_id, first_amount, required_erg)
-            .map_err(|e| MewLockTxError::BoxSelection(e.to_string()))?
-    };
+    let first_token = req
+        .lock_tokens
+        .first()
+        .map(|(tid, amt)| (tid.as_str(), *amt));
+    let selected = select_inputs_for_spend(&req.user_inputs, required_erg, first_token)
+        .map_err(|e| MewLockTxError::BoxSelection(e.to_string()))?;
 
-    // Change
-    let change_erg = selected.total_erg as i64 - lock_value - MINER_FEE;
-    if change_erg < 0 {
-        return Err(MewLockTxError::InsufficientFunds(format!(
-            "Need {} more nanoERG",
-            -change_erg
-        )));
-    }
-
+    let erg_used = (lock_value + MINER_FEE) as u64;
     let spent_tokens: Vec<(&str, u64)> = req
         .lock_tokens
         .iter()
         .map(|(tid, amt)| (tid.as_str(), *amt))
         .collect();
-    let change_tokens = if spent_tokens.len() == 1 {
-        collect_change_tokens(
-            &selected.boxes,
-            Some((spent_tokens[0].0, spent_tokens[0].1)),
-        )
-    } else if spent_tokens.is_empty() {
-        collect_change_tokens(&selected.boxes, None)
-    } else {
-        ergo_tx::collect_multi_change_tokens(&selected.boxes, &spent_tokens)
-    };
 
-    let change_output = Eip12Output::change(
-        change_erg,
+    let mut outputs = vec![lock_output];
+
+    append_change_output(
+        &mut outputs,
+        &selected,
+        erg_used,
+        &spent_tokens,
         &req.user_ergo_tree,
-        change_tokens,
         req.current_height,
-    );
-    let fee_output = Eip12Output::fee(MINER_FEE, req.current_height);
+        MIN_CHANGE_VALUE as u64,
+    )
+    .map_err(|e| MewLockTxError::InsufficientFunds(e.to_string()))?;
+
+    outputs.push(Eip12Output::fee(MINER_FEE, req.current_height));
 
     Ok(Eip12UnsignedTx {
         inputs: selected.boxes,
         data_inputs: vec![],
-        outputs: vec![lock_output, change_output, fee_output],
+        outputs,
     })
 }
 
-// =============================================================================
-// Unlock Transaction
-// =============================================================================
-
 pub struct UnlockRequest {
-    /// The lock box to unlock (as EIP-12 input, with registers)
     pub lock_box: Eip12InputBox,
-    /// User's P2PK ErgoTree hex
     pub user_ergo_tree: String,
-    /// User's available UTXOs (for miner fee if needed)
     pub user_inputs: Vec<Eip12InputBox>,
-    /// Current blockchain height
     pub current_height: i32,
 }
 
-/// Build an unlock transaction that spends a MewLock box.
-///
-/// The contract enforces: user output value >= lock_erg - erg_fee.
-/// Therefore the miner fee must come from a separate user UTXO, not
-/// from the lock box value.
+/// Contract enforces: user output value >= lock_erg - erg_fee,
+/// so the miner fee must come from a separate user UTXO.
 pub fn build_unlock_tx(req: &UnlockRequest) -> Result<Eip12UnsignedTx, MewLockTxError> {
     let lock_erg: u64 = req
         .lock_box
@@ -216,16 +149,13 @@ pub fn build_unlock_tx(req: &UnlockRequest) -> Result<Eip12UnsignedTx, MewLockTx
         .parse()
         .map_err(|_| MewLockTxError::InvalidAmount("Invalid lock box value".to_string()))?;
 
-    // Derive dev ErgoTree from address
     let dev_ergo_tree =
         ergo_tx::address_to_ergo_tree(constants::DEV_ADDRESS).map_err(|e| {
             MewLockTxError::InvalidAddress(format!("Invalid dev address: {}", e))
         })?;
 
-    // Calculate ERG fee (3%)
     let erg_fee = constants::calculate_erg_fee(lock_erg);
 
-    // Calculate token fees
     let mut user_tokens: Vec<Eip12Asset> = Vec::new();
     let mut dev_tokens: Vec<Eip12Asset> = Vec::new();
 
@@ -247,14 +177,9 @@ pub fn build_unlock_tx(req: &UnlockRequest) -> Result<Eip12UnsignedTx, MewLockTx
 
     let has_dev_fees = erg_fee > 0 || !dev_tokens.is_empty();
 
-    // Contract requires: user_output.value >= lock_erg - erg_fee
-    // So user gets exactly lock_erg - erg_fee from the lock box.
-    // Dev gets exactly erg_fee from the lock box.
-    // Miner fee + change come from a separate user UTXO.
     let user_erg = lock_erg as i64 - erg_fee as i64;
     let dev_erg = erg_fee as i64;
 
-    // Always need user UTXOs for miner fee (+ change)
     let fee_required = (MINER_FEE + MIN_CHANGE_VALUE) as u64;
     let selected = select_erg_boxes(&req.user_inputs, fee_required)
         .map_err(|e| MewLockTxError::BoxSelection(e.to_string()))?;
@@ -263,10 +188,8 @@ pub fn build_unlock_tx(req: &UnlockRequest) -> Result<Eip12UnsignedTx, MewLockTx
     let selected_boxes = selected.boxes;
     inputs.extend(selected_boxes.clone());
 
-    // Change: user UTXO ERG minus miner fee
     let change_erg = selected.total_erg as i64 - MINER_FEE;
 
-    // User output: lock_erg - erg_fee (contract-enforced minimum)
     let user_output = Eip12Output {
         value: user_erg.to_string(),
         ergo_tree: req.user_ergo_tree.clone(),
@@ -277,7 +200,6 @@ pub fn build_unlock_tx(req: &UnlockRequest) -> Result<Eip12UnsignedTx, MewLockTx
 
     let mut outputs = vec![user_output];
 
-    // Dev fee output (only if there are fees)
     if has_dev_fees {
         let dev_output = Eip12Output {
             value: dev_erg.to_string(),
@@ -289,7 +211,6 @@ pub fn build_unlock_tx(req: &UnlockRequest) -> Result<Eip12UnsignedTx, MewLockTx
         outputs.push(dev_output);
     }
 
-    // Change output
     if change_erg > 0 {
         let change_tokens = collect_change_tokens(&selected_boxes, None);
         let change_output = Eip12Output::change(
@@ -301,7 +222,6 @@ pub fn build_unlock_tx(req: &UnlockRequest) -> Result<Eip12UnsignedTx, MewLockTx
         outputs.push(change_output);
     }
 
-    // Miner fee
     outputs.push(Eip12Output::fee(MINER_FEE, req.current_height));
 
     Ok(Eip12UnsignedTx {
@@ -311,11 +231,6 @@ pub fn build_unlock_tx(req: &UnlockRequest) -> Result<Eip12UnsignedTx, MewLockTx
     })
 }
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
-/// Extract the 33-byte compressed public key from a P2PK ErgoTree hex
 fn extract_pubkey(ergo_tree_hex: &str) -> Result<[u8; 33], MewLockTxError> {
     extract_pk_from_p2pk_ergo_tree(ergo_tree_hex)
         .map_err(|e| MewLockTxError::InvalidAddress(format!("Invalid P2PK ErgoTree: {}", e)))
@@ -376,14 +291,14 @@ mod tests {
         };
 
         let tx = build_lock_tx(&req).unwrap();
-        assert_eq!(tx.outputs.len(), 3); // lock + change + fee
+        assert_eq!(tx.outputs.len(), 3);
         assert_eq!(tx.outputs[0].value, "1000000000");
         assert_eq!(tx.outputs[0].ergo_tree, MEWLOCK_ERGO_TREE);
         assert!(tx.outputs[0].additional_registers.contains_key("R4"));
         assert!(tx.outputs[0].additional_registers.contains_key("R5"));
         assert!(tx.outputs[0].additional_registers.contains_key("R6"));
         assert!(tx.outputs[0].additional_registers.contains_key("R7"));
-        assert!(!tx.outputs[0].additional_registers.contains_key("R8")); // No description
+        assert!(!tx.outputs[0].additional_registers.contains_key("R8"));
     }
 
     #[test]
@@ -408,7 +323,6 @@ mod tests {
 
     #[test]
     fn test_build_lock_tx_validation() {
-        // Zero amount
         let req = LockRequest {
             user_ergo_tree: TEST_ERGO_TREE.to_string(),
             lock_erg: 0,
@@ -422,7 +336,6 @@ mod tests {
         };
         assert!(build_lock_tx(&req).is_err());
 
-        // Unlock height in the past
         let req2 = LockRequest {
             user_ergo_tree: TEST_ERGO_TREE.to_string(),
             lock_erg: 1_000_000_000,
@@ -448,15 +361,12 @@ mod tests {
             assets: vec![Eip12Asset::new(TEST_TOKEN_ID, 1000)],
             creation_height: 800,
             additional_registers: {
-                let mut regs = HashMap::new();
                 let mut pubkey = [0u8; 33];
                 pubkey[0] = 0x02;
-                regs.insert(
-                    "R4".to_string(),
-                    encode_sigma_group_element(&pubkey),
-                );
-                regs.insert("R5".to_string(), encode_sigma_int(900));
-                regs
+                ergo_tx::sigma_registers!(
+                    "R4" => encode_sigma_group_element(&pubkey),
+                    "R5" => encode_sigma_int(900),
+                )
             },
             extension: HashMap::new(),
         };
@@ -469,31 +379,24 @@ mod tests {
         };
 
         let tx = build_unlock_tx(&req).unwrap();
-        // Inputs: lock box + user UTXO
         assert_eq!(tx.inputs.len(), 2);
-        // Outputs: user + dev + change + fee
         assert_eq!(tx.outputs.len(), 4);
 
-        // User gets lock_erg - 3% fee = 10 ERG - 0.3 ERG = 9.7 ERG
         let user_erg: i64 = tx.outputs[0].value.parse().unwrap();
         assert_eq!(user_erg, 9_700_000_000);
 
-        // Dev gets exactly the 3% ERG fee
         let dev_erg: i64 = tx.outputs[1].value.parse().unwrap();
-        assert_eq!(dev_erg, 300_000_000); // 3% of 10 ERG
+        assert_eq!(dev_erg, 300_000_000);
 
-        // Token fees: 3% of 1000 = 30
         let user_token_amt: i64 = tx.outputs[0].assets[0].amount.parse().unwrap();
         assert_eq!(user_token_amt, 970);
 
         let dev_token_amt: i64 = tx.outputs[1].assets[0].amount.parse().unwrap();
         assert_eq!(dev_token_amt, 30);
 
-        // Change: user UTXO minus miner fee
         let change_erg: i64 = tx.outputs[2].value.parse().unwrap();
         assert_eq!(change_erg, 5_000_000_000 - MINER_FEE);
 
-        // Verify total balance
         let total_in = 10_000_000_000i64 + 5_000_000_000;
         let total_out: i64 = tx.outputs.iter().map(|o| o.value.parse::<i64>().unwrap()).sum();
         assert_eq!(total_in, total_out);
@@ -521,14 +424,12 @@ mod tests {
         };
 
         let tx = build_unlock_tx(&req).unwrap();
-        // User should get all 20 tokens (no fee below threshold)
         let user_token_amt: i64 = tx.outputs[0].assets[0].amount.parse().unwrap();
         assert_eq!(user_token_amt, 20);
     }
 
     #[test]
     fn test_build_unlock_tx_small_lock() {
-        // 0.01 ERG lock — matches user's real-world test case
         let lock_box = Eip12InputBox {
             box_id: "cccc".repeat(16),
             transaction_id: "dddd".repeat(16),
@@ -550,15 +451,12 @@ mod tests {
 
         let tx = build_unlock_tx(&req).unwrap();
 
-        // User gets 0.01 ERG - 3% fee = 10,000,000 - 300,000 = 9,700,000
         let user_erg: i64 = tx.outputs[0].value.parse().unwrap();
         assert_eq!(user_erg, 9_700_000);
 
-        // Dev gets exactly 300,000 (the 3% fee)
         let dev_erg: i64 = tx.outputs[1].value.parse().unwrap();
         assert_eq!(dev_erg, 300_000);
 
-        // Verify total balance
         let total_in = 10_000_000i64 + 3_000_000_000;
         let total_out: i64 = tx.outputs.iter().map(|o| o.value.parse::<i64>().unwrap()).sum();
         assert_eq!(total_in, total_out);

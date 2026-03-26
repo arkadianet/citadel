@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { QRCodeSVG } from 'qrcode.react'
 import {
-  buildSwapRefundTx, startRefundSign, getRefundTxStatus,
+  buildSwapRefundTx,
   formatOrderInput, type PendingOrder,
 } from '../api/orders'
-import { formatErg } from '../api/amm'
+import { startSign, getTxStatus } from '../api/types'
+import { formatErg } from '../utils/format'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
 import { TxSuccess } from './TxSuccess'
 
@@ -63,7 +64,7 @@ export function SwapRefundModal({
       if (isPolling) return
       isPolling = true
       try {
-        const status = await getRefundTxStatus(requestId)
+        const status = await getTxStatus(requestId)
         if (status.status === 'submitted' && status.tx_id) {
           setTxId(status.tx_id)
           setStep('success')
@@ -107,7 +108,7 @@ export function SwapRefundModal({
       })
 
       const message = `Refund swap order ${order.txId.slice(0, 8)}...`
-      const signResult = await startRefundSign(buildResult.unsigned_tx, message)
+      const signResult = await startSign(buildResult.unsigned_tx, message)
 
       setRequestId(signResult.request_id)
       setQrUrl(signResult.ergopay_url)

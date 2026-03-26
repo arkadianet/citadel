@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { getMempool, formatErg, formatSize, calcFee, type Transaction } from '../../api/explorer'
+import { getMempool, formatSize, calcFee, type Transaction } from '../../api/explorer'
+import { formatErg } from '../../utils/format'
 import { ExplorerSkeleton } from './ExplorerSkeleton'
 import { TxTypeBadge } from './TxTypeBadge'
 import type { ExplorerRoute } from '../ExplorerTab'

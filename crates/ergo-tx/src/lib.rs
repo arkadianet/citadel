@@ -6,6 +6,7 @@ pub mod box_selector;
 pub mod burn;
 pub mod eip12;
 pub mod sigma;
+pub mod tx_helpers;
 pub mod utxo_management;
 
 #[cfg(feature = "ergo-lib")]
@@ -26,6 +27,9 @@ pub use burn::{
 };
 pub use eip12::*;
 pub use sigma::*;
+pub use tx_helpers::{
+    append_change_output, select_inputs_for_multi_spend, select_inputs_for_spend, ChangeOutputError,
+};
 pub use utxo_management::{
     build_consolidate_tx, build_split_tx, ConsolidateBuildResult, ConsolidateSummary,
     SplitBuildResult, SplitMode, SplitSummary, UtxoManagementError,

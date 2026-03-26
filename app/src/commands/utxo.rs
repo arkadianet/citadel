@@ -4,6 +4,8 @@ use citadel_core::constants::{MIN_BOX_VALUE_NANO, TX_FEE_NANO};
 use serde::Serialize;
 use tauri::State;
 
+use super::StrErr;
+
 /// Response for building a consolidation transaction
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,7 +41,7 @@ pub async fn build_consolidate_tx(
     let inputs = super::parse_eip12_utxos(selected_utxos)?;
 
     let result = ergo_tx::build_consolidate_tx(&inputs, &user_ergo_tree, current_height)
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize tx: {}", e))?;
@@ -98,7 +100,7 @@ pub async fn build_split_tx(
         ergo_tx::SplitMode::Erg { amount_per_box } => {
             let total_needed =
                 (*amount_per_box * count as i64 + TX_FEE_NANO + MIN_BOX_VALUE_NANO) as u64;
-            ergo_tx::select_erg_boxes(&all_inputs, total_needed).map_err(|e| e.to_string())?
+            ergo_tx::select_erg_boxes(&all_inputs, total_needed).str_err()?
         }
         ergo_tx::SplitMode::Token {
             token_id,
@@ -108,7 +110,7 @@ pub async fn build_split_tx(
             let total_tokens = *amount_per_box * count as u64;
             let total_erg = (*erg_per_box * count as i64 + TX_FEE_NANO + MIN_BOX_VALUE_NANO) as u64;
             ergo_tx::select_token_boxes(&all_inputs, token_id, total_tokens, total_erg)
-                .map_err(|e| e.to_string())?
+                .str_err()?
         }
     };
 
@@ -119,7 +121,7 @@ pub async fn build_split_tx(
         &user_ergo_tree,
         current_height,
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize tx: {}", e))?;

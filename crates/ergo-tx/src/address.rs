@@ -21,10 +21,31 @@ pub fn address_to_ergo_tree(address: &str) -> Result<String, AddressError> {
     Err(AddressError::InvalidAddress(address.to_string()))
 }
 
+/// Convert an ErgoTree hex to an Ergo address (mainnet).
+pub fn ergo_tree_to_address(ergo_tree_hex: &str) -> Result<String, AddressError> {
+    use ergo_lib::ergotree_ir::chain::address::{Address, AddressEncoder, NetworkPrefix};
+    use ergo_lib::ergotree_ir::ergo_tree::ErgoTree;
+    use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
+
+    let tree_bytes = hex::decode(ergo_tree_hex)
+        .map_err(|e| AddressError::InvalidErgoTree(format!("Invalid hex: {}", e)))?;
+
+    let tree = ErgoTree::sigma_parse_bytes(&tree_bytes)
+        .map_err(|e| AddressError::InvalidErgoTree(format!("Failed to parse: {}", e)))?;
+
+    let address = Address::recreate_from_ergo_tree(&tree)
+        .map_err(|e| AddressError::InvalidErgoTree(format!("Failed to create address: {}", e)))?;
+
+    let encoder = AddressEncoder::new(NetworkPrefix::Mainnet);
+    Ok(encoder.address_to_str(&address))
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum AddressError {
     #[error("Invalid Ergo address: {0}")]
     InvalidAddress(String),
+    #[error("Invalid ErgoTree: {0}")]
+    InvalidErgoTree(String),
 }
 
 #[cfg(test)]

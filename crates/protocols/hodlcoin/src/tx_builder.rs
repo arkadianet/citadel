@@ -1,30 +1,14 @@
-//! HodlCoin Transaction Builder
-//!
-//! Builds EIP-12 unsigned transactions for direct mint/burn operations.
-//!
-//! # Mint Transaction Structure
-//!
-//! Inputs:  [bank_box, user_utxos...]
-//! Outputs: [new_bank_box, user_output (hodl tokens), miner_fee, change?]
-//!
-//! # Burn Transaction Structure
-//!
-//! Inputs:  [bank_box, user_utxos... (containing hodl tokens)]
-//! Outputs: [new_bank_box, user_output (ERG), dev_fee_output, miner_fee, change?]
-
 use std::collections::HashMap;
 
 use crate::calculator;
 use crate::constants::{self, MIN_BOX_VALUE, MIN_CHANGE_VALUE, MIN_MINER_FEE};
 use crate::state::{HodlBankState, HodlError};
 use ergo_tx::{
-    collect_change_tokens, select_erg_boxes, select_token_boxes, Eip12Asset, Eip12InputBox,
+    append_change_output, select_erg_boxes, select_token_boxes, Eip12Asset, Eip12InputBox,
     Eip12Output, Eip12UnsignedTx,
 };
 
-/// Build a mint transaction (deposit ERG, receive hodlTokens).
-///
-/// The bank box must be inputs[0] and the new bank box must be outputs[0].
+/// Bank box must be inputs[0]; new bank box must be outputs[0].
 pub fn build_mint_tx_eip12(
     bank_box: &Eip12InputBox,
     bank_state: &HodlBankState,
@@ -39,7 +23,6 @@ pub fn build_mint_tx_eip12(
         ));
     }
 
-    // Calculate tokens received
     let tokens_received = calculator::mint_amount(
         bank_state.reserve_nano_erg,
         bank_state.circulating_supply,
@@ -53,7 +36,6 @@ pub fn build_mint_tx_eip12(
         ));
     }
 
-    // Verify bank has enough tokens
     if tokens_received > bank_state.hodl_tokens_in_bank {
         return Err(HodlError::TxBuildError(format!(
             "Bank only has {} tokens, but {} needed",
@@ -61,7 +43,6 @@ pub fn build_mint_tx_eip12(
         )));
     }
 
-    // Parse bank box values
     let bank_erg: u64 = bank_box
         .value
         .parse()
@@ -82,7 +63,6 @@ pub fn build_mint_tx_eip12(
         .parse()
         .map_err(|_| HodlError::TxBuildError("Invalid hodl token amount".to_string()))?;
 
-    // New bank box: ERG increased, hodl tokens decreased
     let new_bank_erg = bank_erg + erg_to_deposit as u64;
     let new_hodl_in_bank = hodl_in_bank - tokens_received as u64;
 
@@ -92,7 +72,7 @@ pub fn build_mint_tx_eip12(
         assets: vec![
             Eip12Asset {
                 token_id: bank_singleton.token_id.clone(),
-                amount: bank_singleton.amount.clone(), // same singleton (1)
+                amount: bank_singleton.amount.clone(),
             },
             Eip12Asset {
                 token_id: bank_hodl.token_id.clone(),
@@ -103,7 +83,6 @@ pub fn build_mint_tx_eip12(
         additional_registers: bank_box.additional_registers.clone(),
     };
 
-    // User output: receives hodl tokens
     let user_output = Eip12Output::change(
         MIN_BOX_VALUE as i64,
         user_ergo_tree,
@@ -111,10 +90,8 @@ pub fn build_mint_tx_eip12(
         current_height,
     );
 
-    // Miner fee
     let fee_output = Eip12Output::fee(MIN_MINER_FEE as i64, current_height);
 
-    // User ERG needed: deposit + min box value (for user output) + miner fee
     let user_erg_needed = erg_to_deposit as u64 + MIN_BOX_VALUE + MIN_MINER_FEE;
 
     let selected = select_erg_boxes(user_utxos, user_erg_needed)
@@ -122,27 +99,17 @@ pub fn build_mint_tx_eip12(
 
     let mut outputs = vec![new_bank_output, user_output, fee_output];
 
-    // Change output
-    let change_erg = selected.total_erg - user_erg_needed;
-    let change_tokens = collect_change_tokens(&selected.boxes, None);
+    append_change_output(
+        &mut outputs,
+        &selected,
+        user_erg_needed,
+        &[],
+        user_ergo_tree,
+        current_height,
+        MIN_CHANGE_VALUE,
+    )
+    .map_err(|e| HodlError::TxBuildError(e.to_string()))?;
 
-    if !change_tokens.is_empty() && change_erg < MIN_CHANGE_VALUE {
-        return Err(HodlError::TxBuildError(format!(
-            "Change tokens exist but not enough ERG for change box (need {}, have {})",
-            MIN_CHANGE_VALUE, change_erg
-        )));
-    }
-
-    if change_erg >= MIN_CHANGE_VALUE || !change_tokens.is_empty() {
-        outputs.push(Eip12Output::change(
-            change_erg as i64,
-            user_ergo_tree,
-            change_tokens,
-            current_height,
-        ));
-    }
-
-    // Build transaction: bank box = inputs[0]
     let mut inputs = vec![bank_box.clone()];
     inputs.extend(selected.boxes);
 
@@ -153,9 +120,7 @@ pub fn build_mint_tx_eip12(
     })
 }
 
-/// Build a burn transaction (return hodlTokens, receive ERG minus fees).
-///
-/// The bank box must be inputs[0] and the new bank box must be outputs[0].
+/// Bank box must be inputs[0]; new bank box must be outputs[0].
 pub fn build_burn_tx_eip12(
     bank_box: &Eip12InputBox,
     bank_state: &HodlBankState,
@@ -170,7 +135,6 @@ pub fn build_burn_tx_eip12(
         ));
     }
 
-    // Calculate burn result
     let burn_result = calculator::burn_amount(
         bank_state.reserve_nano_erg,
         bank_state.circulating_supply,
@@ -186,7 +150,6 @@ pub fn build_burn_tx_eip12(
         ));
     }
 
-    // Parse bank box values
     let bank_erg: u64 = bank_box
         .value
         .parse()
@@ -207,14 +170,12 @@ pub fn build_burn_tx_eip12(
         .parse()
         .map_err(|_| HodlError::TxBuildError("Invalid hodl token amount".to_string()))?;
 
-    // New bank box: ERG decreased by user_amount + dev_fee, hodl tokens increased
-    // The bank_fee stays in the bank (reserve increases relative to circulating supply)
+    // bank_fee stays in the bank (increases reserve relative to circulating supply)
     let erg_leaving_bank = (burn_result.erg_to_user + burn_result.dev_fee) as u64;
     let new_bank_erg = bank_erg
         .checked_sub(erg_leaving_bank)
         .ok_or_else(|| HodlError::TxBuildError("Bank ERG underflow".to_string()))?;
 
-    // Check min bank value constraint
     if (new_bank_erg as i64) < bank_state.min_bank_value {
         return Err(HodlError::BelowMinBankValue);
     }
@@ -238,7 +199,6 @@ pub fn build_burn_tx_eip12(
         additional_registers: bank_box.additional_registers.clone(),
     };
 
-    // User output: receives ERG
     let user_output = Eip12Output::change(
         burn_result.erg_to_user,
         user_ergo_tree,
@@ -246,11 +206,6 @@ pub fn build_burn_tx_eip12(
         current_height,
     );
 
-    // Dev fee output: extract the dev fee contract ErgoTree from the bank box constants
-    // The dev fee goes to the contract embedded in the bank's ErgoTree.
-    // We use a P2S output with the dev fee contract bytes from constants.
-    // NOTE: For the real contract, we need to read the actual dev fee P2PK address
-    // from the bank's ErgoTree constants. For now, we use the embedded constant.
     let dev_fee_ergo_tree = extract_dev_fee_tree(bank_box)?;
     let dev_fee_output = Eip12Output {
         value: burn_result.dev_fee.to_string(),
@@ -260,13 +215,11 @@ pub fn build_burn_tx_eip12(
         additional_registers: HashMap::new(),
     };
 
-    // Miner fee
     let fee_output = Eip12Output::fee(MIN_MINER_FEE as i64, current_height);
 
     let mut outputs = vec![new_bank_output, user_output, dev_fee_output, fee_output];
 
-    // User needs: hodl tokens to burn + ERG for miner fee
-    // The user's ERG output comes from the bank, not from the user's UTXOs
+    // User's ERG output comes from the bank, not from user UTXOs
     let user_erg_needed = MIN_MINER_FEE;
 
     let selected = select_token_boxes(
@@ -277,28 +230,17 @@ pub fn build_burn_tx_eip12(
     )
     .map_err(|e| HodlError::InsufficientFunds(e.to_string()))?;
 
-    // Change output (remaining tokens and ERG)
-    let change_erg = selected.total_erg - user_erg_needed;
-    let spent_token = Some((bank_state.hodl_token_id.as_str(), hodl_to_burn as u64));
-    let change_tokens = collect_change_tokens(&selected.boxes, spent_token);
+    append_change_output(
+        &mut outputs,
+        &selected,
+        user_erg_needed,
+        &[(bank_state.hodl_token_id.as_str(), hodl_to_burn as u64)],
+        user_ergo_tree,
+        current_height,
+        MIN_CHANGE_VALUE,
+    )
+    .map_err(|e| HodlError::TxBuildError(e.to_string()))?;
 
-    if !change_tokens.is_empty() && change_erg < MIN_CHANGE_VALUE {
-        return Err(HodlError::TxBuildError(format!(
-            "Change tokens exist but not enough ERG for change box (need {}, have {})",
-            MIN_CHANGE_VALUE, change_erg
-        )));
-    }
-
-    if change_erg >= MIN_CHANGE_VALUE || !change_tokens.is_empty() {
-        outputs.push(Eip12Output::change(
-            change_erg as i64,
-            user_ergo_tree,
-            change_tokens,
-            current_height,
-        ));
-    }
-
-    // Build transaction: bank box = inputs[0]
     let mut inputs = vec![bank_box.clone()];
     inputs.extend(selected.boxes);
 
@@ -309,14 +251,9 @@ pub fn build_burn_tx_eip12(
     })
 }
 
-/// Get the dev fee contract ErgoTree hex for a hodlERG bank box.
-///
-/// The hodlERG bank contract stores `blake2b256(feeContract.propBytes)` as a constant,
-/// NOT the ErgoTree itself. We verify the embedded hash matches our known fee contract,
-/// then return the full fee contract ErgoTree.
+/// Bank contract stores `blake2b256(feeContract.propBytes)`, not the ErgoTree itself.
+/// Verify the embedded hash matches our known fee contract, then return the full ErgoTree.
 fn extract_dev_fee_tree(bank_box: &Eip12InputBox) -> Result<String, HodlError> {
-    // The bank contract raw bytes contain the fee contract hash as a Coll[Byte] constant.
-    // Verify it matches our known hash before returning the fee contract ErgoTree.
     let hash_hex = constants::DEV_FEE_CONTRACT_HASH;
     if bank_box.ergo_tree.contains(hash_hex) {
         return Ok(constants::DEV_FEE_CONTRACT_BYTES.to_string());

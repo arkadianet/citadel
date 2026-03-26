@@ -12,7 +12,6 @@
 
 import { invoke } from '@tauri-apps/api/core'
 
-import type { SignResponse, TxStatusResponse } from './types'
 
 // =============================================================================
 // Type Definitions
@@ -75,8 +74,6 @@ export interface DexySwapBuildResponse {
   summary: DexySwapTxSummary
 }
 
-export type DexySwapSignResponse = SignResponse
-export type DexySwapTxStatusResponse = TxStatusResponse
 
 // =============================================================================
 // API Functions
@@ -139,40 +136,6 @@ export async function buildDexySwapTx(
   })
 }
 
-/**
- * Start the signing flow for a Dexy swap transaction.
- * Reuses the existing start_mint_sign Tauri command.
- *
- * @param unsignedTx - The unsigned transaction from buildDexySwapTx
- * @param message - Human-readable description of the transaction
- * @returns Request ID and signing URLs (ErgoPay QR + Nautilus)
- */
-export async function startDexySwapSign(
-  unsignedTx: object,
-  message: string,
-): Promise<DexySwapSignResponse> {
-  return await invoke<DexySwapSignResponse>('start_mint_sign', {
-    request: {
-      unsigned_tx: unsignedTx,
-      message,
-    },
-  })
-}
-
-/**
- * Poll for Dexy swap transaction status.
- * Reuses the existing get_mint_tx_status Tauri command.
- *
- * @param requestId - Request ID from startDexySwapSign
- * @returns Current status, optional tx_id on success, optional error on failure
- */
-export async function getDexySwapTxStatus(
-  requestId: string,
-): Promise<DexySwapTxStatusResponse> {
-  return await invoke<DexySwapTxStatusResponse>('get_mint_tx_status', {
-    requestId,
-  })
-}
 
 // =============================================================================
 // LP Deposit/Redeem Types

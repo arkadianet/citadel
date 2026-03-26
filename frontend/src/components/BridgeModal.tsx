@@ -2,13 +2,12 @@ import { useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import {
   buildBridgeLockTx,
-  startBridgeSign,
-  getBridgeTxStatus,
   chainDisplayName,
-  formatTokenAmount,
   type BridgeTokenInfo,
   type BridgeFeeInfo,
 } from '../api/rosen'
+import { startSign, getTxStatus } from '../api/types'
+import { formatTokenAmount } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 
@@ -44,7 +43,7 @@ export function BridgeModal({
   const [error, setError] = useState<string | null>(null)
 
   const flow = useTransactionFlow({
-    pollStatus: getBridgeTxStatus,
+    pollStatus: getTxStatus,
     isOpen,
     onSuccess: () => setStep('success'),
     onError: (err) => { setError(err); setStep('error') },
@@ -68,7 +67,7 @@ export function BridgeModal({
       )
 
       const message = `Bridge ${amount} ${token.name} to ${chainDisplayName(targetChain)}`
-      const signResult = await startBridgeSign(result.unsignedTx, message)
+      const signResult = await startSign(result.unsignedTx, message)
 
       flow.startSigning(signResult.request_id, signResult.ergopay_url, signResult.nautilus_url)
       setStep('signing')

@@ -17,9 +17,9 @@ use dexy::{
         build_mint_dexy_tx, validate_mint_dexy, LpDepositRequest, LpRedeemRequest, MintDexyRequest,
     },
 };
+use super::StrErr;
 use tauri::State;
 
-/// Get Dexy protocol state for a variant
 #[tauri::command]
 pub async fn get_dexy_state(
     state: State<'_, AppState>,
@@ -29,15 +29,8 @@ pub async fn get_dexy_state(
         .parse::<DexyVariant>()
         .map_err(|_| format!("Invalid variant: {}. Use 'gold' or 'usd'", variant))?;
 
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
     let config = state.config().await;
     let ids = DexyIds::for_variant(dexy_variant, config.network)
@@ -45,7 +38,7 @@ pub async fn get_dexy_state(
 
     let dexy_state = fetch_dexy_state(&client, &capabilities, &ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     Ok(DexyStateResponse {
         variant: dexy_variant.as_str().to_string(),
@@ -71,7 +64,6 @@ pub async fn get_dexy_state(
     })
 }
 
-/// Get Dexy rates for all minting paths
 #[tauri::command]
 pub async fn get_dexy_rates(
     state: State<'_, AppState>,
@@ -81,15 +73,8 @@ pub async fn get_dexy_rates(
         .parse::<DexyVariant>()
         .map_err(|_| format!("Invalid variant: {}. Use 'gold' or 'usd'", variant))?;
 
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
     let config = state.config().await;
     let ids = DexyIds::for_variant(dexy_variant, config.network)
@@ -97,12 +82,11 @@ pub async fn get_dexy_rates(
 
     let dexy_state = fetch_dexy_state(&client, &capabilities, &ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     Ok(DexyRates::from_state(&dexy_state))
 }
 
-/// Preview Dexy mint operation
 #[tauri::command]
 pub async fn preview_mint_dexy(
     state: State<'_, AppState>,
@@ -125,15 +109,8 @@ pub async fn preview_mint_dexy(
         });
     }
 
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
     let config = state.config().await;
     let ids = DexyIds::for_variant(variant, config.network)
@@ -141,7 +118,7 @@ pub async fn preview_mint_dexy(
 
     let dexy_state = fetch_dexy_state(&client, &capabilities, &ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     if !dexy_state.can_mint {
         return Ok(DexyPreviewResponse {
@@ -190,7 +167,6 @@ pub async fn preview_mint_dexy(
     })
 }
 
-/// Build Dexy mint transaction
 #[tauri::command]
 pub async fn build_mint_dexy(
     state: State<'_, AppState>,
@@ -201,40 +177,29 @@ pub async fn build_mint_dexy(
         .parse::<DexyVariant>()
         .map_err(|_| format!("Invalid variant: {}", request.variant))?;
 
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
 
     let config = state.config().await;
     let ids = DexyIds::for_variant(variant, config.network)
         .ok_or_else(|| "Dexy not available on this network".to_string())?;
 
-    // Fetch state and context
     let dexy_state = fetch_dexy_state(&client, &capabilities, &ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
-    // Validate
-    validate_mint_dexy(request.amount, &dexy_state).map_err(|e| e.to_string())?;
+    validate_mint_dexy(request.amount, &dexy_state).str_err()?;
 
     let tx_ctx = fetch_dexy_tx_context(&client, &capabilities, &ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
-    // Parse user UTXOs
     let user_inputs = super::parse_eip12_utxos(request.user_utxos)?;
-
     let user_ergo_tree = user_inputs[0].ergo_tree.clone();
 
     let recipient_ergo_tree = match &request.recipient_address {
         Some(addr) if !addr.is_empty() => {
-            Some(ergo_tx::address_to_ergo_tree(addr).map_err(|e| e.to_string())?)
+            Some(ergo_tx::address_to_ergo_tree(addr).str_err()?)
         }
         _ => None,
     };
@@ -250,7 +215,7 @@ pub async fn build_mint_dexy(
     };
 
     let result =
-        build_mint_dexy_tx(&mint_request, &tx_ctx, &dexy_state).map_err(|e| e.to_string())?;
+        build_mint_dexy_tx(&mint_request, &tx_ctx, &dexy_state).str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize tx: {}", e))?;
@@ -268,7 +233,6 @@ pub async fn build_mint_dexy(
     })
 }
 
-/// Preview a Dexy LP swap (calculate output without building tx)
 #[tauri::command]
 pub async fn preview_dexy_swap(
     state: State<'_, AppState>,
@@ -285,20 +249,16 @@ pub async fn preview_dexy_swap(
         return Err("Amount must be positive".to_string());
     }
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or("Node capabilities not available")?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
     let config = state.config().await;
     let ids = DexyIds::for_variant(dexy_variant, config.network)
         .ok_or_else(|| format!("Dexy {} not available", variant))?;
 
     let dexy_state = fetch_dexy_state(&client, &capabilities, &ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
-    // Calculate output
     let (output_amount, reserves_sold, reserves_bought) = match direction.as_str() {
         "erg_to_dexy" => {
             let out = dexy::calculator::calculate_lp_swap_output(
@@ -365,7 +325,6 @@ pub async fn preview_dexy_swap(
     })
 }
 
-/// Build Dexy LP swap transaction
 #[tauri::command]
 pub async fn build_dexy_swap_tx(
     state: State<'_, AppState>,
@@ -388,32 +347,26 @@ pub async fn build_dexy_swap_tx(
         _ => return Err(format!("Invalid direction: {}", direction)),
     };
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or("Node capabilities not available")?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
     let config = state.config().await;
     let ids = DexyIds::for_variant(dexy_variant, config.network)
         .ok_or_else(|| format!("Dexy {} not available", variant))?;
 
-    // Fetch state and swap context
     let dexy_state = fetch_dexy_state(&client, &capabilities, &ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let swap_ctx = dexy::fetch::fetch_swap_tx_context(&client, &capabilities, &ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
-    // Parse user UTXOs
     let user_inputs = super::parse_eip12_utxos(user_utxos)?;
-
     let user_ergo_tree = user_inputs[0].ergo_tree.clone();
 
     let recipient_ergo_tree = match &recipient_address {
         Some(addr) if !addr.is_empty() => {
-            Some(ergo_tx::address_to_ergo_tree(addr).map_err(|e| e.to_string())?)
+            Some(ergo_tx::address_to_ergo_tree(addr).str_err()?)
         }
         _ => None,
     };
@@ -431,7 +384,7 @@ pub async fn build_dexy_swap_tx(
     };
 
     let result = dexy::tx_builder::build_swap_dexy_tx(&request, &swap_ctx, &dexy_state)
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize tx: {}", e))?;
@@ -442,7 +395,6 @@ pub async fn build_dexy_swap_tx(
     })
 }
 
-/// Preview LP deposit (add liquidity) - calculate LP tokens received
 #[tauri::command]
 pub async fn preview_lp_deposit(
     state: State<'_, AppState>,
@@ -468,25 +420,18 @@ pub async fn preview_lp_deposit(
         });
     }
 
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
     let config = state.config().await;
     let ids = DexyIds::for_variant(dexy_variant, config.network)
         .ok_or_else(|| format!("Dexy {} not available on {:?}", variant, config.network))?;
 
-    // Fetch LP box to get lp_token_reserves
     let lp_token_id = citadel_core::TokenId::new(&ids.lp_nft);
     let lp_box =
-        ergo_node_client::queries::get_box_by_token_id(client.inner(), &capabilities, &lp_token_id)
+        client.get_box_by_token_id(&capabilities, &lp_token_id)
             .await
             .map_err(|e| format!("LP box not found: {}", e))?;
-    let lp_data = parse_lp_box(&lp_box, &ids).map_err(|e| e.to_string())?;
+    let lp_data = parse_lp_box(&lp_box, &ids).str_err()?;
 
     let calc = calculate_lp_deposit(
         erg_amount,
@@ -524,7 +469,6 @@ pub async fn preview_lp_deposit(
     })
 }
 
-/// Build LP deposit (add liquidity) transaction
 #[tauri::command]
 pub async fn build_lp_deposit_tx(
     state: State<'_, AppState>,
@@ -540,27 +484,22 @@ pub async fn build_lp_deposit_tx(
         .parse::<DexyVariant>()
         .map_err(|_| format!("Invalid variant: {}", variant))?;
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or("Node capabilities not available")?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
     let config = state.config().await;
     let ids = DexyIds::for_variant(dexy_variant, config.network)
         .ok_or_else(|| format!("Dexy {} not available", variant))?;
 
-    // Fetch LP tx context (LP box + LP Mint NFT box)
     let ctx = fetch_lp_tx_context(&client, &capabilities, &ids, LpAction::Deposit)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
-    // Parse user UTXOs
     let user_inputs = super::parse_eip12_utxos(user_utxos)?;
     let user_ergo_tree = user_inputs[0].ergo_tree.clone();
 
     let recipient_ergo_tree = match &recipient_address {
         Some(addr) if !addr.is_empty() => {
-            Some(ergo_tx::address_to_ergo_tree(addr).map_err(|e| e.to_string())?)
+            Some(ergo_tx::address_to_ergo_tree(addr).str_err()?)
         }
         _ => None,
     };
@@ -583,7 +522,7 @@ pub async fn build_lp_deposit_tx(
         &ids.lp_token_id,
         dexy_variant.initial_lp(),
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize tx: {}", e))?;
@@ -594,7 +533,6 @@ pub async fn build_lp_deposit_tx(
     })
 }
 
-/// Preview LP redeem (remove liquidity) - calculate ERG and Dexy received
 #[tauri::command]
 pub async fn preview_lp_redeem(
     state: State<'_, AppState>,
@@ -619,31 +557,23 @@ pub async fn preview_lp_redeem(
         });
     }
 
-    let client = state
-        .node_client()
-        .await
-        .ok_or_else(|| "Node not connected".to_string())?;
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or_else(|| "Node capabilities not available".to_string())?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
     let config = state.config().await;
     let ids = DexyIds::for_variant(dexy_variant, config.network)
         .ok_or_else(|| format!("Dexy {} not available on {:?}", variant, config.network))?;
 
-    // Fetch dexy state (for oracle rate) and LP box (for lp_token_reserves)
     let dexy_state = fetch_dexy_state(&client, &capabilities, &ids)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
     let lp_token_id = citadel_core::TokenId::new(&ids.lp_nft);
     let lp_box =
-        ergo_node_client::queries::get_box_by_token_id(client.inner(), &capabilities, &lp_token_id)
+        client.get_box_by_token_id(&capabilities, &lp_token_id)
             .await
             .map_err(|e| format!("LP box not found: {}", e))?;
-    let lp_data = parse_lp_box(&lp_box, &ids).map_err(|e| e.to_string())?;
+    let lp_data = parse_lp_box(&lp_box, &ids).str_err()?;
 
-    // Check oracle rate gate (depeg protection)
     if !can_redeem_lp(
         dexy_state.lp_erg_reserves,
         dexy_state.lp_dexy_reserves,
@@ -700,7 +630,6 @@ pub async fn preview_lp_redeem(
     })
 }
 
-/// Build LP redeem (remove liquidity) transaction
 #[tauri::command]
 pub async fn build_lp_redeem_tx(
     state: State<'_, AppState>,
@@ -715,27 +644,22 @@ pub async fn build_lp_redeem_tx(
         .parse::<DexyVariant>()
         .map_err(|_| format!("Invalid variant: {}", variant))?;
 
-    let client = state.node_client().await.ok_or("Node not connected")?;
-    let capabilities = client
-        .capabilities()
-        .await
-        .ok_or("Node capabilities not available")?;
+    let client = state.require_node_client().await?;
+    let capabilities = client.require_capabilities().await?;
     let config = state.config().await;
     let ids = DexyIds::for_variant(dexy_variant, config.network)
         .ok_or_else(|| format!("Dexy {} not available", variant))?;
 
-    // Fetch LP tx context (LP box + LP Redeem NFT box + Oracle box)
     let ctx = fetch_lp_tx_context(&client, &capabilities, &ids, LpAction::Redeem)
         .await
-        .map_err(|e| e.to_string())?;
+        .str_err()?;
 
-    // Parse user UTXOs
     let user_inputs = super::parse_eip12_utxos(user_utxos)?;
     let user_ergo_tree = user_inputs[0].ergo_tree.clone();
 
     let recipient_ergo_tree = match &recipient_address {
         Some(addr) if !addr.is_empty() => {
-            Some(ergo_tx::address_to_ergo_tree(addr).map_err(|e| e.to_string())?)
+            Some(ergo_tx::address_to_ergo_tree(addr).str_err()?)
         }
         _ => None,
     };
@@ -757,7 +681,7 @@ pub async fn build_lp_redeem_tx(
         &ids.lp_token_id,
         dexy_variant.initial_lp(),
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize tx: {}", e))?;

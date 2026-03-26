@@ -4,11 +4,10 @@ import { QRCodeSVG } from 'qrcode.react'
 import {
   previewDexySwap,
   buildDexySwapTx,
-  startDexySwapSign,
-  getDexySwapTxStatus,
   type DexySwapPreviewResponse,
   type SwapDirection,
 } from '../api/dexySwap'
+import { startSign, getTxStatus } from '../api/types'
 import { formatErg } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
 import { AdvancedOptions, useRecipientAddress } from './AdvancedOptions'
@@ -98,7 +97,7 @@ export function DexySwapModal({
   const [error, setError] = useState<string | null>(null)
 
   const flow = useTransactionFlow({
-    pollStatus: getDexySwapTxStatus,
+    pollStatus: getTxStatus,
     isOpen,
     onSuccess: () => setStep('success'),
     onError: (err) => { setError(err); setStep('error') },
@@ -290,7 +289,7 @@ export function DexySwapModal({
         : 'ERG'
       const message = `Swap ${inputLabel} for ${outputLabel}`
 
-      const signResult = await startDexySwapSign(buildResult.unsigned_tx, message)
+      const signResult = await startSign(buildResult.unsigned_tx, message)
 
       flow.startSigning(signResult.request_id, signResult.ergopay_url, signResult.nautilus_url)
       setStep('signing')
