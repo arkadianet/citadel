@@ -12,7 +12,6 @@ members = [
     "crates/protocols/lending",
     "crates/protocols/amm",
     "crates/protocols/hodlcoin",
-    "crates/protocols/rosen",
     "crates/protocols/sigmafi",
     "crates/protocols/mewlock",
     "app",
@@ -65,7 +64,6 @@ dexy = { path = "crates/protocols/dexy" }
 lending = { path = "crates/protocols/lending" }
 amm = { path = "crates/protocols/amm" }
 hodlcoin = { path = "crates/protocols/hodlcoin" }
-rosen = { path = "crates/protocols/rosen" }
 sigmafi = { path = "crates/protocols/sigmafi" }
 mewlock = { path = "crates/protocols/mewlock" }
 

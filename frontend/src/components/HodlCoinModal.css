@@ -44,7 +44,7 @@
   display: flex;
   padding: 0 var(--space-md);
   gap: var(--space-xs);
-  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
 }
 
 .hodl-tab-btn {
@@ -185,7 +185,7 @@
 }
 
 .hodl-info-row.total {
-  border-top: 1px solid rgba(52, 211, 153, 0.06);
+  border-top: 1px solid rgba(148, 163, 184, 0.06);
   padding-top: var(--space-sm);
   font-weight: 600;
 }

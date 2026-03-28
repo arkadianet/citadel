@@ -2037,11 +2037,10 @@ html, body, #root {
 .badge-swap { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
 .badge-mint { background: rgba(16, 185, 129, 0.15); color: #34d399; }
 .badge-lend { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
-.badge-bridge { background: rgba(168, 85, 247, 0.15); color: #a78bfa; }
 .badge-redeem { background: rgba(249, 115, 22, 0.15); color: #fb923c; }
 .badge-burn { background: rgba(239, 68, 68, 0.15); color: #f87171; }
 
-.badge-swap, .badge-mint, .badge-lend, .badge-bridge, .badge-redeem, .badge-burn {
+.badge-swap, .badge-mint, .badge-lend, .badge-redeem, .badge-burn {
   padding: 2px 8px;
   border-radius: 4px;
   font-size: var(--text-xs);

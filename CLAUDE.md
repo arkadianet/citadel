@@ -42,7 +42,6 @@ crates/
     hodlcoin/            Phoenix HodlCoin
     lending/             Duckpools lending
     mewlock/             MewLock timelocks
-    rosen/               Rosen Bridge cross-chain
     sigmafi/             SigmaFi P2P bonds
     sigmausd/            AgeUSD stablecoin
 ```

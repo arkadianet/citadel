@@ -15,7 +15,6 @@ import { ExplorerTab, type ExplorerRoute } from './components/ExplorerTab'
 import { BurnTab } from './components/BurnTab'
 import { UtxoManagementTab } from './components/UtxoManagementTab'
 import { HodlCoinTab } from './components/HodlCoinTab'
-import { BridgeTab } from './components/BridgeTab'
 import { SigmaFiTab } from './components/SigmaFiTab'
 import { TimelockTab } from './components/TimelockTab'
 import { RouterTab } from './components/RouterTab'
@@ -76,7 +75,7 @@ interface WalletBalance {
   }>
 }
 
-type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bridge' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management'
+type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management'
 
 function App() {
   const [view, setView] = useState<View>('home')
@@ -100,8 +99,6 @@ function App() {
   const [explorerPendingRoute, setExplorerPendingRoute] = useState<ExplorerRoute | null>(null)
   const [discoveredNodes, setDiscoveredNodes] = useState<NodeProbeResult[]>([])
   const [discovering, setDiscovering] = useState(false)
-  const [rosenDisclaimed, setRosenDisclaimed] = useState(false)
-  const [showRosenWarning, setShowRosenWarning] = useState(false)
   const { notifications, unreadCount, pendingCount, markAllRead } = useNotifications()
 
   const clearPendingRoute = useCallback(() => setExplorerPendingRoute(null), [])
@@ -386,10 +383,6 @@ function App() {
         <Sidebar
           view={view}
           onNavigate={(v) => {
-            if (v === 'bridge' && !rosenDisclaimed) {
-              setShowRosenWarning(true)
-              return
-            }
             setView(v)
             if (v !== 'home') setSidebarCollapsed(true)
           }}
@@ -409,10 +402,6 @@ function App() {
               explorerUrl={explorerUrl}
               blockHeight={nodeStatus?.chain_height}
               onNavigate={(v) => {
-                if (v === 'bridge' && !rosenDisclaimed) {
-                  setShowRosenWarning(true)
-                  return
-                }
                 setView(v)
                 if (v !== 'home') setSidebarCollapsed(true)
               }}
@@ -470,15 +459,6 @@ function App() {
             <HodlCoinTab
               isConnected={isConnected}
               capabilityTier={nodeStatus?.capability_tier}
-              walletAddress={walletAddress}
-              walletBalance={walletBalance}
-              explorerUrl={explorerUrl}
-            />
-          )}
-
-          {view === 'bridge' && (
-            <BridgeTab
-              isConnected={isConnected}
               walletAddress={walletAddress}
               walletBalance={walletBalance}
               explorerUrl={explorerUrl}
@@ -696,43 +676,6 @@ function App() {
       )}
       <ToastStack notifications={notifications} />
 
-      {showRosenWarning && (
-        <div className="modal-overlay" onClick={() => setShowRosenWarning(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="modal-header">
-              <h2>Rosen Bridge Warning</h2>
-              <button className="modal-close" onClick={() => setShowRosenWarning(false)}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div style={{ padding: '16px 24px', lineHeight: 1.6 }}>
-              <p style={{ color: 'var(--warning-color, #f59e0b)', fontWeight: 600, marginBottom: 12 }}>
-                This feature is untested and likely will not work.
-              </p>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
-                Only Ergo to other chains is theoretically supported in this app.
-                Bridging from other chains to Ergo is not supported.
-                Use at your own risk.
-              </p>
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                <button className="btn btn-secondary" onClick={() => setShowRosenWarning(false)}>
-                  Cancel
-                </button>
-                <button className="btn btn-primary" onClick={() => {
-                  setRosenDisclaimed(true)
-                  setShowRosenWarning(false)
-                  setView('bridge')
-                  setSidebarCollapsed(true)
-                }}>
-                  I understand, continue
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
     </ExplorerNavProvider>
   )

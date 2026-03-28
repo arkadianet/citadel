@@ -64,7 +64,7 @@ interface RecentTx {
   token_changes: TokenChange[]
 }
 
-type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bridge' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management'
+type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management'
 
 interface DashboardProps {
   isConnected: boolean
@@ -123,7 +123,6 @@ const PROTOCOL_GRID: Array<{ id: View; name: string; desc: string; color: string
   { id: 'lending', name: 'Lending', desc: 'Duckpools', color: '#3b82f6', letter: 'L' },
   { id: 'dex', name: 'DEX', desc: 'AMM Swaps', color: '#8b5cf6', letter: 'S' },
   { id: 'hodlcoin', name: 'HodlCoin', desc: 'Hold & Earn', color: '#f97316', letter: 'H' },
-  { id: 'bridge', name: 'Rosen', desc: 'Bridge', color: '#06b6d4', letter: 'R' },
   { id: 'bonds', name: 'Bonds', desc: 'SigmaFi P2P', color: '#ec4899', letter: 'B' },
   { id: 'timelocks', name: 'Timelocks', desc: 'MewLock', color: '#64748b', letter: 'T' },
 ]

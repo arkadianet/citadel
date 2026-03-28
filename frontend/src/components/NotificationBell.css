@@ -106,7 +106,7 @@
   align-items: flex-start;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
-  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -116,7 +116,7 @@
 }
 
 .bell-item:hover {
-  background: rgba(52, 211, 153, 0.06);
+  background: rgba(148, 163, 184, 0.06);
 }
 
 .bell-item-dot {

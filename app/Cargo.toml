@@ -26,7 +26,6 @@ dexy = { workspace = true }
 lending = { workspace = true }
 amm = { workspace = true }
 hodlcoin = { workspace = true }
-rosen = { workspace = true }
 sigmafi = { workspace = true }
 mewlock = { workspace = true }
 tokio = { workspace = true }

@@ -1,6 +1,6 @@
 import './Sidebar.css'
 
-type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bridge' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management'
+type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management'
 
 interface SidebarProps {
   view: View
@@ -23,7 +23,6 @@ const protocols: Array<{
   { id: 'lending', name: 'Lending', description: 'Duckpools', icon: 'lending' },
   { id: 'dex', name: 'DEX', description: 'AMM Swaps', icon: 'dex' },
   { id: 'hodlcoin', name: 'HodlCoin', description: 'Hold & Earn', icon: 'hodlcoin' },
-  { id: 'bridge', name: 'Rosen', description: 'Bridge', icon: 'rosen' },
   { id: 'bonds', name: 'Bonds', description: 'SigmaFi P2P', icon: 'bonds' },
   { id: 'timelocks', name: 'Timelocks', description: 'MewLock', icon: 'timelock' },
 ]
@@ -92,17 +91,6 @@ function ProtocolIcon({ icon }: { icon: string; className: string }) {
         <svg {...svgProps} strokeLinecap="round" strokeLinejoin="round">
           <path d="M20.42 4.58a5.4 5.4 0 00-7.65 0l-.77.78-.77-.78a5.4 5.4 0 00-7.65 0C1.46 6.7 1.33 10.28 4 13l8 8 8-8c2.67-2.72 2.54-6.3.42-8.42z" />
           <path d="M12 5.36V21" />
-        </svg>
-      )
-      break
-    case 'rosen':
-      // Bridge arch — cross-chain bridge
-      content = (
-        <svg {...svgProps} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M2 18h20" />
-          <path d="M4 18v-5a8 8 0 0116 0v5" />
-          <path d="M9 18v-3" />
-          <path d="M15 18v-3" />
         </svg>
       )
       break

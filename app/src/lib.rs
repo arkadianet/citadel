@@ -5,7 +5,6 @@ pub mod tx_watcher;
 
 use citadel_api::AppState;
 
-use commands::{RosenConfigState, RosenTokenMapState};
 use tx_watcher::TxWatcherState;
 
 /// Run the Tauri application
@@ -25,16 +24,12 @@ pub fn run() {
 
     let state = AppState::new();
 
-    let rosen_config_state = RosenConfigState(tokio::sync::Mutex::new(None));
-    let rosen_token_map_state = RosenTokenMapState(tokio::sync::Mutex::new(None));
     let tx_watcher_state = TxWatcherState::new();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .manage(state)
-        .manage(rosen_config_state)
-        .manage(rosen_token_map_state)
         .manage(tx_watcher_state)
         .invoke_handler(tauri::generate_handler![
             commands::health_check,
@@ -139,12 +134,6 @@ pub fn run() {
             commands::preview_hodlcoin_burn,
             commands::build_hodlcoin_mint_tx,
             commands::build_hodlcoin_burn_tx,
-            // Rosen Bridge
-            commands::init_bridge_config,
-            commands::get_bridge_state,
-            commands::get_bridge_tokens,
-            commands::get_bridge_fees,
-            commands::build_bridge_lock_tx,
             // SigmaFi Bonds
             commands::sigmafi_fetch_market,
             commands::sigmafi_get_tokens,
