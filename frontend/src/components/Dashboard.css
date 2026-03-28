@@ -31,11 +31,8 @@
 
 .dashboard-section-header {
   font-size: var(--text-sm);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--slate-500);
-  margin: 0 0 var(--space-sm) 0;
+  margin: 0;
 }
 
 /* ============================================================================
@@ -226,7 +223,7 @@
   transition: all 0.2s;
 }
 .protocol-quick-card:hover {
-  background: rgba(52, 211, 153, 0.06);
+  background: rgba(148, 163, 184, 0.06);
   border-color: var(--glass-border-hover);
   transform: translateY(-1px);
 }
@@ -438,7 +435,7 @@
   align-items: center;
   gap: var(--space-xs);
   padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -448,7 +445,7 @@
 }
 
 .activity-row:hover {
-  background: rgba(52, 211, 153, 0.06);
+  background: rgba(148, 163, 184, 0.06);
 }
 
 .activity-op-icon {
@@ -596,7 +593,7 @@
   align-items: center;
   gap: var(--space-xs);
   padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
   transition: background 0.15s;
   text-decoration: none;
   color: inherit;
@@ -608,7 +605,7 @@
 }
 
 .tx-row:hover {
-  background: rgba(52, 211, 153, 0.06);
+  background: rgba(148, 163, 184, 0.06);
 }
 
 .tx-direction {

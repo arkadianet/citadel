@@ -393,7 +393,7 @@ export function Dashboard({
       {/* Protocol Quick-Access Grid */}
       {isConnected && onNavigate && (
         <section>
-          <h3 className="dashboard-section-header">Protocols</h3>
+          <h3 className="dashboard-section-header view-section-label">Protocols</h3>
           <div className="protocol-quick-grid">
             {PROTOCOL_GRID.map(p => (
               <div
@@ -426,7 +426,7 @@ export function Dashboard({
         <div className="dashboard-protocols-row">
           {/* Left: Protocol Status */}
           <section className="protocol-status-section">
-            <h3 className="dashboard-section-header">Protocol Status</h3>
+            <h3 className="dashboard-section-header view-section-label">Protocol Status</h3>
             <div className="protocol-cards-stack">
               {sigmaUsdState && (
                 <div className="protocol-card">
@@ -547,7 +547,7 @@ export function Dashboard({
 
           {/* Right: Protocol Activity Feed */}
           <section className="activity-feed-section">
-            <h3 className="dashboard-section-header">Protocol Activity</h3>
+            <h3 className="dashboard-section-header view-section-label">Protocol Activity</h3>
             <div className="activity-feed-card">
               {activityLoading ? (
                 <div className="activity-loading">
@@ -573,7 +573,7 @@ export function Dashboard({
                     return (
                       <div
                         key={`${item.tx_id}-${idx}`}
-                        className="activity-row"
+                        className="activity-row view-list-row"
                         onClick={() => navigateToExplorer({ page: 'transaction', id: item.tx_id })}
                         role="button"
                         tabIndex={0}
@@ -648,7 +648,7 @@ export function Dashboard({
       {/* Recent Wallet Transactions */}
       {isConnected && walletBalance && (
         <section className="recent-txs-section">
-          <h3 className="dashboard-section-header">Your Recent Transactions</h3>
+          <h3 className="dashboard-section-header view-section-label">Your Recent Transactions</h3>
           {txsLoading ? (
             <div className="txs-loading">
               <div className="spinner-small" />
@@ -664,7 +664,7 @@ export function Dashboard({
                 return (
                   <div
                     key={tx.tx_id}
-                    className="tx-row"
+                    className="tx-row view-list-row"
                     onClick={() => navigateToExplorer({ page: 'transaction', id: tx.tx_id })}
                     role="button"
                     tabIndex={0}
