@@ -264,7 +264,7 @@ export function LendingTab({
 
       {/* Protocol Header */}
       <div className="lending-header">
-        <div className="lending-header-row">
+        <div className="lending-header-row view-header">
           <div className="lending-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -279,7 +279,7 @@ export function LendingTab({
       </div>
 
       {/* Protocol Info Bar */}
-      <div className="lending-info-bar">
+      <div className="lending-info-bar view-info-bar">
         <div className="lending-info-item">
           <span className="lending-info-label">Markets:</span>
           <span className="lending-info-value">{markets.length}</span>
@@ -301,15 +301,15 @@ export function LendingTab({
       </div>
 
       {/* Mode Toggle */}
-      <div className="lending-mode-toggle">
+      <div className="lending-mode-toggle view-tabs">
         <button
-          className={`mode-btn ${mode === 'supply' ? 'active' : ''}`}
+          className={`mode-btn view-tab ${mode === 'supply' ? 'active' : ''}`}
           onClick={() => setMode('supply')}
         >
           Supply
         </button>
         <button
-          className={`mode-btn ${mode === 'borrow' ? 'active' : ''}`}
+          className={`mode-btn view-tab ${mode === 'borrow' ? 'active' : ''}`}
           onClick={() => setMode('borrow')}
         >
           Borrow

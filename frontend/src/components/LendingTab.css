@@ -60,9 +60,7 @@
 }
 
 .lending-header-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
+  /* layout now from .view-header */
 }
 
 .lending-icon {
@@ -101,15 +99,9 @@
    ============================================================================ */
 
 .lending-info-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-md);
+  /* base from .view-info-bar; override background/border */
   background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(51, 65, 85, 0.5);
-  font-size: var(--text-xs);
+  border-color: rgba(51, 65, 85, 0.5);
   margin-bottom: var(--space-sm);
   flex-shrink: 0;
 }
@@ -151,37 +143,17 @@
    ============================================================================ */
 
 .lending-mode-toggle {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  background: var(--glass-display);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  /* base from .view-tabs */
   width: fit-content;
-  margin-bottom: var(--space-md);
 }
 
 .mode-btn {
-  padding: var(--space-xs) var(--space-lg);
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--slate-400);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
+  /* base from .view-tab */
 }
 
 .mode-btn.active {
   background: var(--emerald-500);
   color: white;
-}
-
-.mode-btn:hover:not(.active) {
-  color: var(--slate-200);
-  background: rgba(255, 255, 255, 0.05);
 }
 
 /* ============================================================================
@@ -279,7 +251,7 @@
 /* Market Card Header */
 .market-card-header {
   padding: var(--space-sm) var(--space-md);
-  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
   flex-shrink: 0;
 }
 
@@ -686,7 +658,7 @@
 .lending-footer {
   margin-top: auto;
   padding-top: var(--space-md);
-  border-top: 1px solid rgba(52, 211, 153, 0.06);
+  border-top: 1px solid rgba(148, 163, 184, 0.06);
   text-align: center;
   flex-shrink: 0;
 }

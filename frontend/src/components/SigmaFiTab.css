@@ -30,9 +30,7 @@
 }
 
 .sigmafi-header-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
+  /* layout now from .view-header */
 }
 
 .sigmafi-icon {
@@ -71,15 +69,9 @@
    ============================================================================ */
 
 .sigmafi-info-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-md);
+  /* base from .view-info-bar; override background/border */
   background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(51, 65, 85, 0.5);
-  font-size: var(--text-xs);
+  border-color: rgba(51, 65, 85, 0.5);
   flex-shrink: 0;
 }
 
@@ -186,9 +178,7 @@
    ============================================================================ */
 
 .sigmafi-sort-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
+  /* base from .view-controls */
   flex-shrink: 0;
 }
 
@@ -199,25 +189,7 @@
 }
 
 .sigmafi-sort-btn {
-  padding: 2px var(--space-sm);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--slate-500);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.sigmafi-sort-btn:hover {
-  color: var(--slate-300);
-  border-color: var(--slate-700);
-}
-
-.sigmafi-sort-btn.active {
-  background: rgba(16, 185, 129, 0.1);
-  border-color: rgba(16, 185, 129, 0.3);
-  color: var(--emerald-400);
+  /* base from .view-sort-btn */
 }
 
 /* ============================================================================
@@ -273,7 +245,7 @@
   justify-content: space-between;
   padding: var(--space-sm) var(--space-md);
   background: rgba(16, 185, 129, 0.06);
-  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
 }
 
 .sigmafi-card.past-due .sigmafi-card-header {
@@ -372,7 +344,7 @@
   display: flex;
   gap: var(--space-xs);
   padding: var(--space-sm) var(--space-md);
-  border-top: 1px solid rgba(52, 211, 153, 0.06);
+  border-top: 1px solid rgba(148, 163, 184, 0.06);
 }
 
 .sigmafi-action-btn {

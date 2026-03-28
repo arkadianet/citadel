@@ -115,7 +115,7 @@ export function TimelockTab({
     <div className="timelock-tab">
       {/* Header */}
       <div className="timelock-header">
-        <div className="timelock-header-row">
+        <div className="timelock-header-row view-header">
           <div className="timelock-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
@@ -138,7 +138,7 @@ export function TimelockTab({
 
       {/* Info Bar */}
       {state && (
-        <div className="timelock-info-bar">
+        <div className="timelock-info-bar view-info-bar">
           <div className="timelock-info-item">
             <span className="timelock-info-label">Total Locks</span>
             <span className="timelock-info-value">{state.totalLocks}</span>
@@ -179,7 +179,7 @@ export function TimelockTab({
       </div>
 
       {/* Sort Bar */}
-      <div className="timelock-sort-bar">
+      <div className="timelock-sort-bar view-controls">
         <span className="timelock-sort-label">Sort:</span>
         {([
           ['newest', 'Newest'],
@@ -188,7 +188,7 @@ export function TimelockTab({
         ] as [SortKey, string][]).map(([key, label]) => (
           <button
             key={key}
-            className={`timelock-sort-btn ${sortKey === key ? 'active' : ''}`}
+            className={`timelock-sort-btn view-sort-btn ${sortKey === key ? 'active' : ''}`}
             onClick={() => setSortKey(key)}
           >
             {label}
@@ -220,7 +220,7 @@ export function TimelockTab({
 
       {/* Card Grid */}
       {filteredLocks.length > 0 && (
-        <div className="timelock-grid">
+        <div className="timelock-grid view-grid">
           {filteredLocks.map(lock => (
             <LockCard
               key={lock.boxId}
