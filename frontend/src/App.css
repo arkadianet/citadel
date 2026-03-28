@@ -415,8 +415,9 @@ html, body, #root {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -429,9 +430,11 @@ html, body, #root {
   max-width: 420px;
   max-height: calc(100vh - 32px);
   border-radius: 16px;
-  background: var(--slate-900);
-  border: 1px solid var(--slate-700);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  background: var(--glass-action);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid rgba(52, 211, 153, 0.15);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), var(--glass-inner-edge);
   overflow-y: auto;
   animation: slideUp 0.3s ease-out;
 }
