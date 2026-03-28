@@ -317,8 +317,8 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
           <div className="burn-token-panel">
             <div className="burn-token-toolbar">
               <div className="burn-toolbar-actions">
-                <button className="burn-toolbar-btn" onClick={selectAll}>Select All</button>
-                <button className="burn-toolbar-btn" onClick={deselectAll}>Deselect All</button>
+                <button className="burn-toolbar-btn view-sort-btn" onClick={selectAll}>Select All</button>
+                <button className="burn-toolbar-btn view-sort-btn" onClick={deselectAll}>Deselect All</button>
               </div>
               {burnCart.size > 0 && (
                 <span className="burn-cart-badge">{burnCart.size}</span>

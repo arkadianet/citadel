@@ -40,8 +40,7 @@
 }
 
 .bridge-header-row {
-  display: flex;
-  align-items: center;
+  /* layout from .view-header; keep gap override */
   gap: var(--space-md);
 }
 
@@ -171,7 +170,7 @@
 .bridge-max-btn {
   padding: var(--space-xs) var(--space-sm);
   margin-right: var(--space-xs);
-  background: rgba(52, 211, 153, 0.06);
+  background: rgba(148, 163, 184, 0.06);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   color: var(--emerald-400);
@@ -228,7 +227,7 @@
   color: rgb(var(--text));
   font-weight: 600;
   padding-top: var(--space-xs);
-  border-top: 1px solid rgba(52, 211, 153, 0.06);
+  border-top: 1px solid rgba(148, 163, 184, 0.06);
 }
 
 .bridge-fee-warning {
@@ -342,7 +341,7 @@
 
 .bridge-preview-divider {
   height: 1px;
-  background: rgba(52, 211, 153, 0.06);
+  background: rgba(148, 163, 184, 0.06);
   margin: var(--space-xs) 0;
 }
 

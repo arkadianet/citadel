@@ -94,7 +94,7 @@ export function HodlCoinTab({
     return (
       <div className="hodl-tab">
         <div className="hodl-header">
-          <div className="hodl-header-row">
+          <div className="hodl-header-row view-header">
             <div className="hodl-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="28" height="28">
                 <path d="M12 2L2 7l10 5 10-5-10-5z" />
@@ -146,7 +146,7 @@ export function HodlCoinTab({
         <div className="message warning">No HodlCoin banks found on the network.</div>
       )}
 
-      <div className="hodl-banks-grid">
+      <div className="hodl-banks-grid view-grid">
         {banks.map(bank => {
           const userBalance = getUserHodlBalance(bank)
           const name = bank.hodlTokenName || `hodl...${bank.hodlTokenId.slice(-6)}`

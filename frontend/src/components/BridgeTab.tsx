@@ -174,7 +174,7 @@ export function BridgeTab({
     return (
       <div className="bridge-tab">
         <div className="bridge-header">
-          <div className="bridge-header-row">
+          <div className="bridge-header-row view-header">
             <div className="protocol-app-icon" style={{ background: 'linear-gradient(135deg, #f97316, #8b5cf6)' }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24">
                 <path d="M4 12h6m4 0h6M10 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm4 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />

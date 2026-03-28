@@ -70,7 +70,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
   flex-shrink: 0;
 }
 
@@ -80,18 +80,12 @@
 }
 
 .burn-toolbar-btn {
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--slate-700);
-  background: transparent;
-  color: var(--slate-400);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  transition: all 0.15s;
+  /* base from .view-sort-btn; override border */
+  border-color: var(--slate-700);
 }
 
 .burn-toolbar-btn:hover {
-  background: rgba(52, 211, 153, 0.06);
+  background: rgba(148, 163, 184, 0.06);
   color: rgb(var(--text));
   border-color: var(--slate-600);
 }
@@ -164,7 +158,7 @@
   padding: var(--space-sm);
   background: none;
   border: none;
-  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
   cursor: pointer;
   transition: all 0.15s;
   text-align: left;
@@ -172,7 +166,7 @@
 }
 
 .burn-token-item:hover {
-  background: rgba(52, 211, 153, 0.06);
+  background: rgba(148, 163, 184, 0.06);
 }
 
 .burn-token-item.in-cart {
@@ -263,7 +257,7 @@
   padding: var(--space-xs) var(--space-sm);
   font-size: var(--text-xs);
   color: var(--slate-500);
-  border-top: 1px solid rgba(52, 211, 153, 0.06);
+  border-top: 1px solid rgba(148, 163, 184, 0.06);
   flex-shrink: 0;
 }
 
@@ -432,7 +426,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  border-top: 1px solid rgba(52, 211, 153, 0.06);
+  border-top: 1px solid rgba(148, 163, 184, 0.06);
   padding-top: var(--space-sm);
 }
 
