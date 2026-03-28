@@ -57,7 +57,6 @@
 }
 
 .sidebar-item.active {
-  border-left-color: var(--emerald-400);
   border-left: 2px solid var(--emerald-400);
   background: rgba(52, 211, 153, 0.1);
   color: var(--emerald-400);

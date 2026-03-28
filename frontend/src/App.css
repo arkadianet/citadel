@@ -1470,8 +1470,10 @@ html, body, #root {
    ============================================================================= */
 
 .order-history {
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
+  background: var(--glass-display);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   padding: var(--space-sm);
   flex-shrink: 1;
@@ -1520,7 +1522,7 @@ html, body, #root {
   padding: var(--space-xs) var(--space-sm);
   color: var(--text-secondary);
   font-weight: 500;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--glass-border);
   white-space: nowrap;
 }
 
@@ -1878,7 +1880,7 @@ html, body, #root {
 .badge-redeem { background: rgba(249, 115, 22, 0.15); color: #fb923c; }
 .badge-burn { background: rgba(239, 68, 68, 0.15); color: #f87171; }
 
-[class*="badge-"] {
+.badge-swap, .badge-mint, .badge-lend, .badge-bridge, .badge-redeem, .badge-burn {
   padding: 2px 8px;
   border-radius: 4px;
   font-size: var(--text-xs);
