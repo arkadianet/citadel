@@ -137,6 +137,30 @@
 }
 
 /* ============================================================================
+   Two-Column Layout (Overview mode)
+   ============================================================================ */
+
+.dexy-columns {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: var(--space-md);
+  align-items: start;
+}
+
+.dexy-left,
+.dexy-right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+@media (max-width: 900px) {
+  .dexy-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================================
    Asset Cards — amber variant (extends token-card from SigmaUsdTab.css)
    ============================================================================ */
 
@@ -278,14 +302,8 @@
 
 .dexy-holdings-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr;
   gap: var(--space-xs);
-}
-
-@media (max-width: 640px) {
-  .dexy-holdings-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 .dexy-holding-card {

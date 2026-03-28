@@ -576,8 +576,11 @@ export function DexyTab({
       </div>
 
       {subTab === 'overview' && (<>
-      {/* Asset Cards */}
-      <div className="token-cards-grid">
+      {/* Two-column layout: protocol state (left) + actions/holdings (right) */}
+      <div className="dexy-columns">
+        <div className="dexy-left">
+          {/* Asset Cards — protocol state */}
+          <div className="token-cards-grid">
         <DexyAssetCard
           state={goldState}
           variant="gold"
@@ -599,8 +602,10 @@ export function DexyTab({
           onMint={() => openMintModal('usd')}
           onSwap={() => openSwapModal('usd')}
         />
-      </div>
+          </div>
+        </div>
 
+        <div className="dexy-right">
       {/* Your Holdings */}
       {walletAddress && walletBalance ? (
         <div className="dexy-holdings-section">
@@ -691,8 +696,10 @@ export function DexyTab({
           </div>
         </div>
       )}
+        </div>
+      </div>
 
-      {/* Activity Feeds — side by side */}
+      {/* Activity Feeds — side by side (full-width below columns) */}
       <div className="dexy-activity-grid">
         {/* Your Dexy Activity */}
         <div className="dexy-activity-section">
