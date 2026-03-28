@@ -834,11 +834,14 @@
 }
 
 .sigmausd-activity-card {
-  background: rgb(var(--card));
-  border: 1px solid rgb(var(--border) / 0.5);
+  background: var(--glass-display);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   overflow: hidden;
   flex: 1;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
 }
 
 .sigmausd-activity-loading {
@@ -867,7 +870,7 @@
   align-items: center;
   gap: var(--space-xs);
   padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid rgb(var(--border) / 0.3);
+  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -877,7 +880,7 @@
 }
 
 .sigmausd-activity-row:hover {
-  background: rgb(var(--card-hover));
+  background: rgba(52, 211, 153, 0.06);
 }
 
 .sigmausd-activity-row .activity-op-icon {
