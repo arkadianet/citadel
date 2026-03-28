@@ -52,13 +52,16 @@
    ============================================================================ */
 
 .burn-token-panel {
-  background: rgb(var(--card));
-  border: 1px solid rgb(var(--border) / 0.5);
+  background: var(--glass-display);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
 }
 
 /* Toolbar: Select All / Deselect All + cart count */
@@ -67,7 +70,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid rgb(var(--border) / 0.3);
+  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
   flex-shrink: 0;
 }
 
@@ -88,7 +91,7 @@
 }
 
 .burn-toolbar-btn:hover {
-  background: rgb(var(--card-hover));
+  background: rgba(52, 211, 153, 0.06);
   color: rgb(var(--text));
   border-color: var(--slate-600);
 }
@@ -109,7 +112,7 @@
 
 .burn-token-search {
   padding: var(--space-sm);
-  border-bottom: 1px solid rgb(var(--border) / 0.5);
+  border-bottom: 1px solid var(--glass-border);
   flex-shrink: 0;
 }
 
@@ -161,7 +164,7 @@
   padding: var(--space-sm);
   background: none;
   border: none;
-  border-bottom: 1px solid rgb(var(--border) / 0.3);
+  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
   cursor: pointer;
   transition: all 0.15s;
   text-align: left;
@@ -169,7 +172,7 @@
 }
 
 .burn-token-item:hover {
-  background: rgb(var(--card-hover));
+  background: rgba(52, 211, 153, 0.06);
 }
 
 .burn-token-item.in-cart {
@@ -260,7 +263,7 @@
   padding: var(--space-xs) var(--space-sm);
   font-size: var(--text-xs);
   color: var(--slate-500);
-  border-top: 1px solid rgb(var(--border) / 0.3);
+  border-top: 1px solid rgba(52, 211, 153, 0.06);
   flex-shrink: 0;
 }
 
@@ -269,14 +272,17 @@
    ============================================================================ */
 
 .burn-form-panel {
-  background: rgb(var(--card));
-  border: 1px solid rgb(var(--border) / 0.5);
+  background: var(--glass-action);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   padding: var(--space-md);
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
 }
 
 .burn-form-empty {
@@ -426,7 +432,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  border-top: 1px solid rgb(var(--border) / 0.3);
+  border-top: 1px solid rgba(52, 211, 153, 0.06);
   padding-top: var(--space-sm);
 }
 
