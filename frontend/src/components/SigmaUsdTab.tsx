@@ -296,7 +296,7 @@ export function SigmaUsdTab({
       <div className="sigmausd-content">
         {/* Protocol Header */}
         <div className="sigmausd-header">
-          <div className="sigmausd-header-row">
+          <div className="sigmausd-header-row view-header">
             <div className="sigmausd-icon-stack">
               <span className="icon-sigusd">
                 <img src="/icons/sigmausd.svg" alt="SigUSD" />
@@ -313,7 +313,7 @@ export function SigmaUsdTab({
         </div>
 
         {/* Protocol Info Bar */}
-        <div className="protocol-info-bar">
+        <div className="protocol-info-bar view-info-bar">
           <div className="info-item">
             <span className="info-label">Protocol Fee:</span>
             <span className="info-value">2%</span>
@@ -608,7 +608,7 @@ export function SigmaUsdTab({
         <div className="sigmausd-activity-grid">
           {/* Your SigmaUSD Activity */}
           <div className="sigmausd-activity-section">
-            <h3 className="sigmausd-section-header">Your SigmaUSD Activity</h3>
+            <h3 className="sigmausd-section-header view-section-label">Your SigmaUSD Activity</h3>
             <div className="sigmausd-activity-card">
               {!walletAddress ? (
                 <div className="sigmausd-activity-empty">Connect wallet to see your activity</div>
@@ -628,7 +628,7 @@ export function SigmaUsdTab({
                     return (
                       <div
                         key={tx.tx_id}
-                        className="sigmausd-activity-row"
+                        className="sigmausd-activity-row view-list-row"
                         onClick={() => navigateToExplorer({ page: 'transaction', id: tx.tx_id })}
                         role="button"
                         tabIndex={0}
@@ -671,7 +671,7 @@ export function SigmaUsdTab({
 
           {/* Recent Protocol Activity */}
           <div className="sigmausd-activity-section">
-            <h3 className="sigmausd-section-header">Recent Protocol Activity</h3>
+            <h3 className="sigmausd-section-header view-section-label">Recent Protocol Activity</h3>
             <div className="sigmausd-activity-card">
               {activityLoading ? (
                 <div className="sigmausd-activity-loading">
@@ -689,7 +689,7 @@ export function SigmaUsdTab({
                     return (
                       <div
                         key={`${item.tx_id}-${idx}`}
-                        className="sigmausd-activity-row"
+                        className="sigmausd-activity-row view-list-row"
                         onClick={() => navigateToExplorer({ page: 'transaction', id: item.tx_id })}
                         role="button"
                         tabIndex={0}

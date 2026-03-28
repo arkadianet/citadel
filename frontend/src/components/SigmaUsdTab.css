@@ -103,9 +103,7 @@
    ============================================================================ */
 
 .sigmausd-header-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
+  /* layout now from .view-header */
 }
 
 .sigmausd-icon-stack {
@@ -898,8 +896,8 @@
 }
 
 .sigmausd-section-header {
+  /* base from .view-section-label; override font-size + color */
   font-size: var(--text-sm);
-  font-weight: 600;
   color: rgb(var(--text));
   margin: 0 0 var(--space-xs);
 }
@@ -937,21 +935,9 @@
 }
 
 .sigmausd-activity-row {
-  display: flex;
-  align-items: center;
+  /* layout from .view-list-row */
   gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
   cursor: pointer;
-  transition: background 0.15s;
-}
-
-.sigmausd-activity-row:last-child {
-  border-bottom: none;
-}
-
-.sigmausd-activity-row:hover {
-  background: rgba(52, 211, 153, 0.06);
 }
 
 .sigmausd-activity-row .activity-op-icon {

@@ -30,9 +30,7 @@
 }
 
 .dexy-header-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
+  /* layout now from .view-header */
 }
 
 .dexy-icon-stack {
@@ -103,15 +101,9 @@
    ============================================================================ */
 
 .dexy-info-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-md);
+  /* base from .view-info-bar; override background/border */
   background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(51, 65, 85, 0.5);
-  font-size: var(--text-xs);
+  border-color: rgba(51, 65, 85, 0.5);
   flex-shrink: 0;
 }
 
@@ -466,8 +458,8 @@
 }
 
 .dexy-section-header {
+  /* base from .view-section-label; override font-size + color */
   font-size: var(--text-sm);
-  font-weight: 600;
   color: rgb(var(--text));
   margin: 0 0 var(--space-xs);
 }
@@ -506,21 +498,9 @@
 }
 
 .dexy-activity-row {
-  display: flex;
-  align-items: center;
+  /* layout from .view-list-row */
   gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
   cursor: pointer;
-  transition: background 0.15s;
-}
-
-.dexy-activity-row:last-child {
-  border-bottom: none;
-}
-
-.dexy-activity-row:hover {
-  background: rgba(52, 211, 153, 0.06);
 }
 
 /* Reuse Dashboard activity sub-elements */
@@ -704,39 +684,17 @@
    ============================================================================ */
 
 .dexy-sub-tabs {
-  display: flex;
-  gap: 4px;
+  /* base from .view-tabs */
   margin-bottom: 4px;
-  background: var(--glass-display);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  padding: 4px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--glass-border);
   flex-shrink: 0;
 }
 
 .dexy-sub-tab {
-  flex: 1;
-  padding: 8px 16px;
-  border: none;
-  background: transparent;
-  color: var(--slate-400);
-  cursor: pointer;
-  border-radius: 6px;
-  font-size: var(--text-sm);
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.dexy-sub-tab:hover {
-  color: rgb(var(--text));
-  background: rgba(255, 255, 255, 0.05);
+  /* base from .view-tab */
 }
 
 .dexy-sub-tab.active {
-  color: rgb(var(--text));
-  background: rgba(52, 211, 153, 0.15);
+  /* override from .view-tab.active with border */
   border: 1px solid var(--emerald-400);
 }
 

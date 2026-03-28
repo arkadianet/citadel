@@ -530,7 +530,7 @@ export function DexyTab({
     <div className="dexy-tab">
       {/* Protocol Header */}
       <div className="dexy-header">
-        <div className="dexy-header-row">
+        <div className="dexy-header-row view-header">
           <div className="dexy-icon-stack">
             <span className="icon-gold">
               <img src="/icons/dexygold.svg" alt="DexyGold" />
@@ -547,7 +547,7 @@ export function DexyTab({
       </div>
 
       {/* Protocol Info Bar */}
-      <div className="dexy-info-bar">
+      <div className="dexy-info-bar view-info-bar">
         <div className="dexy-info-item">
           <span className="dexy-info-label">Variants:</span>
           <span className="dexy-info-value">DexyGold, USE</span>
@@ -560,15 +560,15 @@ export function DexyTab({
       </div>
 
       {/* Sub-tab Navigation */}
-      <div className="dexy-sub-tabs">
+      <div className="dexy-sub-tabs view-tabs">
         <button
-          className={`dexy-sub-tab ${subTab === 'overview' ? 'active' : ''}`}
+          className={`dexy-sub-tab view-tab ${subTab === 'overview' ? 'active' : ''}`}
           onClick={() => setSubTab('overview')}
         >
           Overview
         </button>
         <button
-          className={`dexy-sub-tab ${subTab === 'liquidity' ? 'active' : ''}`}
+          className={`dexy-sub-tab view-tab ${subTab === 'liquidity' ? 'active' : ''}`}
           onClick={() => setSubTab('liquidity')}
         >
           Liquidity
@@ -703,7 +703,7 @@ export function DexyTab({
       <div className="dexy-activity-grid">
         {/* Your Dexy Activity */}
         <div className="dexy-activity-section">
-          <h3 className="dexy-section-header">Your Dexy Activity</h3>
+          <h3 className="dexy-section-header view-section-label">Your Dexy Activity</h3>
           <div className="dexy-activity-card">
             {!walletAddress ? (
               <div className="dexy-activity-empty">Connect wallet to see your activity</div>
@@ -723,7 +723,7 @@ export function DexyTab({
                   return (
                     <div
                       key={tx.tx_id}
-                      className="dexy-activity-row"
+                      className="dexy-activity-row view-list-row"
                       onClick={() => navigateToExplorer({ page: 'transaction', id: tx.tx_id })}
                       role="button"
                       tabIndex={0}
@@ -766,7 +766,7 @@ export function DexyTab({
 
         {/* Recent Protocol Activity */}
         <div className="dexy-activity-section">
-          <h3 className="dexy-section-header">Recent Protocol Activity</h3>
+          <h3 className="dexy-section-header view-section-label">Recent Protocol Activity</h3>
           <div className="dexy-activity-card">
             {activityLoading ? (
               <div className="dexy-activity-loading">
@@ -792,7 +792,7 @@ export function DexyTab({
                   return (
                     <div
                       key={`${item.tx_id}-${idx}`}
-                      className="dexy-activity-row"
+                      className="dexy-activity-row view-list-row"
                       onClick={() => navigateToExplorer({ page: 'transaction', id: item.tx_id })}
                       role="button"
                       tabIndex={0}
