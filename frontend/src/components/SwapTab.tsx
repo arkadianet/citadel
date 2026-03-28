@@ -92,7 +92,7 @@ function formatForInput(amount: number, decimals: number): string {
 // =============================================================================
 
 export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl, ergUsdPrice, canMintSigusd, reserveRatioPct }: SwapTabProps) {
-  const [tabMode, setTabMode] = useState<'smart' | 'pool'>('smart')
+  const [tabMode, setTabMode] = useState<'smart' | 'pool' | 'liquidity' | 'create'>('smart')
   const [pools, setPools] = useState<AmmPool[]>([])
   const [filteredPools, setFilteredPools] = useState<AmmPool[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -111,7 +111,6 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Liquidity view state
-  const [view, setView] = useState<'swap' | 'liquidity'>('swap')
   const [lpMode, setLpMode] = useState<'deposit' | 'redeem'>('deposit')
   const [lpPool, setLpPool] = useState<AmmPool | null>(null)
   const [depositErgInput, setDepositErgInput] = useState('')
@@ -126,7 +125,6 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
   const [lpTxError, setLpTxError] = useState<string | null>(null)
 
   // Pool creation state
-  const [showCreatePool, setShowCreatePool] = useState(false)
   const [createPoolType, setCreatePoolType] = useState<'N2T' | 'T2T'>('N2T')
   const [createXTokenId, setCreateXTokenId] = useState('')
   const [createXAmount, setCreateXAmount] = useState('')
@@ -473,7 +471,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
   // =========================================================================
 
   useEffect(() => {
-    if (!showCreatePool) return
+    if (tabMode !== 'create') return
     const xAmt = parseFloat(createXAmount)
     const yAmt = parseFloat(createYAmount)
     const fee = parseFloat(createFeePercent)
@@ -510,7 +508,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
       }
     }, 500)
     return () => clearTimeout(timer)
-  }, [showCreatePool, createPoolType, createXAmount, createYAmount, createXTokenId, createYTokenId, createFeePercent])
+  }, [tabMode, createPoolType, createXAmount, createYAmount, createXTokenId, createYTokenId, createFeePercent])
 
   // =========================================================================
   // Pool Creation: Handler (two-step signing flow)
@@ -603,19 +601,6 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
     }
   }
 
-  const resetCreatePoolForm = () => {
-    setShowCreatePool(false)
-    setCreateXAmount('')
-    setCreateYAmount('')
-    setCreateXTokenId('')
-    setCreateYTokenId('')
-    setCreateFeePercent('0.3')
-    setCreatePreview(null)
-    setCreateError('')
-    setCreateTxStep('idle')
-    setCreateLoading(false)
-  }
-
   if (!isConnected) {
     return (
       <div className="swap-tab">
@@ -629,18 +614,30 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
   return (
     <div className="swap-tab">
       {/* Mode toggle */}
-      <div className="smart-swap-mode-toggle">
+      <div className="swap-mode-bar">
         <button
-          className={`smart-swap-mode-btn ${tabMode === 'smart' ? 'active' : ''}`}
+          className={`swap-mode-btn ${tabMode === 'smart' ? 'active' : ''}`}
           onClick={() => setTabMode('smart')}
         >
           Smart Swap
         </button>
         <button
-          className={`smart-swap-mode-btn ${tabMode === 'pool' ? 'active' : ''}`}
+          className={`swap-mode-btn ${tabMode === 'pool' ? 'active' : ''}`}
           onClick={() => setTabMode('pool')}
         >
           Pool Swap
+        </button>
+        <button
+          className={`swap-mode-btn ${tabMode === 'liquidity' ? 'active' : ''}`}
+          onClick={() => setTabMode('liquidity')}
+        >
+          Liquidity
+        </button>
+        <button
+          className={`swap-mode-btn ${tabMode === 'create' ? 'active' : ''}`}
+          onClick={() => setTabMode('create')}
+        >
+          Create Pool
         </button>
       </div>
 
@@ -652,65 +649,8 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
           explorerUrl={explorerUrl}
           pools={pools}
         />
-      ) : (
+      ) : tabMode === 'pool' ? (
       <>
-      {/* Protocol Header */}
-      <div className="swap-header">
-        <div className="swap-header-row">
-          <div
-            className="protocol-app-icon"
-            style={{ background: '#8b5cf6', width: 40, height: 40, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', color: 'white', fontWeight: 700 }}
-          >
-            X
-          </div>
-          <div>
-            <h2>DEX Swap</h2>
-            <p className="swap-description">Swap tokens via Spectrum AMM pools</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Info Bar */}
-      <div className="protocol-info-bar">
-        <div className="info-item">
-          <span className="info-label">Protocol:</span>
-          <span className="info-value">Spectrum AMM</span>
-        </div>
-        <div className="info-divider" />
-        <div className="info-item">
-          <span className="info-label">Pools:</span>
-          <span className="info-value">{pools.length}</span>
-        </div>
-        <div className="info-divider" />
-        <div className="info-item">
-          <span className="info-label">Types:</span>
-          <span className="info-value">N2T, T2T</span>
-        </div>
-        <div className="info-status">
-          <span className="dot" />
-          <span className="info-label">Live</span>
-        </div>
-      </div>
-
-      {/* View Toggle */}
-      <div className="slippage-row" style={{ justifyContent: 'center' }}>
-        <div className="slippage-options">
-          <button
-            className={`slippage-btn ${view === 'swap' ? 'active' : ''}`}
-            onClick={() => setView('swap')}
-          >
-            Swap
-          </button>
-          <button
-            className={`slippage-btn ${view === 'liquidity' ? 'active' : ''}`}
-            onClick={() => setView('liquidity')}
-          >
-            Liquidity
-          </button>
-        </div>
-      </div>
-
-      {view === 'swap' ? (<>
       {/* Main Layout */}
       <div className="swap-layout">
         {/* Pool List Panel */}
@@ -1044,18 +984,14 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
           onSuccess={() => { setShowSwapModal(false); fetchPools() }}
         />
       )}
-      </>) : (
+      </>
+      ) : tabMode === 'create' ? (
       /* ================================================================= */
-      /* Liquidity UI                                                      */
+      /* Create Pool UI                                                    */
       /* ================================================================= */
-      <>
-      {showCreatePool ? (
         <div className="swap-form-panel" style={{ maxWidth: 520, margin: '0 auto' }}>
           <div className="swap-form-header">
             <h3>Create New Pool</h3>
-            <button className="btn btn-secondary" style={{ fontSize: 'var(--text-xs)' }} onClick={resetCreatePoolForm}>
-              Back to Liquidity
-            </button>
           </div>
 
           {/* Pool Type Toggle */}
@@ -1244,12 +1180,11 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                 : 'Create Pool'}
           </button>
         </div>
-      ) : (<>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-sm)' }}>
-          <button className="btn btn-secondary" onClick={() => setShowCreatePool(true)}>
-            + Create Pool
-          </button>
-        </div>
+      ) : tabMode === 'liquidity' ? (
+      /* ================================================================= */
+      /* Liquidity UI                                                      */
+      /* ================================================================= */
+      <>
         <div className="swap-layout">
         {/* Pool List Panel (N2T only) */}
         <div className="pool-list-panel">
@@ -1539,11 +1474,8 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
           )}
         </div>
       </div>
-      </>)}
       </>
-      )}
-      </>
-      )}
+      ) : null}
     </div>
   )
 }

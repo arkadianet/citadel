@@ -815,3 +815,42 @@
   color: rgb(var(--text));
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
+
+/* =========================================================================
+   Swap Mode Bar — top-level 4-mode toggle
+   ========================================================================= */
+
+.swap-mode-bar {
+  display: flex;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  background: var(--glass-display);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  margin-bottom: var(--space-md);
+}
+
+.swap-mode-btn {
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--slate-400);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.swap-mode-btn:hover {
+  color: rgb(var(--text));
+  background: rgba(52, 211, 153, 0.06);
+}
+
+.swap-mode-btn.active {
+  background: rgba(52, 211, 153, 0.1);
+  color: var(--emerald-400);
+}
