@@ -96,10 +96,13 @@
 }
 
 .hodl-bank-card {
-  background: rgb(var(--card));
+  background: var(--glass-display);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid rgba(139, 92, 246, 0.2);
   border-radius: var(--radius-lg);
   overflow: hidden;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
 }
 
 .hodl-bank-header {

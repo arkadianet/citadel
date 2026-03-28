@@ -154,8 +154,10 @@
   display: flex;
   gap: 2px;
   padding: 2px;
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
+  background: var(--glass-display);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: 8px;
   width: fit-content;
   margin-bottom: var(--space-md);
@@ -251,15 +253,18 @@
 .market-card {
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgb(var(--border) / 0.5);
+  background: var(--glass-display);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   display: flex;
   flex-direction: column;
   transition: border-color 0.2s, transform 0.2s;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
 }
 
 .market-card:hover {
-  border-color: rgb(var(--border));
+  border-color: var(--glass-border-hover);
   transform: translateY(-2px);
 }
 
@@ -274,7 +279,7 @@
 /* Market Card Header */
 .market-card-header {
   padding: var(--space-sm) var(--space-md);
-  border-bottom: 1px solid rgb(var(--border) / 0.3);
+  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
   flex-shrink: 0;
 }
 
@@ -681,7 +686,7 @@
 .lending-footer {
   margin-top: auto;
   padding-top: var(--space-md);
-  border-top: 1px solid rgb(var(--border) / 0.3);
+  border-top: 1px solid rgba(52, 211, 153, 0.06);
   text-align: center;
   flex-shrink: 0;
 }

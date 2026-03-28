@@ -92,8 +92,10 @@
 
 .bridge-select {
   padding: var(--space-sm) var(--space-md);
-  background: rgb(var(--card));
-  border: 1px solid rgb(var(--border) / 0.5);
+  background: var(--glass-action);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   color: rgb(var(--text));
   font-size: var(--text-base);
@@ -111,7 +113,7 @@
 }
 
 .bridge-select option {
-  background: rgb(var(--card));
+  background: var(--slate-900);
   color: rgb(var(--text));
 }
 
@@ -124,8 +126,10 @@
   display: flex;
   align-items: center;
   gap: 0;
-  background: rgb(var(--card));
-  border: 1px solid rgb(var(--border) / 0.5);
+  background: var(--glass-action);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -150,8 +154,10 @@
 
 .bridge-address-input {
   padding: var(--space-sm) var(--space-md);
-  background: rgb(var(--card));
-  border: 1px solid rgb(var(--border) / 0.5);
+  background: var(--glass-action);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   font-family: monospace;
   font-size: var(--text-xs);
@@ -165,8 +171,8 @@
 .bridge-max-btn {
   padding: var(--space-xs) var(--space-sm);
   margin-right: var(--space-xs);
-  background: rgb(var(--border) / 0.3);
-  border: 1px solid rgb(var(--border) / 0.5);
+  background: rgba(52, 211, 153, 0.06);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   color: var(--emerald-400);
   font-size: var(--text-xs);
@@ -176,7 +182,7 @@
 }
 
 .bridge-max-btn:hover {
-  background: rgb(var(--border) / 0.5);
+  background: rgba(52, 211, 153, 0.1);
 }
 
 /* =============================================================================
@@ -199,8 +205,10 @@
 }
 
 .bridge-fees {
-  background: rgb(var(--card) / 0.5);
-  border: 1px solid rgb(var(--border) / 0.3);
+  background: var(--glass-display);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   padding: var(--space-sm) var(--space-md);
   display: flex;
@@ -220,7 +228,7 @@
   color: rgb(var(--text));
   font-weight: 600;
   padding-top: var(--space-xs);
-  border-top: 1px solid rgb(var(--border) / 0.3);
+  border-top: 1px solid rgba(52, 211, 153, 0.06);
 }
 
 .bridge-fee-warning {
@@ -334,7 +342,7 @@
 
 .bridge-preview-divider {
   height: 1px;
-  background: rgb(var(--border) / 0.3);
+  background: rgba(52, 211, 153, 0.06);
   margin: var(--space-xs) 0;
 }
 
