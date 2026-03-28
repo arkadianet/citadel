@@ -241,17 +241,20 @@
    ============================================================================ */
 
 .sigmafi-card {
-  background: rgb(var(--card));
-  border: 1px solid rgb(var(--border) / 0.5);
+  background: var(--glass-display);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   transition: border-color 0.2s, transform 0.2s;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
 }
 
 .sigmafi-card:hover {
-  border-color: rgb(var(--border));
+  border-color: var(--glass-border-hover);
   transform: translateY(-2px);
 }
 
@@ -270,7 +273,7 @@
   justify-content: space-between;
   padding: var(--space-sm) var(--space-md);
   background: rgba(16, 185, 129, 0.06);
-  border-bottom: 1px solid rgb(var(--border) / 0.3);
+  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
 }
 
 .sigmafi-card.past-due .sigmafi-card-header {
@@ -369,7 +372,7 @@
   display: flex;
   gap: var(--space-xs);
   padding: var(--space-sm) var(--space-md);
-  border-top: 1px solid rgb(var(--border) / 0.3);
+  border-top: 1px solid rgba(52, 211, 153, 0.06);
 }
 
 .sigmafi-action-btn {

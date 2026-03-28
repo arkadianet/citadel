@@ -28,8 +28,10 @@
 .arb-scanner-refresh {
   padding: 0.5rem 1rem;
   border-radius: 8px;
-  border: 1px solid var(--border-color);
-  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-display);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   color: var(--slate-200);
   cursor: pointer;
   font-size: 0.85rem;
@@ -51,11 +53,14 @@
   gap: 1.5rem;
   align-items: center;
   padding: 0.75rem 1rem;
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
+  background: var(--glass-display);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: 10px;
   margin-bottom: 1rem;
   font-size: 0.85rem;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
 }
 
 .arb-scanner-count {
@@ -81,10 +86,13 @@
 }
 
 .arb-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
+  background: var(--glass-display);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: 10px;
   padding: 1rem;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
 }
 
 .arb-card-header {
@@ -104,7 +112,7 @@
   font-size: 0.75rem;
   color: var(--slate-500);
   padding: 0.15rem 0.5rem;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--glass-border);
   border-radius: 4px;
 }
 
@@ -125,7 +133,7 @@
   gap: 0.5rem;
   margin-bottom: 0.75rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
 }
 
 .arb-card-amount,
@@ -153,12 +161,12 @@
   gap: 0.5rem;
   margin-bottom: 0.75rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
 }
 
 .arb-hop {
   background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--glass-border);
   border-radius: 6px;
   padding: 0.5rem 0.75rem;
 }
