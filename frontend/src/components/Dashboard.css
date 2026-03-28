@@ -174,6 +174,91 @@
 }
 
 /* ============================================================================
+   Market Stats Row
+   ============================================================================ */
+
+.market-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-sm);
+}
+.market-stat-card {
+  padding: var(--space-md);
+}
+.market-stat-label {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-xs);
+}
+.market-stat-value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  color: rgb(var(--text));
+}
+.market-stat-change {
+  font-size: var(--text-xs);
+  color: var(--emerald-400);
+  margin-top: var(--space-xs);
+  font-family: 'JetBrains Mono', monospace;
+}
+.market-stat-change.negative { color: var(--red-400); }
+.market-stat-change.stable { color: var(--slate-400); }
+
+/* ============================================================================
+   Protocol Quick-Access Grid
+   ============================================================================ */
+
+.protocol-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-sm);
+}
+.protocol-quick-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.protocol-quick-card:hover {
+  background: rgba(52, 211, 153, 0.06);
+  border-color: var(--glass-border-hover);
+  transform: translateY(-1px);
+}
+.protocol-quick-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+.protocol-quick-info { flex: 1; min-width: 0; }
+.protocol-quick-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: rgb(var(--text));
+}
+.protocol-quick-desc {
+  font-size: var(--text-xs);
+  color: var(--slate-500);
+}
+.protocol-quick-arrow {
+  color: var(--slate-500);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+/* ============================================================================
    Protocols Row — 2-column grid
    ============================================================================ */
 
@@ -628,6 +713,14 @@
    ============================================================================ */
 
 @media (max-width: 800px) {
+  .market-stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .protocol-quick-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .dashboard-protocols-row {
     grid-template-columns: 1fr;
   }

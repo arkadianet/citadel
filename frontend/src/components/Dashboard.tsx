@@ -64,12 +64,16 @@ interface RecentTx {
   token_changes: TokenChange[]
 }
 
+type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bridge' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management'
+
 interface DashboardProps {
   isConnected: boolean
   ergUsd: number
   walletBalance?: WalletBalance | null
   sigmaUsdState?: SigmaUsdState | null
   explorerUrl: string
+  blockHeight?: number
+  onNavigate?: (view: View) => void
 }
 
 function formatTimeAgo(timestampMs: number): string {
@@ -113,11 +117,24 @@ const TOKEN_DECIMALS: Record<string, number> = {
   USE: 3,
 }
 
+const PROTOCOL_GRID: Array<{ id: View; name: string; desc: string; color: string; letter: string }> = [
+  { id: 'sigmausd', name: 'SigmaUSD', desc: 'AgeUSD Stablecoin', color: '#10b981', letter: '$' },
+  { id: 'dexy', name: 'Dexy', desc: 'Oracle Pegged', color: '#f59e0b', letter: 'D' },
+  { id: 'lending', name: 'Lending', desc: 'Duckpools', color: '#3b82f6', letter: 'L' },
+  { id: 'dex', name: 'DEX', desc: 'AMM Swaps', color: '#8b5cf6', letter: 'S' },
+  { id: 'hodlcoin', name: 'HodlCoin', desc: 'Hold & Earn', color: '#f97316', letter: 'H' },
+  { id: 'bridge', name: 'Rosen', desc: 'Bridge', color: '#06b6d4', letter: 'R' },
+  { id: 'bonds', name: 'Bonds', desc: 'SigmaFi P2P', color: '#ec4899', letter: 'B' },
+  { id: 'timelocks', name: 'Timelocks', desc: 'MewLock', color: '#64748b', letter: 'T' },
+]
+
 export function Dashboard({
   isConnected,
   ergUsd,
   walletBalance,
   sigmaUsdState,
+  blockHeight,
+  onNavigate,
 }: DashboardProps) {
   const { navigateToExplorer } = useExplorerNav()
   const [recentTxs, setRecentTxs] = useState<RecentTx[]>([])
@@ -327,6 +344,79 @@ export function Dashboard({
                   </div>
                 </div>
               ))}
+          </div>
+        </section>
+      )}
+
+      {/* Market Stats Row */}
+      {isConnected && (
+        <section className="market-stats-row">
+          <div className="market-stat-card glass-display">
+            <div className="market-stat-label">ERG Price</div>
+            <div className="market-stat-value">
+              {ergUsd > 0 ? `$${ergUsd.toFixed(2)}` : '\u2014'}
+            </div>
+          </div>
+          <div className="market-stat-card glass-display">
+            <div className="market-stat-label">SigUSD Rate</div>
+            <div className="market-stat-value">
+              {sigmaUsdState
+                ? `${(sigmaUsdState.sigusd_price_nano / 1e9).toFixed(4)} ERG`
+                : '\u2014'}
+            </div>
+          </div>
+          <div className="market-stat-card glass-display">
+            <div className="market-stat-label">Reserve Ratio</div>
+            <div className="market-stat-value">
+              {sigmaUsdState ? (
+                <span style={{
+                  color: sigmaUsdState.reserve_ratio_pct >= 400
+                    ? 'var(--emerald-400)'
+                    : sigmaUsdState.reserve_ratio_pct >= 200
+                      ? 'var(--amber-400)'
+                      : 'var(--red-400)',
+                }}>
+                  {Math.round(sigmaUsdState.reserve_ratio_pct)}%
+                </span>
+              ) : '\u2014'}
+            </div>
+          </div>
+          <div className="market-stat-card glass-display">
+            <div className="market-stat-label">Block Height</div>
+            <div className="market-stat-value">
+              {blockHeight ? blockHeight.toLocaleString() : '\u2014'}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Protocol Quick-Access Grid */}
+      {isConnected && onNavigate && (
+        <section>
+          <h3 className="dashboard-section-header">Protocols</h3>
+          <div className="protocol-quick-grid">
+            {PROTOCOL_GRID.map(p => (
+              <div
+                key={p.id}
+                className="protocol-quick-card glass-display"
+                onClick={() => onNavigate(p.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => { if (e.key === 'Enter') onNavigate(p.id) }}
+              >
+                <div
+                  className="protocol-quick-icon"
+                  style={{ background: p.color }}
+                >
+                  {p.letter}
+                </div>
+                <div className="protocol-quick-info">
+                  <div className="protocol-quick-name">{p.name}</div>
+                  <div className="protocol-quick-desc">{p.desc}</div>
+                </div>
+                <span className="protocol-quick-arrow">&rsaquo;</span>
+              </div>
+            ))}
           </div>
         </section>
       )}

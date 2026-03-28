@@ -407,6 +407,15 @@ function App() {
               walletBalance={walletBalance}
               sigmaUsdState={sigmaUsdState}
               explorerUrl={explorerUrl}
+              blockHeight={nodeStatus?.chain_height}
+              onNavigate={(v) => {
+                if (v === 'bridge' && !rosenDisclaimed) {
+                  setShowRosenWarning(true)
+                  return
+                }
+                setView(v)
+                if (v !== 'home') setSidebarCollapsed(true)
+              }}
             />
           )}
 
