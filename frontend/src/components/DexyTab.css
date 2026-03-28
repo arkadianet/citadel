@@ -704,7 +704,7 @@
 
 .dexy-variant-selector {
   display: flex;
-  gap: 8px;
+  gap: var(--space-xs);
   flex-shrink: 0;
 }
 
@@ -713,8 +713,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 16px;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   background: var(--glass-display);
@@ -901,7 +901,7 @@
    ============================================================================ */
 
 .dexy-action-btn {
-  padding: 10px 20px;
+  padding: var(--space-sm) var(--space-lg);
   border: none;
   border-radius: var(--radius-md);
   background: var(--emerald-500);

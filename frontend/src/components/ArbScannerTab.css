@@ -3,7 +3,7 @@
    ============================================================ */
 
 .arb-scanner-tab {
-  padding: 1.5rem;
+  padding: var(--space-lg);
   max-width: 900px;
 }
 
@@ -11,30 +11,30 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--space-lg);
 }
 
 .arb-scanner-header h2 {
-  margin: 0 0 0.25rem 0;
-  font-size: 1.25rem;
+  margin: 0 0 var(--space-xs) 0;
+  font-size: var(--text-lg);
 }
 
 .arb-scanner-desc {
   margin: 0;
   color: var(--slate-400);
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
 }
 
 .arb-scanner-refresh {
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-md);
   border: 1px solid var(--glass-border);
   background: var(--glass-display);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   color: var(--slate-200);
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   transition: border-color 0.15s;
 }
 
