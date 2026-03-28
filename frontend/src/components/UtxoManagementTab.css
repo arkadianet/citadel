@@ -32,36 +32,19 @@
 
 /* Sub-tab toggle bar */
 .utxo-subtab-bar {
-  display: flex;
-  gap: 2px;
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  padding: 3px;
-  flex-shrink: 0;
+  /* base from .view-tabs */
   width: fit-content;
+  flex-shrink: 0;
 }
 
 .utxo-subtab {
-  padding: var(--space-xs) var(--space-lg);
-  border-radius: var(--radius-sm);
-  border: none;
-  background: transparent;
-  color: var(--slate-400);
-  font-size: var(--text-sm);
+  /* base from .view-tab */
   font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.utxo-subtab:hover {
-  color: rgb(var(--text));
 }
 
 .utxo-subtab.active {
   background: var(--emerald-500);
   color: white;
-  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3);
 }
 
 /* ============================================================================
@@ -106,7 +89,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
   flex-shrink: 0;
 }
 
@@ -127,7 +110,7 @@
 }
 
 .utxo-toolbar-btn:hover {
-  background: rgba(52, 211, 153, 0.06);
+  background: rgba(148, 163, 184, 0.06);
   color: rgb(var(--text));
   border-color: var(--slate-600);
 }
@@ -173,7 +156,7 @@
   padding: var(--space-sm);
   background: none;
   border: none;
-  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
   cursor: pointer;
   transition: all 0.15s;
   text-align: left;
@@ -181,7 +164,7 @@
 }
 
 .utxo-list-item:hover {
-  background: rgba(52, 211, 153, 0.06);
+  background: rgba(148, 163, 184, 0.06);
 }
 
 .utxo-list-item.selected {
@@ -264,7 +247,7 @@
   padding: var(--space-xs) var(--space-sm);
   font-size: var(--text-xs);
   color: var(--slate-500);
-  border-top: 1px solid rgba(52, 211, 153, 0.06);
+  border-top: 1px solid rgba(148, 163, 184, 0.06);
   flex-shrink: 0;
 }
 
@@ -308,7 +291,7 @@
 
 .utxo-summary-footer {
   flex-shrink: 0;
-  border-top: 1px solid rgba(52, 211, 153, 0.06);
+  border-top: 1px solid rgba(148, 163, 184, 0.06);
   padding-top: var(--space-sm);
 }
 

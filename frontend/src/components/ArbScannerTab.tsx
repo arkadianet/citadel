@@ -92,7 +92,7 @@ export function ArbScannerTab({ walletAddress: _walletAddress }: ArbScannerTabPr
         <>
           {snapshot.windows.length > 0 ? (
             <>
-              <div className="arb-scanner-summary">
+              <div className="arb-scanner-summary view-info-bar">
                 <span className="arb-scanner-count">
                   {snapshot.windows.length} opportunit{snapshot.windows.length === 1 ? 'y' : 'ies'} found
                 </span>

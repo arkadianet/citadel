@@ -683,15 +683,15 @@ export function UtxoManagementTab({
       </div>
 
       {/* Sub-tab toggle */}
-      <div className="utxo-subtab-bar">
+      <div className="utxo-subtab-bar view-tabs">
         <button
-          className={`utxo-subtab ${subTab === 'consolidate' ? 'active' : ''}`}
+          className={`utxo-subtab view-tab ${subTab === 'consolidate' ? 'active' : ''}`}
           onClick={() => { setSubTab('consolidate'); handleReset() }}
         >
           Consolidate
         </button>
         <button
-          className={`utxo-subtab ${subTab === 'split' ? 'active' : ''}`}
+          className={`utxo-subtab view-tab ${subTab === 'split' ? 'active' : ''}`}
           onClick={() => { setSubTab('split'); handleReset() }}
         >
           Split
