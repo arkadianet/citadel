@@ -581,40 +581,41 @@ html, body, #root {
 
 .btn-primary {
   padding: 10px 20px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 0.875rem;
   font-weight: 500;
-  background: var(--emerald-500);
-  color: white;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
   border: none;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--emerald-600);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+  transform: translateY(-1px);
 }
 
 .btn-primary:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .btn-secondary {
   flex: 1;
   padding: 10px 20px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 0.875rem;
   font-weight: 500;
-  background: var(--slate-700);
-  color: rgb(var(--text));
-  border: none;
+  background: rgba(2, 8, 18, 0.4);
+  color: var(--emerald-400);
+  border: 1px solid rgba(52, 211, 153, 0.15);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .btn-secondary:hover {
-  background: var(--slate-600);
+  background: rgba(52, 211, 153, 0.08);
 }
 
 /* ============================================================================
@@ -1641,15 +1642,15 @@ html, body, #root {
 }
 
 .btn-danger {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(2, 8, 18, 0.4);
+  color: var(--red-400);
+  border: 1px solid rgba(239, 68, 68, 0.2);
   cursor: pointer;
-  border-radius: var(--radius-md);
+  border-radius: 10px;
 }
 
 .btn-danger:hover {
-  background: rgba(239, 68, 68, 0.25);
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.15);
 }
 
 /* Refund modal info section */
