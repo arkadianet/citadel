@@ -556,10 +556,12 @@ html, body, #root {
   width: 100%;
   padding: 10px 14px;
   border-radius: 8px;
-  background: var(--slate-800);
+  background: var(--glass-action);
   border: 1px solid var(--slate-700);
   color: rgb(var(--text));
   font-size: 0.875rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
   transition: all 0.15s;
 }
 
@@ -731,7 +733,7 @@ html, body, #root {
   width: 100%;
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
-  background: var(--slate-800);
+  background: var(--glass-action);
   border: 1px solid var(--slate-700);
   color: rgb(var(--text));
   font-size: var(--text-sm);
@@ -741,7 +743,7 @@ html, body, #root {
 .pool-search-input:focus {
   outline: none;
   border-color: var(--emerald-500);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
 }
 
 .pool-search-input::placeholder {
