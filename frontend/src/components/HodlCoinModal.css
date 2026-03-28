@@ -3,14 +3,17 @@
    ============================================================================ */
 
 .hodl-modal {
-  background: rgb(var(--card));
-  border: 1px solid rgb(var(--border));
+  background: var(--glass-display);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   width: 100%;
   max-width: 480px;
   max-height: 90vh;
   overflow-y: auto;
   animation: hodlModalIn 0.2s ease-out;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
 }
 
 @keyframes hodlModalIn {
@@ -23,7 +26,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-md);
-  border-bottom: 1px solid rgb(var(--border) / 0.5);
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .hodl-modal-header h2 {
@@ -41,7 +44,7 @@
   display: flex;
   padding: 0 var(--space-md);
   gap: var(--space-xs);
-  border-bottom: 1px solid rgb(var(--border) / 0.3);
+  border-bottom: 1px solid rgba(52, 211, 153, 0.06);
 }
 
 .hodl-tab-btn {
@@ -182,7 +185,7 @@
 }
 
 .hodl-info-row.total {
-  border-top: 1px solid rgb(var(--border) / 0.3);
+  border-top: 1px solid rgba(52, 211, 153, 0.06);
   padding-top: var(--space-sm);
   font-weight: 600;
 }
