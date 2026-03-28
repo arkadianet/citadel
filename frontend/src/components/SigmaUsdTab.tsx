@@ -334,318 +334,275 @@ export function SigmaUsdTab({
           </div>
         </div>
 
-        {/* Reserve Ratio Section */}
-        <div className="reserve-section">
-          <div className="reserve-layout">
-            {/* Reserve Gauge */}
-            <div className="reserve-gauge-container">
-              <div className="gauge-wrapper">
-                <svg className="gauge-svg" viewBox="0 0 100 100">
-                  <circle className="gauge-bg" cx="50" cy="50" r="40" />
-                  <circle
-                    className="gauge-progress"
-                    cx="50" cy="50" r="40"
-                    stroke={gaugeStatus.color}
-                    strokeDasharray={circumference}
-                    strokeDashoffset={strokeDashoffset}
-                  />
-                </svg>
-                <div className="gauge-center">
-                  <span className={`gauge-value ${gaugeStatus.cls}`}>{ratio.toFixed(0)}%</span>
-                  <span className="gauge-label">Reserve Ratio</span>
-                </div>
-              </div>
-              <div className={`gauge-status ${gaugeStatus.cls}`}>{gaugeStatus.label}</div>
-              <div className="gauge-range">
-                <span>Min 400%</span>
-                <span>•</span>
-                <span>Max 800%</span>
-              </div>
-            </div>
-
-            {/* Stats Grid */}
-            <div className="stats-grid">
-              <div className="stat-card">
-                <div className="stat-header">
-                  <svg className="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 6v6l4 2" />
-                  </svg>
-                  <span className="stat-label">ERG/USD</span>
-                </div>
-                <div className="stat-value-row">
-                  <span className="stat-value">${ergUsd.toFixed(4)}</span>
-                </div>
-                <div className="stat-subtext">Oracle Price</div>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-header">
-                  <svg className="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  <span className="stat-label">Reserves</span>
-                </div>
-                <div className="stat-value-row">
-                  <span className="stat-value">{formatCompact(ergReserves)}</span>
-                  <span className="stat-unit">ERG</span>
-                </div>
-                <div className="stat-subtext">${formatCompact(ergReserves * ergUsd)}</div>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-header">
-                  <svg className="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                  </svg>
-                  <span className="stat-label">Liabilities</span>
-                </div>
-                <div className="stat-value-row">
-                  <span className="stat-value">{formatCompact(liabilitiesErg)}</span>
-                  <span className="stat-unit">ERG</span>
-                </div>
-                <div className="stat-subtext">${formatCompact(liabilitiesErg * ergUsd)}</div>
-              </div>
-
-              <div className="stat-card highlight">
-                <div className="stat-header">
-                  <svg className="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                    <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
-                  </svg>
-                  <span className="stat-label">Equity</span>
-                </div>
-                <div className="stat-value-row">
-                  <span className="stat-value">{formatCompact(equityErg)}</span>
-                  <span className="stat-unit">ERG</span>
-                </div>
-                <div className="stat-subtext">${formatCompact(equityErg * ergUsd)}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Token Cards */}
-        <div className="token-cards-grid">
-          {/* SigUSD Card */}
-          <div className="token-card emerald">
-            <div className="token-card-header">
-              <div className="token-header-content">
-                <div className="token-header-left">
-                  <img src="/icons/sigmausd.svg" alt="SigUSD" className="token-icon" />
-                  <div className="token-info">
-                    <h3>SigUSD</h3>
-                    <p>Algorithmic stablecoin pegged to USD</p>
+        {/* Two-Column Layout */}
+        <div className="sigmausd-columns">
+          {/* Left Column: Gauge + Bank Stats */}
+          <div className="sigmausd-left">
+            {/* Reserve Ratio Section */}
+            <div className="reserve-section">
+              <div className="reserve-layout">
+                {/* Reserve Gauge */}
+                <div className="reserve-gauge-container">
+                  <div className="gauge-wrapper">
+                    <svg className="gauge-svg" viewBox="0 0 100 100">
+                      <circle className="gauge-bg" cx="50" cy="50" r="40" />
+                      <circle
+                        className="gauge-progress"
+                        cx="50" cy="50" r="40"
+                        stroke={gaugeStatus.color}
+                        strokeDasharray={circumference}
+                        strokeDashoffset={strokeDashoffset}
+                      />
+                    </svg>
+                    <div className="gauge-center">
+                      <span className={`gauge-value ${gaugeStatus.cls}`}>{ratio.toFixed(0)}%</span>
+                      <span className="gauge-label">Reserve Ratio</span>
+                    </div>
+                  </div>
+                  <div className={`gauge-status ${gaugeStatus.cls}`}>{gaugeStatus.label}</div>
+                  <div className="gauge-range">
+                    <span>Min 400%</span>
+                    <span>•</span>
+                    <span>Max 800%</span>
                   </div>
                 </div>
-                <span className="token-ticker">SIGUSD</span>
+
+                {/* Stats Grid */}
+                <div className="stats-grid">
+                  <div className="stat-card">
+                    <div className="stat-header">
+                      <svg className="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 6v6l4 2" />
+                      </svg>
+                      <span className="stat-label">ERG/USD</span>
+                    </div>
+                    <div className="stat-value-row">
+                      <span className="stat-value">${ergUsd.toFixed(4)}</span>
+                    </div>
+                    <div className="stat-subtext">Oracle Price</div>
+                  </div>
+
+                  <div className="stat-card">
+                    <div className="stat-header">
+                      <svg className="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                      <span className="stat-label">Reserves</span>
+                    </div>
+                    <div className="stat-value-row">
+                      <span className="stat-value">{formatCompact(ergReserves)}</span>
+                      <span className="stat-unit">ERG</span>
+                    </div>
+                    <div className="stat-subtext">${formatCompact(ergReserves * ergUsd)}</div>
+                  </div>
+
+                  <div className="stat-card">
+                    <div className="stat-header">
+                      <svg className="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                      </svg>
+                      <span className="stat-label">Liabilities</span>
+                    </div>
+                    <div className="stat-value-row">
+                      <span className="stat-value">{formatCompact(liabilitiesErg)}</span>
+                      <span className="stat-unit">ERG</span>
+                    </div>
+                    <div className="stat-subtext">${formatCompact(liabilitiesErg * ergUsd)}</div>
+                  </div>
+
+                  <div className="stat-card highlight">
+                    <div className="stat-header">
+                      <svg className="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+                      </svg>
+                      <span className="stat-label">Equity</span>
+                    </div>
+                    <div className="stat-value-row">
+                      <span className="stat-value">{formatCompact(equityErg)}</span>
+                      <span className="stat-unit">ERG</span>
+                    </div>
+                    <div className="stat-subtext">${formatCompact(equityErg * ergUsd)}</div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="token-card-body">
-              <div className="token-stats">
-                <div className="token-stat">
-                  <span className="token-stat-label">Circulating Supply</span>
-                  <span className="token-stat-value">{formatCompact(sigusdSupply)}</span>
-                </div>
-                <div className="token-stat">
-                  <span className="token-stat-label">Price (ERG)</span>
-                  <span className="token-stat-value">{sigusdPrice.toFixed(4)}</span>
-                </div>
-                <div className="token-stat">
-                  <span className="token-stat-label">Price (USD)</span>
-                  <span className="token-stat-value">${(sigusdPrice * ergUsd).toFixed(4)}</span>
-                </div>
-              </div>
 
-              {walletAddress && (
-                <div className="wallet-balance-box">
-                  <div className="wallet-balance-row">
-                    <span className="wallet-balance-label">Your Balance</span>
-                    <div className="wallet-balance-value">
-                      <span className="wallet-balance-amount">
-                        {sigusdBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                      <span className="wallet-balance-ticker">SIGUSD</span>
+            {/* Token Stats Cards */}
+            <div className="token-cards-grid">
+              <div className="token-card emerald">
+                <div className="token-card-header">
+                  <div className="token-header-content">
+                    <div className="token-header-left">
+                      <img src="/icons/sigmausd.svg" alt="SigUSD" className="token-icon" />
+                      <div className="token-info">
+                        <h3>SigUSD</h3>
+                        <p>Algorithmic stablecoin pegged to USD</p>
+                      </div>
+                    </div>
+                    <span className="token-ticker">SIGUSD</span>
+                  </div>
+                </div>
+                <div className="token-card-body">
+                  <div className="token-stats">
+                    <div className="token-stat">
+                      <span className="token-stat-label">Circulating Supply</span>
+                      <span className="token-stat-value">{formatCompact(sigusdSupply)}</span>
+                    </div>
+                    <div className="token-stat">
+                      <span className="token-stat-label">Price (ERG)</span>
+                      <span className="token-stat-value">{sigusdPrice.toFixed(4)}</span>
+                    </div>
+                    <div className="token-stat">
+                      <span className="token-stat-label">Price (USD)</span>
+                      <span className="token-stat-value">${(sigusdPrice * ergUsd).toFixed(4)}</span>
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
 
-              <div className="token-actions">
+              <div className="token-card blue">
+                <div className="token-card-header">
+                  <div className="token-header-content">
+                    <div className="token-header-left">
+                      <img src="/icons/sigrsv.svg" alt="SigRSV" className="token-icon" />
+                      <div className="token-info">
+                        <h3>SigRSV</h3>
+                        <p>Reserve token backing SigUSD</p>
+                      </div>
+                    </div>
+                    <span className="token-ticker">SIGRSV</span>
+                  </div>
+                </div>
+                <div className="token-card-body">
+                  <div className="token-stats">
+                    <div className="token-stat">
+                      <span className="token-stat-label">Circulating Supply</span>
+                      <span className="token-stat-value">{formatCompact(sigrsvSupply)}</span>
+                    </div>
+                    <div className="token-stat">
+                      <span className="token-stat-label">Price (ERG)</span>
+                      <span className="token-stat-value">{sigrsvPrice.toFixed(8)}</span>
+                    </div>
+                    <div className="token-stat">
+                      <span className="token-stat-label">Price (USD)</span>
+                      <span className="token-stat-value">${(sigrsvPrice * ergUsd).toFixed(6)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Actions + Wallet */}
+          <div className="sigmausd-right">
+            {/* Action Grid Card */}
+            <div className="sigmausd-actions-card glass-action">
+              <div className="sigmausd-actions-grid">
                 <button
-                  className={`action-btn ${canMintSigusd ? 'primary emerald' : ''}`}
+                  className="sigmausd-action-btn"
                   disabled={!canMintSigusd}
                   onClick={() => openTxModal('mint_sigusd')}
                   title={!walletAddress ? 'Connect wallet to mint' : !state.can_mint_sigusd ? 'Minting unavailable' : 'Mint SigUSD'}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 4v16m8-8H4" />
-                  </svg>
-                  Mint
+                  <div className="action-btn-label">Mint SigUSD</div>
+                  <div className="action-btn-sub">
+                    {state.can_mint_sigusd ? `${sigusdPrice.toFixed(4)} ERG` : 'Unavailable'}
+                  </div>
                 </button>
                 <button
-                  className={`action-btn ${canRedeemSigusd && sigusdBalance > 0 ? 'secondary' : ''}`}
+                  className="sigmausd-action-btn"
                   disabled={!canRedeemSigusd || sigusdBalance <= 0}
                   onClick={() => openTxModal('redeem_sigusd')}
                   title={!walletAddress ? 'Connect wallet to redeem' : !state.can_redeem_sigusd ? 'Redemption unavailable' : sigusdBalance <= 0 ? 'No SigUSD to redeem' : 'Redeem SigUSD'}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M20 12H4" />
-                  </svg>
-                  Redeem
+                  <div className="action-btn-label">Redeem SigUSD</div>
+                  <div className="action-btn-sub">
+                    {state.can_redeem_sigusd ? (sigusdBalance > 0 ? `${sigusdBalance.toFixed(2)} available` : 'No balance') : 'Unavailable'}
+                  </div>
                 </button>
-              </div>
-
-              <div className="status-badges">
-                <span className={`status-badge ${state.can_mint_sigusd ? 'available' : 'unavailable'}`}>
-                  <span className="dot" />
-                  Mint {state.can_mint_sigusd ? 'Available' : 'Unavailable'}
-                </span>
-                <span className={`status-badge ${state.can_redeem_sigusd ? 'available' : 'unavailable'}`}>
-                  <span className="dot" />
-                  Redeem {state.can_redeem_sigusd ? 'Available' : 'Unavailable'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* SigRSV Card */}
-          <div className="token-card blue">
-            <div className="token-card-header">
-              <div className="token-header-content">
-                <div className="token-header-left">
-                  <img src="/icons/sigrsv.svg" alt="SigRSV" className="token-icon" />
-                  <div className="token-info">
-                    <h3>SigRSV</h3>
-                    <p>Reserve token backing SigUSD</p>
-                  </div>
-                </div>
-                <span className="token-ticker">SIGRSV</span>
-              </div>
-            </div>
-            <div className="token-card-body">
-              <div className="token-stats">
-                <div className="token-stat">
-                  <span className="token-stat-label">Circulating Supply</span>
-                  <span className="token-stat-value">{formatCompact(sigrsvSupply)}</span>
-                </div>
-                <div className="token-stat">
-                  <span className="token-stat-label">Price (ERG)</span>
-                  <span className="token-stat-value">{sigrsvPrice.toFixed(8)}</span>
-                </div>
-                <div className="token-stat">
-                  <span className="token-stat-label">Price (USD)</span>
-                  <span className="token-stat-value">${(sigrsvPrice * ergUsd).toFixed(6)}</span>
-                </div>
-              </div>
-
-              {walletAddress && (
-                <div className="wallet-balance-box">
-                  <div className="wallet-balance-row">
-                    <span className="wallet-balance-label">Your Balance</span>
-                    <div className="wallet-balance-value">
-                      <span className="wallet-balance-amount">
-                        {sigrsvBalance.toLocaleString()}
-                      </span>
-                      <span className="wallet-balance-ticker">SIGRSV</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="token-actions">
                 <button
-                  className={`action-btn ${canMintSigrsv ? 'primary blue' : ''}`}
+                  className="sigmausd-action-btn"
                   disabled={!canMintSigrsv}
                   onClick={() => openTxModal('mint_sigrsv')}
                   title={!walletAddress ? 'Connect wallet to mint' : !state.can_mint_sigrsv ? 'Minting unavailable' : 'Mint SigRSV'}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 4v16m8-8H4" />
-                  </svg>
-                  Mint
+                  <div className="action-btn-label">Mint SigRSV</div>
+                  <div className="action-btn-sub">
+                    {state.can_mint_sigrsv ? `${sigrsvPrice.toFixed(8)} ERG` : 'Unavailable'}
+                  </div>
                 </button>
                 <button
-                  className={`action-btn ${canRedeemSigrsv && sigrsvBalance > 0 ? 'secondary' : ''}`}
+                  className="sigmausd-action-btn"
                   disabled={!canRedeemSigrsv || sigrsvBalance <= 0}
                   onClick={() => openTxModal('redeem_sigrsv')}
                   title={!walletAddress ? 'Connect wallet to redeem' : !state.can_redeem_sigrsv ? 'Redemption unavailable' : sigrsvBalance <= 0 ? 'No SigRSV to redeem' : 'Redeem SigRSV'}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M20 12H4" />
-                  </svg>
-                  Redeem
+                  <div className="action-btn-label">Redeem SigRSV</div>
+                  <div className="action-btn-sub">
+                    {state.can_redeem_sigrsv ? (sigrsvBalance > 0 ? `${sigrsvBalance.toLocaleString()} available` : 'No balance') : 'Unavailable'}
+                  </div>
                 </button>
               </div>
-
-              <div className="status-badges">
-                <span className={`status-badge ${state.can_mint_sigrsv ? 'available' : 'unavailable'}`}>
-                  <span className="dot" />
-                  Mint {state.can_mint_sigrsv ? 'Available' : 'Unavailable'}
-                </span>
-                <span className={`status-badge ${state.can_redeem_sigrsv ? 'available' : 'unavailable'}`}>
-                  <span className="dot" />
-                  Redeem {state.can_redeem_sigrsv ? 'Available' : 'Unavailable'}
-                </span>
-              </div>
             </div>
+
+            {/* Wallet Balances Strip */}
+            {walletAddress ? (
+              <div className="wallet-section">
+                <div className="wallet-tabs">
+                  <button className="wallet-tab active">Your Holdings</button>
+                </div>
+                <div className="wallet-tab-content">
+                  <div className="portfolio-total">
+                    <div className="portfolio-total-label">Total Portfolio Value</div>
+                    <div className="portfolio-total-value">${totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                  </div>
+                  <div className="holdings-grid">
+                    <div className="holding-card orange">
+                      <div className="holding-header">
+                        <div className="holding-icon" style={{ background: 'rgba(249, 115, 22, 0.3)', width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, color: '#fb923c' }}>Σ</div>
+                        <span className="holding-name">ERG</span>
+                      </div>
+                      <div className="holding-amount">{ergBalance.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</div>
+                      <div className="holding-usd">${ergValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                    </div>
+                    <div className="holding-card emerald">
+                      <div className="holding-header">
+                        <img src="/icons/sigmausd.svg" alt="SigUSD" className="holding-icon" />
+                        <span className="holding-name">SigUSD</span>
+                      </div>
+                      <div className="holding-amount">{sigusdBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      <div className="holding-usd">${sigusdValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                    </div>
+                    <div className="holding-card blue">
+                      <div className="holding-header">
+                        <img src="/icons/sigrsv.svg" alt="SigRSV" className="holding-icon" />
+                        <span className="holding-name">SigRSV</span>
+                      </div>
+                      <div className="holding-amount">{sigrsvBalance.toLocaleString()}</div>
+                      <div className="holding-usd">${sigrsvValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="wallet-section">
+                <div className="wallet-notice">
+                  <div className="wallet-notice-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="2" y="5" width="20" height="14" rx="2" />
+                      <path d="M2 10h20" />
+                    </svg>
+                  </div>
+                  <h3>Wallet Not Connected</h3>
+                  <p>Connect your wallet using the button in the header to mint and redeem tokens</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Wallet Section */}
-        {walletAddress ? (
-          <div className="wallet-section">
-            <div className="wallet-tabs">
-              <button className="wallet-tab active">Your Holdings</button>
-            </div>
-            <div className="wallet-tab-content">
-              <div className="portfolio-total">
-                <div className="portfolio-total-label">Total Portfolio Value</div>
-                <div className="portfolio-total-value">${totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-              </div>
-              <div className="holdings-grid">
-                <div className="holding-card orange">
-                  <div className="holding-header">
-                    <div className="holding-icon" style={{ background: 'rgba(249, 115, 22, 0.3)', width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, color: '#fb923c' }}>Σ</div>
-                    <span className="holding-name">ERG</span>
-                  </div>
-                  <div className="holding-amount">{ergBalance.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</div>
-                  <div className="holding-usd">${ergValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                </div>
-                <div className="holding-card emerald">
-                  <div className="holding-header">
-                    <img src="/icons/sigmausd.svg" alt="SigUSD" className="holding-icon" />
-                    <span className="holding-name">SigUSD</span>
-                  </div>
-                  <div className="holding-amount">{sigusdBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  <div className="holding-usd">${sigusdValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                </div>
-                <div className="holding-card blue">
-                  <div className="holding-header">
-                    <img src="/icons/sigrsv.svg" alt="SigRSV" className="holding-icon" />
-                    <span className="holding-name">SigRSV</span>
-                  </div>
-                  <div className="holding-amount">{sigrsvBalance.toLocaleString()}</div>
-                  <div className="holding-usd">${sigrsvValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="wallet-section">
-            <div className="wallet-notice">
-              <div className="wallet-notice-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="2" y="5" width="20" height="14" rx="2" />
-                  <path d="M2 10h20" />
-                </svg>
-              </div>
-              <h3>Wallet Not Connected</h3>
-              <p>Connect your wallet using the button in the header to mint and redeem tokens</p>
-            </div>
-          </div>
-        )}
 
         {/* Activity Feeds — side by side */}
         <div className="sigmausd-activity-grid">
