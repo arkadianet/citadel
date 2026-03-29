@@ -16,6 +16,7 @@ import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import type { TxStatusResponse } from '../api/types'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
+import { PageHeader, Tabs, Card, CardBody, EmptyState } from './ui'
 import './DexyTab.css'
 
 interface DexyState {
@@ -490,9 +491,7 @@ export function DexyTab({
   if (!isConnected) {
     return (
       <div className="dexy-tab">
-        <div className="empty-state">
-          <p>Connect to a node first</p>
-        </div>
+        <EmptyState title="Node Not Connected" description="Connect to a node first." />
       </div>
     )
   }
@@ -529,8 +528,8 @@ export function DexyTab({
   return (
     <div className="dexy-tab">
       {/* Protocol Header */}
-      <div className="dexy-header">
-        <div className="dexy-header-row view-header">
+      <PageHeader
+        icon={
           <div className="dexy-icon-stack">
             <span className="icon-gold">
               <img src="/icons/dexygold.svg" alt="DexyGold" />
@@ -539,41 +538,25 @@ export function DexyTab({
               <img src="/icons/use.svg" alt="USE" />
             </span>
           </div>
-          <div>
-            <h2>Dexy Protocol</h2>
-            <p className="dexy-description">Oracle-pegged stablecoins with LP dynamics</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Protocol Info Bar */}
-      <div className="dexy-info-bar view-info-bar">
-        <div className="dexy-info-item">
-          <span className="dexy-info-label">Variants:</span>
-          <span className="dexy-info-value">DexyGold, USE</span>
-        </div>
-        <div className="dexy-info-divider" />
-        <div className="dexy-info-item">
-          <span className="dexy-info-label">Actions:</span>
-          <span className="dexy-info-value">Mint, LP Swap, Liquidity</span>
-        </div>
-      </div>
+        }
+        title="Dexy Protocol"
+        subtitle="Oracle-pegged stablecoins with LP dynamics"
+        info={[
+          { label: 'Variants', value: 'DexyGold, USE' },
+          { label: 'Actions', value: 'Mint, LP Swap, Liquidity' },
+        ]}
+      />
 
       {/* Sub-tab Navigation */}
-      <div className="dexy-sub-tabs view-tabs">
-        <button
-          className={`dexy-sub-tab view-tab ${subTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setSubTab('overview')}
-        >
-          Overview
-        </button>
-        <button
-          className={`dexy-sub-tab view-tab ${subTab === 'liquidity' ? 'active' : ''}`}
-          onClick={() => setSubTab('liquidity')}
-        >
-          Liquidity
-        </button>
-      </div>
+      <Tabs
+        tabs={[
+          { id: 'overview', label: 'Overview' },
+          { id: 'liquidity', label: 'Liquidity' },
+        ]}
+        activeId={subTab}
+        onChange={(id) => setSubTab(id as 'overview' | 'liquidity')}
+        size="compact"
+      />
 
       {subTab === 'overview' && (<>
       {/* Two-column layout: protocol state (left) + actions/holdings (right) */}
@@ -683,18 +666,16 @@ export function DexyTab({
           </div>
         </div>
       ) : !walletAddress && (
-        <div className="dexy-wallet-section">
-          <div className="wallet-notice">
-            <div className="wallet-notice-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="2" y="5" width="20" height="14" rx="2" />
-                <path d="M2 10h20" />
-              </svg>
-            </div>
-            <h3>Wallet Not Connected</h3>
-            <p>Connect your wallet using the button in the header to mint Dexy tokens</p>
-          </div>
-        </div>
+        <EmptyState
+          icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24">
+              <rect x="2" y="5" width="20" height="14" rx="2" />
+              <path d="M2 10h20" />
+            </svg>
+          }
+          title="Wallet Not Connected"
+          description="Connect your wallet using the button in the header to mint Dexy tokens."
+        />
       )}
         </div>
       </div>
@@ -704,7 +685,8 @@ export function DexyTab({
         {/* Your Dexy Activity */}
         <div className="dexy-activity-section">
           <h3 className="dexy-section-header view-section-label">Your Dexy Activity</h3>
-          <div className="dexy-activity-card">
+          <Card className="dexy-activity-card" surface="display">
+            <CardBody>
             {!walletAddress ? (
               <div className="dexy-activity-empty">Connect wallet to see your activity</div>
             ) : userTxsLoading ? (
@@ -761,13 +743,15 @@ export function DexyTab({
                 })}
               </div>
             )}
-          </div>
+            </CardBody>
+          </Card>
         </div>
 
         {/* Recent Protocol Activity */}
         <div className="dexy-activity-section">
           <h3 className="dexy-section-header view-section-label">Recent Protocol Activity</h3>
-          <div className="dexy-activity-card">
+          <Card className="dexy-activity-card" surface="display">
+            <CardBody>
             {activityLoading ? (
               <div className="dexy-activity-loading">
                 <div className="spinner-small" />
@@ -846,7 +830,8 @@ export function DexyTab({
                 })}
               </div>
             )}
-          </div>
+            </CardBody>
+          </Card>
         </div>
       </div>
       </>)}

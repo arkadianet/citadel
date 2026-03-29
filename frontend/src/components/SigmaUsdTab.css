@@ -99,12 +99,8 @@
 }
 
 /* ============================================================================
-   Protocol Header
+   Protocol Header — icon stack (kept; PageHeader handles the rest)
    ============================================================================ */
-
-.sigmausd-header-row {
-  /* layout now from .view-header */
-}
 
 .sigmausd-icon-stack {
   position: relative;
@@ -153,85 +149,6 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-.sigmausd-header h2 {
-  font-size: var(--text-lg);
-  font-weight: 700;
-  color: rgb(var(--text));
-  margin: 0;
-  line-height: 1.2;
-}
-
-.sigmausd-description {
-  color: var(--slate-400);
-  font-size: var(--text-xs);
-  margin: 0;
-}
-
-/* ============================================================================
-   Protocol Info Bar
-   ============================================================================ */
-
-.protocol-info-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-md);
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(51, 65, 85, 0.5);
-  font-size: var(--text-xs);
-}
-
-.info-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.info-label {
-  color: var(--slate-500);
-}
-
-.info-value {
-  color: rgb(var(--text));
-  font-weight: 500;
-}
-
-.info-value.mono {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: var(--text-xs);
-  color: var(--cyan-400);
-  cursor: pointer;
-  transition: color 0.15s;
-}
-
-.info-value.mono:hover {
-  color: var(--cyan-400);
-  filter: brightness(1.2);
-}
-
-.info-divider {
-  width: 1px;
-  height: var(--space-md);
-  background: var(--slate-700);
-}
-
-.info-status {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.info-status .dot {
-  width: clamp(6px, 0.6vw, 8px);
-  height: clamp(6px, 0.6vw, 8px);
-  border-radius: 50%;
-  background: var(--emerald-500);
-  animation: pulse-glow 2s ease-in-out infinite;
 }
 
 /* ============================================================================
@@ -903,14 +820,8 @@
 }
 
 .sigmausd-activity-card {
-  background: var(--glass-display);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
   overflow: hidden;
   flex: 1;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
 }
 
 .sigmausd-activity-loading {

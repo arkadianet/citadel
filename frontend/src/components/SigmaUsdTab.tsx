@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { TransactionModal, type SigmaUsdAction } from './TransactionModal'
 import { getSigmaUsdActivity, type ProtocolInteraction } from '../api/protocolActivity'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
+import { PageHeader, Card, CardBody, EmptyState } from './ui'
 import './SigmaUsdTab.css'
 
 interface SigmaUsdState {
@@ -199,9 +200,7 @@ export function SigmaUsdTab({
   if (!isConnected) {
     return (
       <div className="sigmausd-view">
-        <div className="empty-state">
-          <p>Connect to a node first</p>
-        </div>
+        <EmptyState title="Node Not Connected" description="Connect to a node first." />
       </div>
     )
   }
@@ -237,9 +236,7 @@ export function SigmaUsdTab({
   if (!state) {
     return (
       <div className="sigmausd-view">
-        <div className="empty-state">
-          <p>Unable to load protocol state</p>
-        </div>
+        <EmptyState title="Unable to Load" description="Unable to load protocol state." />
       </div>
     )
   }
@@ -295,8 +292,8 @@ export function SigmaUsdTab({
     <div className="sigmausd-view">
       <div className="sigmausd-content">
         {/* Protocol Header */}
-        <div className="sigmausd-header">
-          <div className="sigmausd-header-row view-header">
+        <PageHeader
+          icon={
             <div className="sigmausd-icon-stack">
               <span className="icon-sigusd">
                 <img src="/icons/sigmausd.svg" alt="SigUSD" />
@@ -305,34 +302,15 @@ export function SigmaUsdTab({
                 <img src="/icons/sigrsv.svg" alt="SigRSV" />
               </span>
             </div>
-            <div>
-              <h2>SigmaUSD Protocol</h2>
-              <p className="sigmausd-description">Algorithmic stablecoin with reserve-backed stability</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Protocol Info Bar */}
-        <div className="protocol-info-bar view-info-bar">
-          <div className="info-item">
-            <span className="info-label">Protocol Fee:</span>
-            <span className="info-value">2%</span>
-          </div>
-          <div className="info-divider" />
-          <div className="info-item">
-            <span className="info-label">Reserve Range:</span>
-            <span className="info-value">400% – 800%</span>
-          </div>
-          <div className="info-divider" />
-          <div className="info-item">
-            <span className="info-label">Bank Box:</span>
-            <span className="info-value mono">{state.bank_box_id.slice(0, 8)}...{state.bank_box_id.slice(-4)}</span>
-          </div>
-          <div className="info-status">
-            <span className="dot" />
-            <span className="info-label">Live</span>
-          </div>
-        </div>
+          }
+          title="SigmaUSD Protocol"
+          subtitle="Algorithmic stablecoin with reserve-backed stability"
+          info={[
+            { label: 'Protocol Fee', value: '2%' },
+            { label: 'Reserve Range', value: '400% – 800%' },
+            { label: 'Bank Box', value: `${state.bank_box_id.slice(0, 8)}...${state.bank_box_id.slice(-4)}` },
+          ]}
+        />
 
         {/* Two-Column Layout */}
         <div className="sigmausd-columns">
@@ -499,7 +477,8 @@ export function SigmaUsdTab({
           {/* Right Column: Actions + Wallet */}
           <div className="sigmausd-right">
             {/* Action Grid Card */}
-            <div className="sigmausd-actions-card glass-action">
+            <Card className="sigmausd-actions-card" surface="action">
+              <CardBody>
               <div className="sigmausd-actions-grid">
                 <button
                   className="sigmausd-action-btn"
@@ -546,7 +525,8 @@ export function SigmaUsdTab({
                   </div>
                 </button>
               </div>
-            </div>
+              </CardBody>
+            </Card>
 
             {/* Wallet Balances Strip */}
             {walletAddress ? (
@@ -588,18 +568,16 @@ export function SigmaUsdTab({
                 </div>
               </div>
             ) : (
-              <div className="wallet-section">
-                <div className="wallet-notice">
-                  <div className="wallet-notice-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="2" y="5" width="20" height="14" rx="2" />
-                      <path d="M2 10h20" />
-                    </svg>
-                  </div>
-                  <h3>Wallet Not Connected</h3>
-                  <p>Connect your wallet using the button in the header to mint and redeem tokens</p>
-                </div>
-              </div>
+              <EmptyState
+                icon={
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24">
+                    <rect x="2" y="5" width="20" height="14" rx="2" />
+                    <path d="M2 10h20" />
+                  </svg>
+                }
+                title="Wallet Not Connected"
+                description="Connect your wallet using the button in the header to mint and redeem tokens."
+              />
             )}
           </div>
         </div>
@@ -609,7 +587,8 @@ export function SigmaUsdTab({
           {/* Your SigmaUSD Activity */}
           <div className="sigmausd-activity-section">
             <h3 className="sigmausd-section-header view-section-label">Your SigmaUSD Activity</h3>
-            <div className="sigmausd-activity-card">
+            <Card className="sigmausd-activity-card" surface="display">
+              <CardBody>
               {!walletAddress ? (
                 <div className="sigmausd-activity-empty">Connect wallet to see your activity</div>
               ) : userTxsLoading ? (
@@ -666,13 +645,15 @@ export function SigmaUsdTab({
                   })}
                 </div>
               )}
-            </div>
+              </CardBody>
+            </Card>
           </div>
 
           {/* Recent Protocol Activity */}
           <div className="sigmausd-activity-section">
             <h3 className="sigmausd-section-header view-section-label">Recent Protocol Activity</h3>
-            <div className="sigmausd-activity-card">
+            <Card className="sigmausd-activity-card" surface="display">
+              <CardBody>
               {activityLoading ? (
                 <div className="sigmausd-activity-loading">
                   <div className="spinner-small" />
@@ -740,7 +721,8 @@ export function SigmaUsdTab({
                   })}
                 </div>
               )}
-            </div>
+              </CardBody>
+            </Card>
           </div>
         </div>
 
