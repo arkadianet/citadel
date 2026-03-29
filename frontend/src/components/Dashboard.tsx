@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
 import { getProtocolActivity, type ProtocolInteraction } from '../api/protocolActivity'
 import { getAmmPools, type AmmPool } from '../api/amm'
+import { StatTile, Card, CardBody, EmptyState } from './ui'
 import './Dashboard.css'
 
 interface DexyState {
@@ -274,10 +275,10 @@ export function Dashboard({
     <div className="dashboard">
       {/* Connect prompt */}
       {!isConnected && (
-        <div className="connect-prompt">
-          <p>Connect to an Ergo node to get started</p>
-          <p className="text-muted">Click the settings icon in the top right</p>
-        </div>
+        <EmptyState
+          title="Connect to Get Started"
+          description="Connect to an Ergo node. Click the settings icon in the top right."
+        />
       )}
 
       {/* Portfolio Hero */}
@@ -350,42 +351,24 @@ export function Dashboard({
       {/* Market Stats Row */}
       {isConnected && (
         <section className="market-stats-row">
-          <div className="market-stat-card glass-display">
-            <div className="market-stat-label">ERG Price</div>
-            <div className="market-stat-value">
-              {ergUsd > 0 ? `$${ergUsd.toFixed(2)}` : '\u2014'}
-            </div>
-          </div>
-          <div className="market-stat-card glass-display">
-            <div className="market-stat-label">SigUSD Rate</div>
-            <div className="market-stat-value">
-              {sigmaUsdState
-                ? `${(sigmaUsdState.sigusd_price_nano / 1e9).toFixed(4)} ERG`
-                : '\u2014'}
-            </div>
-          </div>
-          <div className="market-stat-card glass-display">
-            <div className="market-stat-label">Reserve Ratio</div>
-            <div className="market-stat-value">
-              {sigmaUsdState ? (
-                <span style={{
-                  color: sigmaUsdState.reserve_ratio_pct >= 400
-                    ? 'var(--emerald-400)'
-                    : sigmaUsdState.reserve_ratio_pct >= 200
-                      ? 'var(--amber-400)'
-                      : 'var(--red-400)',
-                }}>
-                  {Math.round(sigmaUsdState.reserve_ratio_pct)}%
-                </span>
-              ) : '\u2014'}
-            </div>
-          </div>
-          <div className="market-stat-card glass-display">
-            <div className="market-stat-label">Block Height</div>
-            <div className="market-stat-value">
-              {blockHeight ? blockHeight.toLocaleString() : '\u2014'}
-            </div>
-          </div>
+          <StatTile
+            label="ERG Price"
+            value={ergUsd > 0 ? `$${ergUsd.toFixed(2)}` : '\u2014'}
+          />
+          <StatTile
+            label="SigUSD Rate"
+            value={sigmaUsdState ? `${(sigmaUsdState.sigusd_price_nano / 1e9).toFixed(4)} ERG` : '\u2014'}
+          />
+          <StatTile
+            label="Reserve Ratio"
+            value={sigmaUsdState ? `${Math.round(sigmaUsdState.reserve_ratio_pct)}%` : '\u2014'}
+            change={sigmaUsdState ? (sigmaUsdState.reserve_ratio_pct >= 400 ? 'Healthy' : sigmaUsdState.reserve_ratio_pct >= 200 ? 'Caution' : 'Critical') : undefined}
+            changeDirection={sigmaUsdState ? (sigmaUsdState.reserve_ratio_pct >= 400 ? 'up' : sigmaUsdState.reserve_ratio_pct >= 200 ? 'stable' : 'down') : undefined}
+          />
+          <StatTile
+            label="Block Height"
+            value={blockHeight ? blockHeight.toLocaleString() : '\u2014'}
+          />
         </section>
       )}
 
@@ -395,26 +378,26 @@ export function Dashboard({
           <h3 className="dashboard-section-header view-section-label">Protocols</h3>
           <div className="protocol-quick-grid">
             {PROTOCOL_GRID.map(p => (
-              <div
+              <Card
                 key={p.id}
-                className="protocol-quick-card glass-display"
+                className="protocol-quick-card"
+                surface="display"
                 onClick={() => onNavigate(p.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => { if (e.key === 'Enter') onNavigate(p.id) }}
               >
-                <div
-                  className="protocol-quick-icon"
-                  style={{ background: p.color }}
-                >
-                  {p.letter}
-                </div>
-                <div className="protocol-quick-info">
-                  <div className="protocol-quick-name">{p.name}</div>
-                  <div className="protocol-quick-desc">{p.desc}</div>
-                </div>
-                <span className="protocol-quick-arrow">&rsaquo;</span>
-              </div>
+                <CardBody className="protocol-quick-card-body">
+                  <div
+                    className="protocol-quick-icon"
+                    style={{ background: p.color }}
+                  >
+                    {p.letter}
+                  </div>
+                  <div className="protocol-quick-info">
+                    <div className="protocol-quick-name">{p.name}</div>
+                    <div className="protocol-quick-desc">{p.desc}</div>
+                  </div>
+                  <span className="protocol-quick-arrow">&rsaquo;</span>
+                </CardBody>
+              </Card>
             ))}
           </div>
         </section>

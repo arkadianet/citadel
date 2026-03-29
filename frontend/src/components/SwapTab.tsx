@@ -16,6 +16,7 @@ import { SwapModal } from './SwapModal'
 import { OrderHistory } from './OrderHistory'
 import { TokenIcon, PoolPairIcons } from './tokenIcons'
 import { SmartSwapView } from './SmartSwapView'
+import { Tabs, EmptyState } from './ui'
 
 interface SwapTabProps {
   isConnected: boolean
@@ -604,9 +605,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
   if (!isConnected) {
     return (
       <div className="swap-tab">
-        <div className="empty-state">
-          <p>Connect to a node first</p>
-        </div>
+        <EmptyState title="Node Not Connected" description="Connect to a node first." />
       </div>
     )
   }
@@ -614,32 +613,17 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
   return (
     <div className="swap-tab">
       {/* Mode toggle */}
-      <div className="swap-mode-bar">
-        <button
-          className={`swap-mode-btn ${tabMode === 'smart' ? 'active' : ''}`}
-          onClick={() => setTabMode('smart')}
-        >
-          Smart Swap
-        </button>
-        <button
-          className={`swap-mode-btn ${tabMode === 'pool' ? 'active' : ''}`}
-          onClick={() => setTabMode('pool')}
-        >
-          Pool Swap
-        </button>
-        <button
-          className={`swap-mode-btn ${tabMode === 'liquidity' ? 'active' : ''}`}
-          onClick={() => setTabMode('liquidity')}
-        >
-          Liquidity
-        </button>
-        <button
-          className={`swap-mode-btn ${tabMode === 'create' ? 'active' : ''}`}
-          onClick={() => setTabMode('create')}
-        >
-          Create Pool
-        </button>
-      </div>
+      <Tabs
+        tabs={[
+          { id: 'smart', label: 'Smart Swap' },
+          { id: 'pool', label: 'Pool Swap' },
+          { id: 'liquidity', label: 'Liquidity' },
+          { id: 'create', label: 'Create Pool' },
+        ]}
+        activeId={tabMode}
+        onChange={(id) => setTabMode(id as 'smart' | 'pool' | 'liquidity' | 'create')}
+        size="compact"
+      />
 
       {tabMode === 'smart' ? (
         <SmartSwapView

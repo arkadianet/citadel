@@ -179,31 +179,7 @@
   grid-template-columns: repeat(4, 1fr);
   gap: var(--space-sm);
 }
-.market-stat-card {
-  padding: var(--space-md);
-}
-.market-stat-label {
-  font-size: var(--text-xs);
-  color: var(--slate-500);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: var(--space-xs);
-}
-.market-stat-value {
-  font-size: var(--text-2xl);
-  font-weight: 700;
-  font-family: 'JetBrains Mono', monospace;
-  font-variant-numeric: tabular-nums;
-  color: rgb(var(--text));
-}
-.market-stat-change {
-  font-size: var(--text-xs);
-  color: var(--emerald-400);
-  margin-top: var(--space-xs);
-  font-family: 'JetBrains Mono', monospace;
-}
-.market-stat-change.negative { color: var(--red-400); }
-.market-stat-change.stable { color: var(--slate-400); }
+/* Market stat cards now use <StatTile> component */
 
 /* ============================================================================
    Protocol Quick-Access Grid
@@ -214,18 +190,11 @@
   grid-template-columns: repeat(4, 1fr);
   gap: var(--space-sm);
 }
-.protocol-quick-card {
+/* protocol-quick-card background/border now from <Card>; keep layout below */
+.protocol-quick-card-body {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-md);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.protocol-quick-card:hover {
-  background: rgba(148, 163, 184, 0.06);
-  border-color: var(--glass-border-hover);
-  transform: translateY(-1px);
 }
 .protocol-quick-icon {
   width: 36px;
