@@ -1,0 +1,27 @@
+.ds-activity-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+  transition: background 0.15s;
+}
+
+.ds-activity-row:last-child { border-bottom: none; }
+.ds-activity-row:hover { background: rgba(148, 163, 184, 0.04); }
+
+.ds-activity-left { flex-shrink: 0; }
+
+.ds-activity-center {
+  flex: 1;
+  min-width: 0;
+  font: var(--ds-text-body);
+  color: rgb(var(--text));
+}
+
+.ds-activity-right {
+  flex-shrink: 0;
+  font: var(--ds-text-micro);
+  font-family: var(--ds-font-mono);
+  color: var(--slate-400);
+}

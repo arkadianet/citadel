@@ -1,0 +1,32 @@
+.ds-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--ds-space-8) var(--ds-space-4);
+  min-height: 200px;
+}
+
+.ds-empty-icon {
+  font-size: 32px;
+  margin-bottom: var(--ds-space-3);
+  opacity: 0.5;
+}
+
+.ds-empty-title {
+  font: var(--ds-text-card-title);
+  color: rgb(var(--text));
+  margin-bottom: var(--ds-space-2);
+}
+
+.ds-empty-desc {
+  font: var(--ds-text-body);
+  color: var(--slate-400);
+  max-width: 320px;
+  margin-bottom: var(--ds-space-4);
+}
+
+.ds-empty-action {
+  margin-top: var(--ds-space-2);
+}

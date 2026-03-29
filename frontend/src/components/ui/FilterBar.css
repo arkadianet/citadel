@@ -1,0 +1,40 @@
+.ds-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  margin-bottom: var(--ds-space-3);
+}
+
+.ds-filter-options {
+  display: flex;
+  gap: var(--ds-space-1);
+}
+
+.ds-filter-btn {
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--ds-radius-sm);
+  background: transparent;
+  color: var(--slate-400);
+  font: var(--ds-text-micro);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ds-filter-btn:hover {
+  color: rgb(var(--text));
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.ds-filter-btn.active {
+  color: var(--emerald-400);
+  border-color: var(--ds-border);
+  background: rgba(52, 211, 153, 0.06);
+}
+
+.ds-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
