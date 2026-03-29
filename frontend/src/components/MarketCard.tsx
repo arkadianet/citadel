@@ -16,6 +16,7 @@ import {
   type LendPositionInfo,
   type BorrowPositionInfo,
 } from '../api/lending'
+import { Card, CardHeader, CardBody, CardFooter, Badge } from './ui'
 
 /**
  * Wallet balance information passed from parent component
@@ -139,9 +140,9 @@ export function MarketCard({
   const availableBalance = getAvailableBalance(pool, walletBalance)
 
   return (
-    <div className={`market-card ${pool.is_erg_pool ? 'erg' : 'token'}`}>
+    <Card className={`market-card ${pool.is_erg_pool ? 'erg' : 'token'}`} surface="display">
       {/* Header */}
-      <div className="market-card-header">
+      <CardHeader className="market-card-header">
         <div className="market-header-content">
           <div className="market-header-left">
             <div className="market-icon">
@@ -158,10 +159,10 @@ export function MarketCard({
           </div>
           <span className="market-ticker">{pool.symbol}</span>
         </div>
-      </div>
+      </CardHeader>
 
       {/* Body */}
-      <div className="market-card-body">
+      <CardBody className="market-card-body">
         {/* Stats Grid */}
         <div className="market-stats">
           {mode === 'supply' ? (
@@ -311,16 +312,20 @@ export function MarketCard({
               >
                 {borrowPosition.health_factor.toFixed(2)}
                 {borrowPosition.health_status === 'red' && (
-                  <span className="health-warning" title="At risk of liquidation">
+                  <>
                     {' '}
-                    !
-                  </span>
+                    <Badge variant="danger">Liquidation Risk</Badge>
+                  </>
                 )}
               </span>
             </div>
           </div>
         )}
 
+      </CardBody>
+
+      {/* Footer: Action Buttons */}
+      <CardFooter>
         {/* Supply Mode Actions */}
         {mode === 'supply' && (
           <div className="market-actions">
@@ -413,8 +418,8 @@ export function MarketCard({
             )}
           </>
         )}
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   )
 }
 
