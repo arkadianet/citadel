@@ -114,6 +114,9 @@ html, body, #root {
   border: 1px solid var(--glass-border);
 }
 
+/* DEPRECATED: These .view-* classes will be removed when screens are refactored
+   to use the ui/ component library. Use components from ui/ instead. */
+
 /* ============================================================================
    Shared View Layout — consistent patterns across all protocol tabs
    ============================================================================ */
