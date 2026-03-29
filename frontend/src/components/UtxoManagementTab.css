@@ -12,40 +12,20 @@
   gap: var(--space-md);
 }
 
-.utxo-header {
+/* Header icon (PageHeader handles the rest) */
+.utxo-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-}
-
-.utxo-header h2 {
-  font-size: var(--text-xl);
-  font-weight: 700;
-  color: rgb(var(--text));
-  margin: 0;
-  line-height: 1.2;
-}
-
-.utxo-description {
-  font-size: var(--text-xs);
-  color: var(--slate-400);
-  margin: var(--space-xs) 0 0 0;
-}
-
-/* Sub-tab toggle bar */
-.utxo-subtab-bar {
-  /* base from .view-tabs */
-  width: fit-content;
-  flex-shrink: 0;
-}
-
-.utxo-subtab {
-  /* base from .view-tab */
-  font-weight: 600;
-}
-
-.utxo-subtab.active {
-  background: var(--emerald-500);
   color: white;
 }
+
+/* Sub-tab toggle now uses <Tabs> component */
 
 /* ============================================================================
    Consolidate Layout (two panels)

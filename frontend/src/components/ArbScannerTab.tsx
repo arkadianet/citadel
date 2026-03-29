@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { scanCircularArbs } from '../api/arb'
 import type { CircularArbSnapshot, CircularArb } from '../api/arb'
 import type { RouteHop } from '../api/router'
+import { PageHeader } from './ui'
 import './ArbScannerTab.css'
 
 interface ArbScannerTabProps {
@@ -63,21 +64,27 @@ export function ArbScannerTab({ walletAddress: _walletAddress }: ArbScannerTabPr
 
   return (
     <div className="arb-scanner-tab">
-      <div className="arb-scanner-header">
-        <div>
-          <h2>Arb Scanner</h2>
-          <p className="arb-scanner-desc">
-            Scan for circular arbitrage opportunities across all DEX pools
-          </p>
-        </div>
-        <button
-          className="arb-scanner-refresh"
-          onClick={doScan}
-          disabled={loading}
-        >
-          {loading ? 'Scanning...' : 'Refresh'}
-        </button>
-      </div>
+      <PageHeader
+        icon={
+          <div className="arb-scanner-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+          </div>
+        }
+        title="Arb Scanner"
+        subtitle="Scan for circular arbitrage opportunities across all DEX pools"
+        actions={
+          <button
+            className="arb-scanner-refresh"
+            onClick={doScan}
+            disabled={loading}
+          >
+            {loading ? 'Scanning...' : 'Refresh'}
+          </button>
+        }
+      />
 
       {error && <div className="message error">{error}</div>}
 

@@ -7,6 +7,7 @@ import type { BurnItemInput, BurnedTokenEntry } from '../api/burn'
 import { getCachedTokenInfo } from '../api/tokenCache'
 import { formatTokenAmount } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
+import { PageHeader, EmptyState } from './ui'
 import './BurnTab.css'
 
 interface BurnTabProps {
@@ -288,17 +289,29 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
     setSearch('')
   }
 
+  const burnPageHeader = (
+    <PageHeader
+      icon={
+        <div className="burn-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14l-4-4h3V8h2v4h3l-4 4z" />
+          </svg>
+        </div>
+      }
+      title="Token Burn"
+      subtitle="Permanently destroy tokens by removing them from circulation."
+    />
+  )
+
   // Empty states
   if (!isConnected || !walletAddress) {
     return (
       <div className="burn-tab">
-        <div className="burn-header">
-          <h2>Token Burn</h2>
-          <p className="burn-description">Permanently destroy tokens by removing them from circulation.</p>
-        </div>
-        <div className="message warning">
-          {!isConnected ? 'Connect to a node to use the burn tool.' : 'Connect your wallet to burn tokens.'}
-        </div>
+        {burnPageHeader}
+        <EmptyState
+          title={!isConnected ? 'Node Required' : 'Wallet Required'}
+          description={!isConnected ? 'Connect to a node to use the burn tool.' : 'Connect your wallet to burn tokens.'}
+        />
       </div>
     )
   }
@@ -307,10 +320,7 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
   if (step === 'select') {
     return (
       <div className="burn-tab">
-        <div className="burn-header">
-          <h2>Token Burn</h2>
-          <p className="burn-description">Permanently destroy tokens by removing them from circulation. Select multiple tokens to burn in a single transaction.</p>
-        </div>
+        {burnPageHeader}
 
         <div className="burn-layout">
           {/* Token picker */}
@@ -479,9 +489,10 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
     const cartEntries = Array.from(burnCart.entries())
     return (
       <div className="burn-tab">
-        <div className="burn-header">
-          <h2>Confirm Token Burn</h2>
-        </div>
+        <PageHeader
+          icon={<div className="burn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14l-4-4h3V8h2v4h3l-4 4z" /></svg></div>}
+          title="Confirm Token Burn"
+        />
         <div className="burn-centered-card">
           <div className="card">
             <div className="card-content">

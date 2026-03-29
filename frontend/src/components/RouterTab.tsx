@@ -15,6 +15,7 @@ import { startSign, getTxStatus } from '../api/types'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import { formatTokenAmount } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
+import { PageHeader } from './ui'
 import './RouterTab.css'
 
 const SIGUSD_TOKEN_ID = '03faf2cb329f2e90d6d23b58d91bbb6c046aa143261cc21f52fbe2824bfcbf04'
@@ -254,12 +255,17 @@ export function RouterTab({
 
   return (
     <div className="router-tab">
-      <div className="router-header">
-        <h2 className="router-title">SigUSD Router</h2>
-        <div className="router-subtitle">
-          Find the cheapest path to acquire SigUSD across DEX routes and protocol minting
-        </div>
-      </div>
+      <PageHeader
+        icon={
+          <div className="router-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+              <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+            </svg>
+          </div>
+        }
+        title="SigUSD Router"
+        subtitle="Find the cheapest path to acquire SigUSD across DEX routes and protocol minting"
+      />
 
       {/* Market Context */}
       <div className="router-context">

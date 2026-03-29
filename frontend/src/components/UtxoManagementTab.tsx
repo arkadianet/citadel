@@ -12,6 +12,7 @@ import { getCachedTokenInfo } from '../api/tokenCache'
 import { TX_FEE_NANO, MIN_BOX_VALUE_NANO } from '../constants'
 import { formatErg, formatTokenAmount } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
+import { PageHeader, Tabs, EmptyState } from './ui'
 import './UtxoManagementTab.css'
 
 interface UtxoManagementTabProps {
@@ -350,13 +351,24 @@ export function UtxoManagementTab({
   if (!isConnected || !walletAddress) {
     return (
       <div className="utxo-tab">
-        <div className="utxo-header">
-          <h2>UTXO Management</h2>
-          <p className="utxo-description">Consolidate or split your boxes for better UTXO hygiene.</p>
-        </div>
-        <div className="message warning">
-          {!isConnected ? 'Connect to a node to manage UTXOs.' : 'Connect your wallet to manage UTXOs.'}
-        </div>
+        <PageHeader
+          icon={
+            <div className="utxo-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+              </svg>
+            </div>
+          }
+          title="UTXO Management"
+          subtitle="Consolidate or split your boxes for better UTXO hygiene."
+        />
+        <EmptyState
+          title={!isConnected ? 'Node Required' : 'Wallet Required'}
+          description={!isConnected ? 'Connect to a node to manage UTXOs.' : 'Connect your wallet to manage UTXOs.'}
+        />
       </div>
     )
   }
@@ -677,26 +689,31 @@ export function UtxoManagementTab({
 
   return (
     <div className="utxo-tab">
-      <div className="utxo-header">
-        <h2>UTXO Management</h2>
-        <p className="utxo-description">Consolidate or split your boxes for better UTXO hygiene.</p>
-      </div>
+      <PageHeader
+        icon={
+          <div className="utxo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+            </svg>
+          </div>
+        }
+        title="UTXO Management"
+        subtitle="Consolidate or split your boxes for better UTXO hygiene."
+      />
 
       {/* Sub-tab toggle */}
-      <div className="utxo-subtab-bar view-tabs">
-        <button
-          className={`utxo-subtab view-tab ${subTab === 'consolidate' ? 'active' : ''}`}
-          onClick={() => { setSubTab('consolidate'); handleReset() }}
-        >
-          Consolidate
-        </button>
-        <button
-          className={`utxo-subtab view-tab ${subTab === 'split' ? 'active' : ''}`}
-          onClick={() => { setSubTab('split'); handleReset() }}
-        >
-          Split
-        </button>
-      </div>
+      <Tabs
+        tabs={[
+          { id: 'consolidate', label: 'Consolidate' },
+          { id: 'split', label: 'Split' },
+        ]}
+        activeId={subTab}
+        onChange={(id) => { setSubTab(id as SubTab); handleReset() }}
+        size="compact"
+      />
 
       {/* ================================================================= */}
       {/* Consolidate sub-tab                                               */}
