@@ -1,0 +1,56 @@
+/* ============================================================================
+   Design Tokens — locked values for the entire app
+   ============================================================================ */
+
+:root {
+  /* ── Spacing (4px base) ── */
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-6: 24px;
+  --ds-space-8: 32px;
+
+  /* ── Radius ── */
+  --ds-radius-sm: 6px;
+  --ds-radius-md: 10px;
+  --ds-radius-lg: 14px;
+
+  /* ── Typography roles ── */
+  --ds-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --ds-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --ds-text-page-title: 600 var(--text-lg) / 1.2 var(--ds-font-sans);
+  --ds-text-section-title: 600 var(--text-xs) / 1.4 var(--ds-font-sans);
+  --ds-text-card-title: 600 var(--text-sm) / 1.3 var(--ds-font-sans);
+  --ds-text-body: 400 var(--text-sm) / 1.5 var(--ds-font-sans);
+  --ds-text-label: 500 var(--text-xs) / 1.4 var(--ds-font-sans);
+  --ds-text-micro: 500 11px / 1.3 var(--ds-font-sans);
+  --ds-text-metric: 700 var(--text-xl) / 1.1 var(--ds-font-mono);
+  --ds-text-metric-sm: 600 var(--text-sm) / 1.2 var(--ds-font-mono);
+
+  /* ── Semantic colors (status only — never protocol identity) ── */
+  --ds-success: #34d399;
+  --ds-success-bg: rgba(52, 211, 153, 0.12);
+  --ds-warning: #fbbf24;
+  --ds-warning-bg: rgba(251, 191, 36, 0.12);
+  --ds-danger: #f87171;
+  --ds-danger-bg: rgba(248, 113, 113, 0.12);
+  --ds-info: #60a5fa;
+  --ds-info-bg: rgba(96, 165, 250, 0.12);
+  --ds-neutral: var(--slate-400);
+  --ds-neutral-bg: rgba(148, 163, 184, 0.1);
+
+  /* ── Surface styles ── */
+  --ds-surface-base: var(--glass-display);
+  --ds-surface-elevated: var(--glass-action);
+  --ds-surface-chrome: var(--glass-chrome);
+  --ds-border: var(--glass-border);
+  --ds-border-hover: var(--glass-border-hover);
+  --ds-blur: var(--glass-blur);
+
+  /* ── Card anatomy ── */
+  --ds-card-padding: var(--ds-space-4);
+  --ds-card-radius: var(--ds-radius-lg);
+  --ds-card-gap: var(--ds-space-3);
+}
