@@ -1,0 +1,59 @@
+.ds-card {
+  border-radius: var(--ds-card-radius);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
+  overflow: hidden;
+}
+
+.ds-card--display {
+  background: var(--ds-surface-base);
+  backdrop-filter: var(--ds-blur);
+  -webkit-backdrop-filter: var(--ds-blur);
+  border: 1px solid var(--ds-border);
+}
+
+.ds-card--action {
+  background: var(--ds-surface-elevated);
+  backdrop-filter: var(--ds-blur);
+  -webkit-backdrop-filter: var(--ds-blur);
+  border: 1px solid var(--glass-border-strong);
+}
+
+.ds-card[role="button"] {
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+
+.ds-card[role="button"]:hover {
+  border-color: var(--ds-border-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3), var(--glass-inner-edge);
+}
+
+.ds-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+  padding: var(--ds-card-padding);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+}
+
+.ds-card-body {
+  padding: var(--ds-card-padding);
+}
+
+.ds-card-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-3) var(--ds-card-padding);
+  border-top: 1px solid rgba(148, 163, 184, 0.06);
+}
+
+.ds-card-body:first-child {
+  padding-top: var(--ds-card-padding);
+}
+
+.ds-card-body:last-child {
+  padding-bottom: var(--ds-card-padding);
+}
