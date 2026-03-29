@@ -1,0 +1,33 @@
+.ds-stat-tile {
+  background: var(--ds-surface-base);
+  backdrop-filter: var(--ds-blur);
+  -webkit-backdrop-filter: var(--ds-blur);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  padding: var(--ds-card-padding);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
+}
+
+.ds-stat-label {
+  font: var(--ds-text-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--slate-400);
+  margin-bottom: var(--ds-space-1);
+}
+
+.ds-stat-value {
+  font: var(--ds-text-metric);
+  font-variant-numeric: tabular-nums;
+  color: rgb(var(--text));
+}
+
+.ds-stat-change {
+  font: var(--ds-text-micro);
+  font-family: var(--ds-font-mono);
+  margin-top: var(--ds-space-1);
+}
+
+.ds-stat-change.success { color: var(--ds-success); }
+.ds-stat-change.danger { color: var(--ds-danger); }
+.ds-stat-change.neutral { color: var(--ds-neutral); }
