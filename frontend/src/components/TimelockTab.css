@@ -22,16 +22,8 @@
 }
 
 /* ============================================================================
-   Header
+   Header — icon only (PageHeader handles the rest)
    ============================================================================ */
-
-.timelock-header {
-  flex-shrink: 0;
-}
-
-.timelock-header-row {
-  /* layout now from .view-header */
-}
 
 .timelock-icon {
   width: 36px;
@@ -48,20 +40,6 @@
 .timelock-icon svg {
   width: 20px;
   height: 20px;
-}
-
-.timelock-header h2 {
-  font-size: var(--text-lg);
-  font-weight: 700;
-  color: rgb(var(--text));
-  margin: 0;
-  line-height: 1.2;
-}
-
-.timelock-description {
-  color: var(--slate-400);
-  font-size: var(--text-xs);
-  margin: 0;
 }
 
 .timelock-create-btn {
@@ -87,71 +65,7 @@
   cursor: not-allowed;
 }
 
-/* ============================================================================
-   Info Bar
-   ============================================================================ */
-
-.timelock-info-bar {
-  /* base from .view-info-bar; override background/border */
-  background: rgba(30, 41, 59, 0.5);
-  border-color: rgba(51, 65, 85, 0.5);
-  flex-shrink: 0;
-}
-
-.timelock-info-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.timelock-info-label {
-  color: var(--slate-500);
-}
-
-.timelock-info-value {
-  color: rgb(var(--text));
-  font-weight: 500;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.timelock-info-divider {
-  width: 1px;
-  height: var(--space-md);
-  background: var(--slate-700);
-}
-
-/* ============================================================================
-   Filter / Tab Bar
-   ============================================================================ */
-
-.timelock-tab-bar {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.timelock-tab-btn {
-  padding: var(--space-xs) var(--space-md);
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--slate-400);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.timelock-tab-btn.active {
-  background: #6366f1;
-  color: white;
-}
-
-.timelock-tab-btn:hover:not(.active) {
-  color: var(--slate-200);
-  background: rgba(255, 255, 255, 0.05);
-}
+/* Info bar and filter tabs now handled by PageHeader + Tabs components */
 
 .timelock-controls {
   display: flex;
@@ -222,21 +136,7 @@
    ============================================================================ */
 
 .timelock-card {
-  background: var(--glass-display);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  transition: border-color 0.2s, transform 0.2s;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
-}
-
-.timelock-card:hover {
-  border-color: var(--glass-border-hover);
-  transform: translateY(-2px);
 }
 
 .timelock-card.own {

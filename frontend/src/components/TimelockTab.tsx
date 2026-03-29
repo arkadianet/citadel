@@ -16,6 +16,7 @@ import { formatErg, blocksToTime, truncateAddress } from '../utils/format'
 import { startSign, getTxStatus } from '../api/types'
 import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
+import { PageHeader, Tabs, Card, CardHeader, CardBody, CardFooter, Badge, EmptyState } from './ui'
 import './TimelockTab.css'
 
 interface WalletBalance {
@@ -96,7 +97,7 @@ export function TimelockTab({
   if (!isConnected) {
     return (
       <div className="timelock-tab">
-        <div className="timelock-notice">Connect to a node to view timelocks</div>
+        <EmptyState title="Node Not Connected" description="Connect to a node to view timelocks." />
       </div>
     )
   }
@@ -104,9 +105,7 @@ export function TimelockTab({
   if (capabilityTier === 'Basic') {
     return (
       <div className="timelock-tab">
-        <div className="timelock-notice">
-          MewLock requires an indexed node (Full or Extra tier)
-        </div>
+        <EmptyState title="Indexed Node Required" description="MewLock requires an indexed node (Full or Extra tier)." />
       </div>
     )
   }
@@ -114,18 +113,23 @@ export function TimelockTab({
   return (
     <div className="timelock-tab">
       {/* Header */}
-      <div className="timelock-header">
-        <div className="timelock-header-row view-header">
+      <PageHeader
+        icon={
           <div className="timelock-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
               <path d="M12 6v6l4 2" />
             </svg>
           </div>
-          <div>
-            <h2>MewLock Timelocks</h2>
-            <p className="timelock-description">Lock ERG and tokens until a future block height</p>
-          </div>
+        }
+        title="MewLock Timelocks"
+        subtitle="Lock ERG and tokens until a future block height"
+        info={state ? [
+          { label: 'Total Locks', value: String(state.totalLocks) },
+          { label: 'My Locks', value: String(state.ownLocks) },
+          { label: 'Height', value: state.currentHeight.toLocaleString() },
+        ] : undefined}
+        actions={
           <button
             className="timelock-create-btn"
             onClick={() => setShowCreateModal(true)}
@@ -133,50 +137,20 @@ export function TimelockTab({
           >
             + Create Lock
           </button>
-        </div>
-      </div>
-
-      {/* Info Bar */}
-      {state && (
-        <div className="timelock-info-bar view-info-bar">
-          <div className="timelock-info-item">
-            <span className="timelock-info-label">Total Locks</span>
-            <span className="timelock-info-value">{state.totalLocks}</span>
-          </div>
-          <div className="timelock-info-divider" />
-          <div className="timelock-info-item">
-            <span className="timelock-info-label">My Locks</span>
-            <span className="timelock-info-value">{state.ownLocks}</span>
-          </div>
-          <div className="timelock-info-divider" />
-          <div className="timelock-info-item">
-            <span className="timelock-info-label">Height</span>
-            <span className="timelock-info-value">{state.currentHeight.toLocaleString()}</span>
-          </div>
-        </div>
-      )}
+        }
+      />
 
       {/* Filter Bar */}
-      <div className="timelock-tab-bar">
-        {(['all', 'mine', 'unlockable'] as Filter[]).map(f => (
-          <button
-            key={f}
-            className={`timelock-tab-btn ${filter === f ? 'active' : ''}`}
-            onClick={() => setFilter(f)}
-          >
-            {f === 'all' ? 'All Locks' : f === 'mine' ? 'My Locks' : 'Unlockable'}
-          </button>
-        ))}
-        <div className="timelock-controls">
-          <button
-            className="timelock-refresh-btn"
-            onClick={fetchState}
-            disabled={loading}
-          >
-            {loading ? 'Loading...' : 'Refresh'}
-          </button>
-        </div>
-      </div>
+      <Tabs
+        tabs={[
+          { id: 'all', label: 'All Locks' },
+          { id: 'mine', label: 'My Locks' },
+          { id: 'unlockable', label: 'Unlockable' },
+        ]}
+        activeId={filter}
+        onChange={(id) => setFilter(id as Filter)}
+        size="compact"
+      />
 
       {/* Sort Bar */}
       <div className="timelock-sort-bar view-controls">
@@ -209,13 +183,16 @@ export function TimelockTab({
 
       {/* Empty State */}
       {state && filteredLocks.length === 0 && !loading && (
-        <div className="empty-state">
-          {filter === 'all'
-            ? 'No timelocks found on chain'
-            : filter === 'mine'
-            ? 'You have no timelocks'
-            : 'No unlockable locks found'}
-        </div>
+        <EmptyState
+          title="No Timelocks"
+          description={
+            filter === 'all'
+              ? 'No timelocks found on chain.'
+              : filter === 'mine'
+              ? 'You have no timelocks.'
+              : 'No unlockable locks found.'
+          }
+        />
       )}
 
       {/* Card Grid */}
@@ -277,8 +254,8 @@ function LockCard({
   const isLocked = lock.blocksRemaining > 0
 
   return (
-    <div className={`timelock-card ${lock.isOwn ? 'own' : ''} ${lock.isUnlockable ? 'unlockable' : ''}`}>
-      <div className="timelock-card-header">
+    <Card className={`timelock-card ${lock.isOwn ? 'own' : ''} ${lock.isUnlockable ? 'unlockable' : ''}`} surface="display">
+      <CardHeader className="timelock-card-header">
         <div className="timelock-card-header-left">
           {lock.lockName && (
             <span className="timelock-lock-name">{lock.lockName}</span>
@@ -288,14 +265,14 @@ function LockCard({
               Lock #{lock.boxId.slice(0, 8)}
             </span>
           )}
-          {lock.isOwn && <span className="timelock-own-badge">Your Lock</span>}
+          {lock.isOwn && <Badge variant="info">Your Lock</Badge>}
         </div>
-        <span className={`timelock-status-badge ${isLocked ? 'locked' : 'unlockable'}`}>
+        <Badge variant={isLocked ? 'warning' : 'success'}>
           {isLocked ? 'Locked' : 'Unlockable'}
-        </span>
-      </div>
+        </Badge>
+      </CardHeader>
 
-      <div className="timelock-card-body">
+      <CardBody className="timelock-card-body">
         <div className="timelock-row">
           <span className="timelock-row-label">ERG Value</span>
           <span className="timelock-row-value highlight">{formatErg(lock.ergValue)} ERG</span>
@@ -339,16 +316,16 @@ function LockCard({
             </span>
           </div>
         )}
-      </div>
+      </CardBody>
 
       {lock.isUnlockable && (
-        <div className="timelock-card-actions">
+        <CardFooter className="timelock-card-actions">
           <button className="timelock-action-btn primary" onClick={onUnlock}>
             Unlock
           </button>
-        </div>
+        </CardFooter>
       )}
-    </div>
+    </Card>
   )
 }
 

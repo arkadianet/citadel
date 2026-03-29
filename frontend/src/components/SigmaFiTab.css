@@ -22,16 +22,8 @@
 }
 
 /* ============================================================================
-   Header
+   Header — icon only (PageHeader handles the rest)
    ============================================================================ */
-
-.sigmafi-header {
-  flex-shrink: 0;
-}
-
-.sigmafi-header-row {
-  /* layout now from .view-header */
-}
 
 .sigmafi-icon {
   width: 36px;
@@ -50,84 +42,10 @@
   height: 20px;
 }
 
-.sigmafi-header h2 {
-  font-size: var(--text-lg);
-  font-weight: 700;
-  color: rgb(var(--text));
-  margin: 0;
-  line-height: 1.2;
-}
+/* Tab bar now uses <Tabs> component */
 
-.sigmafi-description {
-  color: var(--slate-400);
-  font-size: var(--text-xs);
-  margin: 0;
-}
-
-/* ============================================================================
-   Info Bar
-   ============================================================================ */
-
-.sigmafi-info-bar {
-  /* base from .view-info-bar; override background/border */
-  background: rgba(30, 41, 59, 0.5);
-  border-color: rgba(51, 65, 85, 0.5);
+.sigmafi-controls-bar {
   flex-shrink: 0;
-}
-
-.sigmafi-info-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.sigmafi-info-label {
-  color: var(--slate-500);
-}
-
-.sigmafi-info-value {
-  color: rgb(var(--text));
-  font-weight: 500;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.sigmafi-info-divider {
-  width: 1px;
-  height: var(--space-md);
-  background: var(--slate-700);
-}
-
-/* ============================================================================
-   Tab Bar
-   ============================================================================ */
-
-.sigmafi-tab-bar {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.sigmafi-tab-btn {
-  padding: var(--space-xs) var(--space-md);
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--slate-400);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.sigmafi-tab-btn.active {
-  background: var(--emerald-500);
-  color: white;
-}
-
-.sigmafi-tab-btn:hover:not(.active) {
-  color: var(--slate-200);
-  background: rgba(255, 255, 255, 0.05);
 }
 
 .sigmafi-controls {

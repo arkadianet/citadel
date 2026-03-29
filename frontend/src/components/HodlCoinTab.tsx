@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getHodlCoinBanks, type HodlBankState } from '../api/hodlcoin'
 import { formatErg } from '../utils/format'
 import { HodlCoinModal } from './HodlCoinModal'
+import { PageHeader, Card, CardHeader, CardBody, CardFooter, EmptyState } from './ui'
 import './HodlCoinTab.css'
 
 const HODL_ICON_MAP: Record<string, string> = {
@@ -93,45 +94,39 @@ export function HodlCoinTab({
   if (!isConnected || capabilityTier === 'Basic') {
     return (
       <div className="hodl-tab">
-        <div className="hodl-header">
-          <div className="hodl-header-row view-header">
+        <PageHeader
+          icon={
             <div className="hodl-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="28" height="28">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
                 <path d="M12 2L2 7l10 5 10-5-10-5z" />
                 <path d="M2 17l10 5 10-5" />
                 <path d="M2 12l10 5 10-5" />
               </svg>
             </div>
-            <div>
-              <h2>HodlCoin</h2>
-              <p className="hodl-description">Phoenix Hold Coin Protocol</p>
-            </div>
-          </div>
-        </div>
-        <div className="message warning">
-          Connect to an indexed node to use HodlCoin.
-        </div>
+          }
+          title="HodlCoin"
+          subtitle="Phoenix Hold Coin Protocol"
+        />
+        <EmptyState title="Node Required" description="Connect to an indexed node to use HodlCoin." />
       </div>
     )
   }
 
   return (
     <div className="hodl-tab">
-      <div className="hodl-header">
-        <div className="hodl-header-row">
+      <PageHeader
+        icon={
           <div className="hodl-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="28" height="28">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
               <path d="M12 2L2 7l10 5 10-5-10-5z" />
               <path d="M2 17l10 5 10-5" />
               <path d="M2 12l10 5 10-5" />
             </svg>
           </div>
-          <div>
-            <h2>HodlCoin</h2>
-            <p className="hodl-description">Deposit ERG to mint hodlTokens. The price can only go up over time.</p>
-          </div>
-        </div>
-      </div>
+        }
+        title="HodlCoin"
+        subtitle="Deposit ERG to mint hodlTokens. The price can only go up over time."
+      />
 
       {loading && banks.length === 0 && (
         <div className="hodl-loading">
@@ -152,8 +147,8 @@ export function HodlCoinTab({
           const name = bank.hodlTokenName || `hodl...${bank.hodlTokenId.slice(-6)}`
 
           return (
-            <div key={bank.singletonTokenId} className="hodl-bank-card">
-              <div className="hodl-bank-header">
+            <Card key={bank.singletonTokenId} className="hodl-bank-card" surface="display">
+              <CardHeader className="hodl-bank-header">
                 <div className="hodl-bank-name">
                   <BankAvatar name={name} />
                   <div>
@@ -162,39 +157,41 @@ export function HodlCoinTab({
                   </div>
                 </div>
                 <span className="hodl-bank-fee">{bank.totalFeePct.toFixed(1)}% fee</span>
-              </div>
+              </CardHeader>
 
-              <div className="hodl-bank-stats">
-                <div className="hodl-stat">
-                  <span className="hodl-stat-label">Price</span>
-                  <span className="hodl-stat-value">{formatErg(bank.priceNanoPerHodl * 1e9)} ERG</span>
+              <CardBody>
+                <div className="hodl-bank-stats">
+                  <div className="hodl-stat">
+                    <span className="hodl-stat-label">Price</span>
+                    <span className="hodl-stat-value">{formatErg(bank.priceNanoPerHodl * 1e9)} ERG</span>
+                  </div>
+                  <div className="hodl-stat">
+                    <span className="hodl-stat-label">TVL</span>
+                    <span className="hodl-stat-value">{formatErg(bank.tvlNanoErg)} ERG</span>
+                  </div>
+                  <div className="hodl-stat">
+                    <span className="hodl-stat-label">Circulating</span>
+                    <span className="hodl-stat-value">{(bank.circulatingSupply / bank.precisionFactor).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
+                  </div>
+                  <div className="hodl-stat">
+                    <span className="hodl-stat-label">Bank Fee</span>
+                    <span className="hodl-stat-value">{bank.bankFeePct.toFixed(1)}%</span>
+                  </div>
+                  <div className="hodl-stat">
+                    <span className="hodl-stat-label">Dev Fee</span>
+                    <span className="hodl-stat-value">{bank.devFeePct.toFixed(1)}%</span>
+                  </div>
                 </div>
-                <div className="hodl-stat">
-                  <span className="hodl-stat-label">TVL</span>
-                  <span className="hodl-stat-value">{formatErg(bank.tvlNanoErg)} ERG</span>
-                </div>
-                <div className="hodl-stat">
-                  <span className="hodl-stat-label">Circulating</span>
-                  <span className="hodl-stat-value">{(bank.circulatingSupply / bank.precisionFactor).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
-                </div>
-                <div className="hodl-stat">
-                  <span className="hodl-stat-label">Bank Fee</span>
-                  <span className="hodl-stat-value">{bank.bankFeePct.toFixed(1)}%</span>
-                </div>
-                <div className="hodl-stat">
-                  <span className="hodl-stat-label">Dev Fee</span>
-                  <span className="hodl-stat-value">{bank.devFeePct.toFixed(1)}%</span>
-                </div>
-              </div>
 
-              {walletAddress && userBalance.raw > 0 && (
-                <div className="hodl-balance-box">
-                  <span className="hodl-balance-label">Your Balance</span>
-                  <span className="hodl-balance-value">{userBalance.formatted} {name}</span>
-                </div>
-              )}
+                {walletAddress && userBalance.raw > 0 && (
+                  <div className="hodl-balance-box">
+                    <span className="hodl-balance-label">Your Balance</span>
+                    <span className="hodl-balance-value">{userBalance.formatted} {name}</span>
+                  </div>
+                )}
+              </CardBody>
 
-              <div className="hodl-bank-actions">
+              <CardFooter className="hodl-bank-actions">
                 <button
                   className="action-btn primary hodl-primary"
                   disabled={!walletAddress}
@@ -206,8 +203,8 @@ export function HodlCoinTab({
                   </svg>
                   Mint / Redeem
                 </button>
-              </div>
-            </div>
+              </CardFooter>
+            </Card>
           )
         })}
       </div>

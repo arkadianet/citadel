@@ -22,16 +22,8 @@
 }
 
 /* ============================================================================
-   Header
+   Header — icon only (PageHeader handles the rest)
    ============================================================================ */
-
-.hodl-header {
-  flex-shrink: 0;
-}
-
-.hodl-header-row {
-  /* layout now from .view-header */
-}
 
 .hodl-icon {
   width: 36px;
@@ -43,25 +35,6 @@
   justify-content: center;
   flex-shrink: 0;
   color: white;
-}
-
-.hodl-icon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.hodl-header h2 {
-  font-size: var(--text-lg);
-  font-weight: 700;
-  color: rgb(var(--text));
-  margin: 0;
-  line-height: 1.2;
-}
-
-.hodl-description {
-  color: var(--slate-400);
-  font-size: var(--text-xs);
-  margin: 0;
 }
 
 /* ============================================================================
@@ -94,13 +67,8 @@
 }
 
 .hodl-bank-card {
-  background: var(--glass-display);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid rgba(139, 92, 246, 0.2);
-  border-radius: var(--radius-lg);
+  border-color: rgba(139, 92, 246, 0.2);
   overflow: hidden;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
 }
 
 .hodl-bank-header {
