@@ -1170,7 +1170,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
       /* ================================================================= */
       <>
         <div className="swap-layout">
-        {/* Pool List Panel (N2T only) */}
+        {/* Pool List Panel */}
         <div className="pool-list-panel">
           <div className="pool-search">
             <input
@@ -1188,7 +1188,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                 <span>Loading pools...</span>
               </div>
             )}
-            {filteredPools.filter(p => p.pool_type === 'N2T').map(pool => (
+            {filteredPools.map(pool => (
               <button
                 key={pool.pool_id}
                 className={`pool-list-item ${lpPool?.pool_id === pool.pool_id ? 'selected' : ''}`}
@@ -1198,6 +1198,9 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                   {getUserLpBalance(pool) > 0 && <span className="wallet-dot" title="You hold LP tokens" />}
                   <PoolPairIcons pool={pool} />
                   <span className="pool-name">{getPoolDisplayName(pool)}</span>
+                  <span className="pool-type-badge" style={{ fontSize: '0.65rem', marginLeft: 4, opacity: 0.6 }}>
+                    {pool.pool_type}
+                  </span>
                 </div>
                 <div className="pool-item-meta">
                   {getUserLpBalance(pool) > 0 && (
@@ -1206,9 +1209,9 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                 </div>
               </button>
             ))}
-            {filteredPools.filter(p => p.pool_type === 'N2T').length === 0 && pools.length > 0 && (
+            {filteredPools.length === 0 && pools.length > 0 && (
               <div className="pool-list-empty">
-                <span>No N2T pools match your search</span>
+                <span>No pools match your search</span>
               </div>
             )}
           </div>
@@ -1223,15 +1226,22 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                   <PoolPairIcons pool={lpPool} />
                   <h3>{getPoolDisplayName(lpPool)}</h3>
                 </div>
-                <span className="pool-type-badge">N2T</span>
+                <span className="pool-type-badge">{lpPool.pool_type}</span>
               </div>
 
               {/* Pool Reserves */}
               <div className="swap-reserves">
-                <div className="reserve-item">
-                  <span className="reserve-label"><TokenIcon name="ERG" size={14} /> ERG Reserves</span>
-                  <span className="reserve-value">{formatErg(lpPool.erg_reserves ?? 0)}</span>
-                </div>
+                {lpPool.pool_type === 'N2T' ? (
+                  <div className="reserve-item">
+                    <span className="reserve-label"><TokenIcon name="ERG" size={14} /> ERG Reserves</span>
+                    <span className="reserve-value">{formatErg(lpPool.erg_reserves ?? 0)}</span>
+                  </div>
+                ) : (
+                  <div className="reserve-item">
+                    <span className="reserve-label"><TokenIcon name={lpPool.token_x?.name || 'Token X'} size={14} /> {lpPool.token_x?.name || 'Token X'} Reserves</span>
+                    <span className="reserve-value">{formatTokenAmount(lpPool.token_x?.amount ?? 0, lpPool.token_x?.decimals ?? 0)}</span>
+                  </div>
+                )}
                 <div className="reserve-item">
                   <span className="reserve-label"><TokenIcon name={lpPool.token_y.name || 'Token'} size={14} /> {lpPool.token_y.name || 'Token'} Reserves</span>
                   <span className="reserve-value">{formatTokenAmount(lpPool.token_y.amount, lpPool.token_y.decimals ?? 0)}</span>
