@@ -417,10 +417,13 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
 
   const handleLpDeposit = useCallback(async () => {
     if (!lpPool || !walletAddress) return
-    const ergNano = Math.floor(parseFloat(depositErgInput || '0') * 1e9)
+
+    const isT2T = lpPool.pool_type === 'T2T'
+    const xDecimals = isT2T ? (lpPool.token_x?.decimals ?? 0) : 9
+    const xRaw = Math.floor(parseFloat(depositErgInput || '0') * Math.pow(10, xDecimals))
     const tokenDecimals = lpPool.token_y.decimals ?? 0
     const tokenRaw = Math.floor(parseFloat(depositTokenInput || '0') * Math.pow(10, tokenDecimals))
-    if (ergNano <= 0 || tokenRaw <= 0) return
+    if (xRaw <= 0 || tokenRaw <= 0) return
 
     setLpTxLoading(true)
     setLpTxError(null)
@@ -429,20 +432,21 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
       const nodeStatus = await invoke<{ chain_height: number }>('get_node_status')
 
       let buildResult: AmmLpBuildResponse
-      if (lpSwapMode === 'direct') {
+      if (lpSwapMode === 'direct' || isT2T) {
         buildResult = await buildAmmLpDepositTx(
-          lpPool.pool_id, ergNano, tokenRaw, walletAddress, utxos as object[], nodeStatus.chain_height
+          lpPool.pool_id, xRaw, tokenRaw, walletAddress, utxos as object[], nodeStatus.chain_height
         )
       } else {
         buildResult = await buildAmmLpDepositOrder(
-          lpPool.pool_id, ergNano, tokenRaw, walletAddress, utxos as object[], nodeStatus.chain_height
+          lpPool.pool_id, xRaw, tokenRaw, walletAddress, utxos as object[], nodeStatus.chain_height
         )
       }
 
-      const tokenName = lpPool.token_y.name || 'Token'
+      const xName = isT2T ? (lpPool.token_x?.name || 'Token X') : 'ERG'
+      const yName = lpPool.token_y.name || 'Token'
       const signResult = await startSign(
         buildResult.unsignedTx,
-        `Add liquidity: ${depositErgInput} ERG + ${depositTokenInput} ${tokenName}`
+        `Add liquidity: ${depositErgInput} ${xName} + ${depositTokenInput} ${yName}`
       )
       lpFlow.startSigning(signResult.request_id, signResult.ergopay_url, signResult.nautilus_url)
       setLpTxStep('signing')
@@ -459,6 +463,8 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
     const lpRaw = Math.floor(parseFloat(redeemLpInput || '0'))
     if (lpRaw <= 0) return
 
+    const isT2T = lpPool.pool_type === 'T2T'
+
     setLpTxLoading(true)
     setLpTxError(null)
     try {
@@ -466,7 +472,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
       const nodeStatus = await invoke<{ chain_height: number }>('get_node_status')
 
       let buildResult: AmmLpBuildResponse
-      if (lpSwapMode === 'direct') {
+      if (lpSwapMode === 'direct' || isT2T) {
         buildResult = await buildAmmLpRedeemTx(
           lpPool.pool_id, lpRaw, walletAddress, utxos as object[], nodeStatus.chain_height
         )
@@ -1346,23 +1352,44 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
 
                 {lpMode === 'deposit' ? (
                   <>
-                    {/* Deposit Form */}
+                    {/* X Amount (ERG for N2T, Token X for T2T) */}
                     <div className="swap-input-section">
                       <div className="swap-field">
                         <div className="swap-field-header">
-                          <span className="swap-field-label">ERG Amount</span>
+                          <span className="swap-field-label">
+                            {lpPool.pool_type === 'N2T' ? 'ERG Amount' : `${lpPool.token_x?.name || 'Token X'} Amount`}
+                          </span>
                           <span className="swap-field-balance">
-                            {walletBalance && <>Balance: {formatErg(walletBalance.erg_nano)}</>}
+                            {walletBalance && (() => {
+                              if (lpPool.pool_type === 'N2T') {
+                                return <>Balance: {formatErg(walletBalance.erg_nano)}</>
+                              }
+                              const token = walletBalance.tokens.find(t => t.token_id === lpPool.token_x?.token_id)
+                              return token ? <>Balance: {formatTokenAmount(token.amount, token.decimals)}</> : null
+                            })()}
                           </span>
                         </div>
                         <div className="swap-field-input">
-                          <input type="number" value={depositErgInput} onChange={e => handleDepositErgChange(e.target.value)} placeholder="0.0" min="0" step="0.1" />
+                          <input type="number" value={depositErgInput} onChange={e => handleDepositErgChange(e.target.value)} placeholder="0.0" min="0" step={lpPool.pool_type === 'N2T' ? '0.1' : (lpPool.token_x?.decimals === 0 ? '1' : '0.001')} />
                           <button className="max-btn" onClick={() => {
                             if (!walletBalance) return
-                            const available = Math.max(0, walletBalance.erg_nano - 10_000_000)
-                            handleDepositErgChange((available / 1e9).toFixed(4))
+                            if (lpPool.pool_type === 'N2T') {
+                              const available = Math.max(0, walletBalance.erg_nano - 10_000_000)
+                              handleDepositErgChange((available / 1e9).toFixed(4))
+                            } else {
+                              const token = walletBalance.tokens.find(t => t.token_id === lpPool.token_x?.token_id)
+                              if (token) {
+                                const xDecimals = lpPool.token_x?.decimals ?? 0
+                                handleDepositErgChange(xDecimals > 0 ? (token.amount / Math.pow(10, xDecimals)).toFixed(xDecimals) : token.amount.toString())
+                              }
+                            }
                           }} disabled={!walletBalance}>MAX</button>
-                          <span className="swap-field-token"><TokenIcon name="ERG" size={16} /> ERG</span>
+                          <span className="swap-field-token">
+                            {lpPool.pool_type === 'N2T'
+                              ? <><TokenIcon name="ERG" size={16} /> ERG</>
+                              : <><TokenIcon name={lpPool.token_x?.name || 'Token X'} size={16} /> {lpPool.token_x?.name || 'Token X'}</>
+                            }
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1425,14 +1452,23 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                       </div>
                     </div>
 
-                    {/* ERG Output (read-only) */}
+                    {/* X Output (ERG for N2T, Token X for T2T) */}
                     <div className="output-display">
                       <div className="output-header">
-                        <span className="swap-field-label">ERG to Receive</span>
-                        <span className="swap-field-token"><TokenIcon name="ERG" size={16} /> ERG</span>
+                        <span className="swap-field-label">
+                          {lpPool.pool_type === 'N2T' ? 'ERG to Receive' : `${lpPool.token_x?.name || 'Token X'} to Receive`}
+                        </span>
+                        <span className="swap-field-token">
+                          {lpPool.pool_type === 'N2T'
+                            ? <><TokenIcon name="ERG" size={16} /> ERG</>
+                            : <><TokenIcon name={lpPool.token_x?.name || 'Token X'} size={16} /> {lpPool.token_x?.name || 'Token X'}</>
+                          }
+                        </span>
                       </div>
                       <div className="output-amount">
-                        {redeemErgOutput ? `${redeemErgOutput} ERG` : <span className="quote-placeholder">---</span>}
+                        {redeemErgOutput
+                          ? `${redeemErgOutput} ${lpPool.pool_type === 'N2T' ? 'ERG' : (lpPool.token_x?.name || 'Token X')}`
+                          : <span className="quote-placeholder">---</span>}
                       </div>
                     </div>
 
@@ -1448,7 +1484,8 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                   </>
                 )}
 
-                {/* Direct vs Proxy Toggle */}
+                {/* Direct vs Proxy Toggle (N2T only -- no T2T proxy contracts exist) */}
+                {lpPool.pool_type === 'N2T' && (
                 <div className="slippage-row">
                   <span className="slippage-label">Execution Mode</span>
                   <div className="slippage-options">
@@ -1464,6 +1501,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                     >Direct</button>
                   </div>
                 </div>
+                )}
 
                 {/* Action Button */}
                 <button
