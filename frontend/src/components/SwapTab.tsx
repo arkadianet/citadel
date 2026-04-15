@@ -327,12 +327,19 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
 
   const handleDepositErgChange = useCallback((val: string) => {
     setDepositErgInput(val)
-    if (!lpPool || !lpPool.erg_reserves || lpPool.token_y.amount === 0) return
-    const ergVal = parseFloat(val || '0')
-    if (ergVal > 0) {
-      const ergNano = Math.floor(ergVal * 1e9)
-      const tokenNeeded = Math.floor(ergNano * lpPool.token_y.amount / lpPool.erg_reserves!)
-      const lpReward = Math.floor(ergNano * lpPool.lp_circulating / lpPool.erg_reserves!)
+    if (!lpPool) return
+
+    const isT2T = lpPool.pool_type === 'T2T'
+    const xReserves = isT2T ? (lpPool.token_x?.amount ?? 0) : (lpPool.erg_reserves ?? 0)
+    const yReserves = lpPool.token_y.amount
+    if (xReserves === 0 || yReserves === 0) return
+
+    const xDecimals = isT2T ? (lpPool.token_x?.decimals ?? 0) : 9
+    const xVal = parseFloat(val || '0')
+    if (xVal > 0) {
+      const xRaw = Math.floor(xVal * Math.pow(10, xDecimals))
+      const tokenNeeded = Math.floor(xRaw * yReserves / xReserves)
+      const lpReward = Math.floor(xRaw * lpPool.lp_circulating / xReserves)
       const tokenDecimals = lpPool.token_y.decimals ?? 0
       setDepositTokenInput(tokenDecimals > 0
         ? (tokenNeeded / Math.pow(10, tokenDecimals)).toFixed(tokenDecimals)
@@ -346,14 +353,23 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
 
   const handleDepositTokenChange = useCallback((val: string) => {
     setDepositTokenInput(val)
-    if (!lpPool || !lpPool.erg_reserves || lpPool.erg_reserves === 0) return
+    if (!lpPool) return
+
+    const isT2T = lpPool.pool_type === 'T2T'
+    const xReserves = isT2T ? (lpPool.token_x?.amount ?? 0) : (lpPool.erg_reserves ?? 0)
+    const yReserves = lpPool.token_y.amount
+    if (xReserves === 0 || yReserves === 0) return
+
+    const xDecimals = isT2T ? (lpPool.token_x?.decimals ?? 0) : 9
     const tokenDecimals = lpPool.token_y.decimals ?? 0
     const tokenVal = parseFloat(val || '0')
     if (tokenVal > 0) {
       const tokenRaw = Math.floor(tokenVal * Math.pow(10, tokenDecimals))
-      const ergNeeded = Math.floor(tokenRaw * lpPool.erg_reserves! / lpPool.token_y.amount)
-      const lpReward = Math.floor(tokenRaw * lpPool.lp_circulating / lpPool.token_y.amount)
-      setDepositErgInput((ergNeeded / 1e9).toFixed(4))
+      const xNeeded = Math.floor(tokenRaw * xReserves / yReserves)
+      const lpReward = Math.floor(tokenRaw * lpPool.lp_circulating / yReserves)
+      setDepositErgInput(xDecimals > 0
+        ? (xNeeded / Math.pow(10, xDecimals)).toFixed(Math.min(xDecimals, 4))
+        : xNeeded.toString())
       setDepositLpOutput(lpReward.toLocaleString())
     } else {
       setDepositErgInput('')
@@ -363,14 +379,21 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
 
   const handleRedeemLpChange = useCallback((val: string) => {
     setRedeemLpInput(val)
-    if (!lpPool || !lpPool.erg_reserves || lpPool.lp_circulating === 0) return
+    if (!lpPool || lpPool.lp_circulating === 0) return
+
+    const isT2T = lpPool.pool_type === 'T2T'
+    const xReserves = isT2T ? (lpPool.token_x?.amount ?? 0) : (lpPool.erg_reserves ?? 0)
+    const xDecimals = isT2T ? (lpPool.token_x?.decimals ?? 0) : 9
+
     const lpVal = parseFloat(val || '0')
     if (lpVal > 0) {
       const lpAmount = Math.floor(lpVal)
-      const ergOut = Math.floor(lpAmount * lpPool.erg_reserves! / lpPool.lp_circulating)
+      const xOut = Math.floor(lpAmount * xReserves / lpPool.lp_circulating)
       const tokenOut = Math.floor(lpAmount * lpPool.token_y.amount / lpPool.lp_circulating)
       const tokenDecimals = lpPool.token_y.decimals ?? 0
-      setRedeemErgOutput((ergOut / 1e9).toFixed(4))
+      setRedeemErgOutput(xDecimals > 0
+        ? (xOut / Math.pow(10, xDecimals)).toFixed(Math.min(xDecimals, 4))
+        : xOut.toString())
       setRedeemTokenOutput(tokenDecimals > 0
         ? (tokenOut / Math.pow(10, tokenDecimals)).toFixed(tokenDecimals)
         : tokenOut.toString())
