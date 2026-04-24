@@ -314,6 +314,8 @@ pub async fn build_direct_swap_tx(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
     recipient_address: Option<String>,
+    // Optional custom miner fee in nanoERG. None = network default.
+    miner_fee_nano: Option<u64>,
 ) -> Result<DirectSwapBuildResponse, String> {
     if amount == 0 {
         return Err("Amount must be greater than 0".to_string());
@@ -349,6 +351,7 @@ pub async fn build_direct_swap_tx(
         &user_ergo_tree,
         current_height,
         recipient_tree.as_deref(),
+        miner_fee_nano,
     )
     .str_err()?;
 

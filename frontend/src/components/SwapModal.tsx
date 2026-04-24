@@ -89,6 +89,10 @@ export function SwapModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Custom miner fee (ERG, display units). Empty string = use network default.
+  // Only applied to direct swaps — the proxy flow has its own fee model.
+  const [customFeeErg, setCustomFeeErg] = useState<string>('')
+
   const flow = useTransactionFlow({
     pollStatus: getTxStatus,
     isOpen,
@@ -148,6 +152,14 @@ export function SwapModal({
       let unsignedTx: object
 
       if (swapMode === 'direct') {
+        // Parse custom miner fee (ERG → nanoERG). Empty input = default fee.
+        const feeNano = (() => {
+          const s = customFeeErg.trim()
+          if (!s) return null
+          const n = parseFloat(s)
+          if (!isFinite(n) || n <= 0) return null
+          return Math.floor(n * 1e9)
+        })()
         const buildResult = await buildDirectSwapTx(
           pool.pool_id,
           inputType,
@@ -158,6 +170,7 @@ export function SwapModal({
           utxos,
           nodeStatus.chain_height,
           recipientOrNull,
+          feeNano,
         )
         unsignedTx = buildResult.unsigned_tx
       } else {
@@ -304,6 +317,26 @@ export function SwapModal({
                     onRecipientChange={setRecipientAddress}
                     addressValid={addressValid}
                   />
+
+                  {swapMode === 'direct' && (
+                    <div className="form-group">
+                      <label className="form-label">
+                        Miner fee (ERG) <span style={{ color: 'var(--slate-500)', fontWeight: 400 }}>· optional</span>
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        className="input"
+                        placeholder="0.0011 (default)"
+                        value={customFeeErg}
+                        onChange={e => setCustomFeeErg(e.target.value)}
+                      />
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--slate-500)', marginTop: 4 }}>
+                        Higher fee = better chance of landing in the next block when the pool is contested.
+                        Minimum 0.001 ERG.
+                      </div>
+                    </div>
+                  )}
 
                   {error && <div className="message error">{error}</div>}
 

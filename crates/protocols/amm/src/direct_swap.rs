@@ -50,7 +50,11 @@ pub fn build_direct_swap_eip12(
     user_ergo_tree: &str,
     current_height: i32,
     recipient_ergo_tree: Option<&str>,
+    // Miner fee in nanoERG. `None` uses the network default (`TX_FEE`).
+    // A custom fee must be at least the network minimum (1_000_000 nano).
+    miner_fee_nano: Option<u64>,
 ) -> Result<DirectSwapBuildResult, AmmError> {
+    let miner_fee = resolve_miner_fee(miner_fee_nano)?;
     match pool.pool_type {
         PoolType::N2T => build_n2t_direct_swap(
             pool_box,
@@ -61,6 +65,7 @@ pub fn build_direct_swap_eip12(
             user_ergo_tree,
             current_height,
             recipient_ergo_tree,
+            miner_fee,
         ),
         PoolType::T2T => build_t2t_direct_swap(
             pool_box,
@@ -71,7 +76,23 @@ pub fn build_direct_swap_eip12(
             user_ergo_tree,
             current_height,
             recipient_ergo_tree,
+            miner_fee,
         ),
+    }
+}
+
+/// Minimum a fee output can be (Ergo protocol's per-byte rule effectively
+/// puts the floor at ≥ 1_000_000 nano for any output with the miner-fee tree).
+const MIN_FEE_NANO: u64 = 1_000_000;
+
+fn resolve_miner_fee(custom: Option<u64>) -> Result<u64, AmmError> {
+    match custom {
+        None => Ok(TX_FEE),
+        Some(v) if v < MIN_FEE_NANO => Err(AmmError::TxBuildError(format!(
+            "Miner fee {} nano is below the network minimum {} nano",
+            v, MIN_FEE_NANO
+        ))),
+        Some(v) => Ok(v),
     }
 }
 
@@ -85,6 +106,7 @@ fn build_n2t_direct_swap(
     user_ergo_tree: &str,
     current_height: i32,
     recipient_ergo_tree: Option<&str>,
+    miner_fee: u64,
 ) -> Result<DirectSwapBuildResult, AmmError> {
     let pool_erg: u64 = pool_box
         .value
@@ -218,15 +240,15 @@ fn build_n2t_direct_swap(
         }
     };
 
-    let fee_output = Eip12Output::fee(TX_FEE as i64, current_height);
+    let fee_output = Eip12Output::fee(miner_fee as i64, current_height);
 
     let user_erg_needed = if is_erg_to_token {
         input_amount
             .checked_add(MIN_BOX_VALUE)
-            .and_then(|v| v.checked_add(TX_FEE))
+            .and_then(|v| v.checked_add(miner_fee))
             .ok_or_else(|| AmmError::TxBuildError("ERG cost overflow".to_string()))?
     } else {
-        TX_FEE
+        miner_fee
     };
 
     let token_requirement = match input {
@@ -343,7 +365,7 @@ fn build_n2t_direct_swap(
         output_amount,
         min_output,
         output_token: output_token_name,
-        miner_fee: TX_FEE,
+        miner_fee,
         total_erg_cost: user_erg_needed,
     };
 
@@ -364,6 +386,7 @@ fn build_t2t_direct_swap(
     user_ergo_tree: &str,
     current_height: i32,
     recipient_ergo_tree: Option<&str>,
+    miner_fee: u64,
 ) -> Result<DirectSwapBuildResult, AmmError> {
     let (input_token_id, input_amount) = match input {
         SwapInput::Erg { .. } => {
@@ -505,10 +528,10 @@ fn build_t2t_direct_swap(
         additional_registers: HashMap::new(),
     };
 
-    let fee_output = Eip12Output::fee(TX_FEE as i64, current_height);
+    let fee_output = Eip12Output::fee(miner_fee as i64, current_height);
 
     let user_erg_needed = MIN_BOX_VALUE
-        .checked_add(TX_FEE)
+        .checked_add(miner_fee)
         .ok_or_else(|| AmmError::TxBuildError("ERG cost overflow".to_string()))?;
 
     let selected = select_token_boxes(user_utxos, input_token_id, input_amount, user_erg_needed)
@@ -616,7 +639,7 @@ fn build_t2t_direct_swap(
         output_amount,
         min_output,
         output_token: output_token_name,
-        miner_fee: TX_FEE,
+        miner_fee,
         total_erg_cost: user_erg_needed,
     };
 
@@ -725,6 +748,7 @@ mod tests {
             "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             1_000_000,
             None,
+            None,
         );
 
         assert!(result.is_ok(), "Should build: {:?}", result.err());
@@ -790,6 +814,7 @@ mod tests {
             "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             1_000_000,
             None,
+            None,
         );
 
         assert!(result.is_ok(), "Should build: {:?}", result.err());
@@ -838,6 +863,7 @@ mod tests {
             "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             1_000_000,
             None,
+            None,
         );
 
         assert!(result.is_err());
@@ -861,6 +887,7 @@ mod tests {
             &[user_utxo],
             "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             1_000_000,
+            None,
             None,
         );
 
@@ -890,6 +917,7 @@ mod tests {
             &[user_utxo],
             "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             1_000_000,
+            None,
             None,
         )
         .unwrap();
@@ -1038,6 +1066,7 @@ mod tests {
             "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             1_000_000,
             None,
+            None,
         );
 
         assert!(result.is_ok(), "Should build T2T X->Y swap: {:?}", result.err());
@@ -1098,6 +1127,7 @@ mod tests {
             "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             1_000_000,
             None,
+            None,
         );
 
         assert!(result.is_ok(), "Should build T2T Y->X swap: {:?}", result.err());
@@ -1147,6 +1177,7 @@ mod tests {
             &[user_utxo],
             "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             1_000_000,
+            None,
             None,
         )
         .unwrap();
@@ -1206,6 +1237,7 @@ mod tests {
             "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             1_000_000,
             None,
+            None,
         );
 
         assert!(result.is_err());
@@ -1235,6 +1267,7 @@ mod tests {
             &[user_utxo],
             "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             1_000_000,
+            None,
             None,
         );
 
@@ -1280,6 +1313,7 @@ mod tests {
             &[user_utxo],
             "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             1_000_000,
+            None,
             None,
         );
 

@@ -280,6 +280,8 @@ export async function buildDirectSwapTx(
   userUtxos: object[],
   currentHeight: number,
   recipientAddress?: string | null,
+  // Optional custom miner fee in nanoERG. Omit (or pass null) for default.
+  minerFeeNano?: number | null,
 ): Promise<DirectSwapBuildResponse> {
   return await invoke<DirectSwapBuildResponse>('build_direct_swap_tx', {
     poolId,
@@ -291,6 +293,7 @@ export async function buildDirectSwapTx(
     userUtxos,
     currentHeight,
     recipientAddress: recipientAddress || null,
+    minerFeeNano: minerFeeNano ?? null,
   })
 }
 
