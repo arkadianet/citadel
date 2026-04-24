@@ -14,7 +14,8 @@ import { invoke } from '@tauri-apps/api/core'
 export interface BurnBuildResponse {
   unsignedTx: object
   burnedTokenId: string
-  burnedAmount: number
+  /// String-form precise amount (see note on BurnItemInput.amount).
+  burnedAmount: string
   minerFee: number
   changeErg: number
 }
@@ -22,12 +23,15 @@ export interface BurnBuildResponse {
 // Multi-burn types
 export interface BurnItemInput {
   tokenId: string
-  amount: number
+  /// Raw integer amount as a decimal string. Use a string (not number) so
+  /// LP-size values above 2^53 − 1 survive the JS→JSON round-trip.
+  amount: string
 }
 
 export interface BurnedTokenEntry {
   tokenId: string
-  amount: number
+  /// String-form precise amount (see `BurnItemInput.amount`).
+  amount: string
 }
 
 export interface MultiBurnBuildResponse {
@@ -44,7 +48,8 @@ export interface MultiBurnBuildResponse {
 
 export async function buildBurnTx(
   tokenId: string,
-  burnAmount: number,
+  /// Raw integer amount as a decimal string (see note on BurnItemInput.amount).
+  burnAmount: string,
   userErgoTree: string,
   userUtxos: object[],
   currentHeight: number,

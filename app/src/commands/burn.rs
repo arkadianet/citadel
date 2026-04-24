@@ -10,21 +10,29 @@ use super::StrErr;
 pub struct BurnBuildResponse {
     pub unsigned_tx: serde_json::Value,
     pub burned_token_id: String,
+    #[serde(with = "citadel_api::dto::u64_as_string")]
     pub burned_amount: u64,
     pub miner_fee: i64,
     pub change_erg: i64,
 }
 
-/// Build a token burn transaction
+/// Build a token burn transaction.
+///
+/// `burn_amount` is a JSON *string* — not a number — because Spectrum LP token
+/// amounts routinely exceed `Number.MAX_SAFE_INTEGER` (2^53 − 1) and would
+/// silently truncate in JS if sent as a JSON number.
 #[tauri::command]
 pub async fn build_burn_tx(
     _state: State<'_, AppState>,
     token_id: String,
-    burn_amount: u64,
+    burn_amount: String,
     user_ergo_tree: String,
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<BurnBuildResponse, String> {
+    let burn_amount: u64 = burn_amount
+        .parse()
+        .map_err(|e| format!("Invalid burn amount '{}': {}", burn_amount, e))?;
     if burn_amount == 0 {
         return Err("Burn amount must be greater than zero".to_string());
     }
@@ -83,6 +91,10 @@ pub struct MultiBurnBuildResponse {
 #[serde(rename_all = "camelCase")]
 pub struct BurnedTokenEntry {
     pub token_id: String,
+    /// Accept JSON string *or* number so the frontend can send amounts larger
+    /// than `Number.MAX_SAFE_INTEGER` (common for LP tokens) without precision
+    /// loss. Emits as string on the way back for the same reason.
+    #[serde(with = "citadel_api::dto::u64_as_string")]
     pub amount: u64,
 }
 

@@ -207,27 +207,63 @@ pub fn build_multi_burn_tx(
         }
     }
 
-    let change_erg = total_erg - TX_FEE;
+    let total_change_erg = total_erg - TX_FEE;
 
-    let change_assets: Vec<Eip12Asset> = token_totals
+    // Sort deterministically so the same input always produces the same output.
+    let mut change_assets: Vec<Eip12Asset> = token_totals
         .into_iter()
         .map(|(id, amt)| Eip12Asset::new(id, amt as i64))
         .collect();
+    change_assets.sort_by(|a, b| a.token_id.cmp(&b.token_id));
 
-    let change_output = Eip12Output {
-        value: change_erg.to_string(),
-        ergo_tree: user_ergo_tree.to_string(),
-        assets: change_assets,
-        creation_height: current_height,
-        additional_registers: HashMap::new(),
+    // An ErgoBox can hold at most `MAX_TOKENS_COUNT` distinct tokens. For
+    // token-heavy wallets (e.g. storage-rent bots) the consolidated change
+    // can blow past that limit, so we split into multiple change outputs of
+    // up to MAX_TOKENS_PER_BOX each. Each extra output gets MIN_BOX_VALUE;
+    // the last output absorbs the remainder.
+    const MAX_TOKENS_PER_BOX: usize = 255;
+    let min_box = citadel_core::constants::MIN_BOX_VALUE_NANO;
+
+    let n_chunks = change_assets.len().div_ceil(MAX_TOKENS_PER_BOX).max(1);
+    let extra_boxes = n_chunks.saturating_sub(1) as i64;
+    let reserved_for_extras = extra_boxes * min_box;
+    if total_change_erg < reserved_for_extras + min_box {
+        return Err(BurnError::InsufficientErg {
+            have: total_change_erg,
+            need: reserved_for_extras + min_box,
+        });
+    }
+    let last_box_erg = total_change_erg - reserved_for_extras;
+
+    let chunks: Vec<Vec<Eip12Asset>> = if change_assets.is_empty() {
+        vec![vec![]]
+    } else {
+        change_assets
+            .chunks(MAX_TOKENS_PER_BOX)
+            .map(|c| c.to_vec())
+            .collect()
     };
 
-    let fee_output = Eip12Output::fee(TX_FEE, current_height);
+    let mut outputs: Vec<Eip12Output> = Vec::with_capacity(chunks.len() + 1);
+    let last_idx = chunks.len() - 1;
+    for (i, chunk) in chunks.into_iter().enumerate() {
+        let erg_for_this = if i == last_idx { last_box_erg } else { min_box };
+        outputs.push(Eip12Output {
+            value: erg_for_this.to_string(),
+            ergo_tree: user_ergo_tree.to_string(),
+            assets: chunk,
+            creation_height: current_height,
+            additional_registers: HashMap::new(),
+        });
+    }
+    outputs.push(Eip12Output::fee(TX_FEE, current_height));
+
+    let change_erg = total_change_erg;
 
     let unsigned_tx = Eip12UnsignedTx {
         inputs: user_inputs.to_vec(),
         data_inputs: vec![],
-        outputs: vec![change_output, fee_output],
+        outputs,
     };
 
     Ok(MultiBurnBuildResult {

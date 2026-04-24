@@ -1,18 +1,38 @@
 /**
  * Format a raw token amount for display using its decimal places.
+ *
+ * Accepts string | number | bigint so that amounts larger than
+ * `Number.MAX_SAFE_INTEGER` (routine for Spectrum LP tokens, ≈ i64::MAX)
+ * survive without the lossy JSON-number round-trip.
  */
 export function formatTokenAmount(
-  amount: number,
+  amount: number | string | bigint,
   decimals: number,
   minDecimals?: number,
   maxDecimals?: number,
 ): string {
-  if (decimals === 0) return amount.toLocaleString()
-  const divisor = Math.pow(10, decimals)
-  return (amount / divisor).toLocaleString(undefined, {
-    minimumFractionDigits: minDecimals ?? decimals,
-    maximumFractionDigits: maxDecimals ?? decimals,
-  })
+  const big =
+    typeof amount === 'bigint' ? amount
+    : typeof amount === 'number' ? BigInt(Math.trunc(amount))
+    : BigInt(amount)
+
+  if (decimals === 0) return big.toLocaleString()
+
+  const divisor = 10n ** BigInt(decimals)
+  const sign = big < 0n ? '-' : ''
+  const absBig = big < 0n ? -big : big
+  const whole = absBig / divisor
+  const fracRaw = (absBig % divisor).toString().padStart(decimals, '0')
+
+  const minFrac = Math.max(0, Math.min(decimals, minDecimals ?? decimals))
+  const maxFrac = Math.max(minFrac, Math.min(decimals, maxDecimals ?? decimals))
+
+  // Trim trailing zeros beyond minFrac, then cap at maxFrac.
+  let frac = fracRaw.slice(0, maxFrac)
+  while (frac.length > minFrac && frac.endsWith('0')) frac = frac.slice(0, -1)
+
+  const wholeFormatted = whole.toLocaleString()
+  return frac ? `${sign}${wholeFormatted}.${frac}` : `${sign}${wholeFormatted}`
 }
 
 /**
@@ -50,12 +70,8 @@ export function blocksToTime(blocks: number): string {
 }
 
 /** Format a token amount with sensible display decimals (min 2, max capped at 6) */
-export function formatAmount(amount: number, decimals: number): string {
-  const divisor = Math.pow(10, decimals)
-  return (amount / divisor).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: Math.min(decimals, 6),
-  })
+export function formatAmount(amount: number | string | bigint, decimals: number): string {
+  return formatTokenAmount(amount, decimals, 2, Math.min(decimals, 6))
 }
 
 /** Format a number as a percentage string */

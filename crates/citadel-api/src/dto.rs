@@ -1,5 +1,33 @@
 use serde::{Deserialize, Serialize};
 
+/// Serialize a u64 as a JSON string (e.g. `"9223372036854774807"`) and accept
+/// either string or number on the way back. Needed for fields that can exceed
+/// JS `Number.MAX_SAFE_INTEGER` (2^53 − 1 ≈ 9.0e15) — which is routinely the
+/// case for Spectrum LP tokens (`~i64::MAX` = 9.2e18) and any other token a
+/// wallet accumulates in large quantities.
+pub mod u64_as_string {
+    use serde::{de, Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(v: &u64, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&v.to_string())
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum StrOrNum<'a> {
+            Str(&'a str),
+            Owned(String),
+            Num(u64),
+        }
+        match StrOrNum::deserialize(d)? {
+            StrOrNum::Str(s) => s.parse().map_err(de::Error::custom),
+            StrOrNum::Owned(s) => s.parse().map_err(de::Error::custom),
+            StrOrNum::Num(n) => Ok(n),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HealthResponse {
     pub status: String,
@@ -203,7 +231,14 @@ pub struct ConnectionStatusResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenBalance {
     pub token_id: String,
+    /// Lossy JS-number form (precision loss above 2^53 − 1). Kept for
+    /// back-compat with all existing display code.
     pub amount: u64,
+    /// Precise string form of `amount`. Consumers that need exact values
+    /// (e.g. building a burn tx for an LP token where `amount ~ i64::MAX`)
+    /// MUST use this and parse via BigInt — the `amount` field alone will
+    /// silently truncate in JSON → JS Number conversion.
+    pub amount_str: String,
     pub name: Option<String>,
     pub decimals: u8,
 }

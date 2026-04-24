@@ -133,6 +133,7 @@ pub async fn get_wallet_balance(
         token_balances.push(TokenBalance {
             token_id,
             amount,
+            amount_str: amount.to_string(),
             name,
             decimals,
         });

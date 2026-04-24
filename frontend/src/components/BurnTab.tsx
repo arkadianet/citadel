@@ -15,7 +15,15 @@ interface BurnTabProps {
   walletAddress: string | null
   walletBalance: {
     erg_nano: number
-    tokens: Array<{ token_id: string; amount: number; name: string | null; decimals: number }>
+    tokens: Array<{
+      token_id: string
+      amount: number
+      /// Precise string form. Use this + BigInt for arithmetic on large LP tokens
+      /// where `amount` (a JS number) loses precision above 2^53 − 1.
+      amount_str?: string
+      name: string | null
+      decimals: number
+    }>
   } | null
   explorerUrl: string
 }
@@ -25,7 +33,17 @@ type SignMethod = 'choose' | 'mobile' | 'nautilus'
 
 interface CartEntry {
   amount: string  // display value (user-typed)
-  rawAmount: number  // raw integer amount
+  /// Raw integer amount as a decimal string (so values > 2^53 − 1 survive —
+  /// Spectrum LP tokens routinely have amounts close to i64::MAX).
+  rawAmount: string
+}
+
+/// Get the precise raw amount for a wallet token as a BigInt.
+/// Falls back to the lossy `amount` field if the backend didn't provide
+/// `amount_str` (e.g. during transition / older backend).
+function tokenRawBig(t: { amount: number; amount_str?: string }): bigint {
+  if (t.amount_str !== undefined) return BigInt(t.amount_str)
+  return BigInt(Math.trunc(t.amount))
 }
 
 /** Generate a deterministic color from a token ID. */
@@ -141,9 +159,10 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
       } else {
         const token = tokens.find(t => t.token_id === tokenId)
         if (token) {
+          const raw = tokenRawBig(token)
           next.set(tokenId, {
-            amount: formatTokenAmount(token.amount, token.decimals),
-            rawAmount: token.amount,
+            amount: formatTokenAmount(raw, token.decimals),
+            rawAmount: raw.toString(),
           })
         }
       }
@@ -154,9 +173,10 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
   const selectAll = () => {
     const next = new Map<string, CartEntry>()
     for (const t of filteredTokens) {
+      const raw = tokenRawBig(t)
       next.set(t.token_id, {
-        amount: formatTokenAmount(t.amount, t.decimals),
-        rawAmount: t.amount,
+        amount: formatTokenAmount(raw, t.decimals),
+        rawAmount: raw.toString(),
       })
     }
     setBurnCart(next)
@@ -177,11 +197,24 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
   const updateCartAmount = (tokenId: string, displayAmount: string) => {
     const token = tokens.find(t => t.token_id === tokenId)
     if (!token) return
-    const parsed = parseFloat(displayAmount.replace(/,/g, ''))
-    const raw = isNaN(parsed) ? 0 : Math.floor(parsed * Math.pow(10, token.decimals))
+    // Parse display → raw BigInt. For zero-decimal tokens parse directly as a
+    // BigInt so large values don't round through parseFloat.
+    const cleaned = displayAmount.replace(/,/g, '').trim()
+    let raw: bigint
+    try {
+      if (token.decimals === 0) {
+        raw = cleaned === '' ? 0n : BigInt(cleaned)
+      } else {
+        const [whole, frac = ''] = cleaned.split('.')
+        const padded = (frac + '0'.repeat(token.decimals)).slice(0, token.decimals)
+        raw = (whole === '' ? 0n : BigInt(whole)) * (10n ** BigInt(token.decimals)) + BigInt(padded || '0')
+      }
+    } catch {
+      raw = 0n
+    }
     setBurnCart(prev => {
       const next = new Map(prev)
-      next.set(tokenId, { amount: displayAmount, rawAmount: raw })
+      next.set(tokenId, { amount: displayAmount, rawAmount: raw.toString() })
       return next
     })
   }
@@ -191,21 +224,25 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
     if (!token) return
     setBurnCart(prev => {
       const next = new Map(prev)
+      const raw = tokenRawBig(token)
       next.set(tokenId, {
-        amount: formatTokenAmount(token.amount, token.decimals),
-        rawAmount: token.amount,
+        amount: formatTokenAmount(raw, token.decimals),
+        rawAmount: raw.toString(),
       })
       return next
     })
   }
 
-  // Validation
+  // Validation — all arithmetic in BigInt so LP-size amounts (≈ i64::MAX) work.
   const cartIsValid = useMemo(() => {
     if (burnCart.size === 0) return false
     for (const [tokenId, entry] of burnCart) {
-      if (entry.rawAmount <= 0) return false
+      let raw: bigint
+      try { raw = BigInt(entry.rawAmount) } catch { return false }
+      if (raw <= 0n) return false
       const token = tokens.find(t => t.token_id === tokenId)
-      if (!token || entry.rawAmount > token.amount) return false
+      if (!token) return false
+      if (raw > tokenRawBig(token)) return false
     }
     return true
   }, [burnCart, tokens])
@@ -415,7 +452,10 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
                     const token = tokens.find(t => t.token_id === tokenId)
                     if (!token) return null
                     const name = getTokenName(token)
-                    const overBalance = entry.rawAmount > token.amount
+                    const overBalance = (() => {
+                      try { return BigInt(entry.rawAmount) > tokenRawBig(token) }
+                      catch { return true }
+                    })()
                     return (
                       <div key={tokenId} className="burn-basket-item">
                         <div className="burn-basket-item-header">
