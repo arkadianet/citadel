@@ -28,6 +28,7 @@ amm = { workspace = true }
 hodlcoin = { workspace = true }
 sigmafi = { workspace = true }
 mewlock = { workspace = true }
+ergopad-recovery = { workspace = true }
 tokio = { workspace = true }
 hex = { workspace = true }
 serde = { workspace = true }

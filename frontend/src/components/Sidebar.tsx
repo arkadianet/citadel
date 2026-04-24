@@ -1,6 +1,6 @@
 import './Sidebar.css'
 
-type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management'
+type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management' | 'ergopad-recovery'
 
 interface SidebarProps {
   view: View
@@ -267,6 +267,25 @@ export function Sidebar({ view, onNavigate, isConnected, capabilityTier, collaps
             <span className="sidebar-item-desc">Manage Boxes</span>
           </div>
           <span className="sidebar-tooltip">UTXO Management</span>
+        </button>
+
+        {/* Ergopad Recovery */}
+        <button
+          className={`sidebar-item ${view === 'ergopad-recovery' ? 'active' : ''} ${!canUseProtocols ? 'disabled' : ''}`}
+          onClick={canUseProtocols ? () => onNavigate('ergopad-recovery') : undefined}
+          disabled={!canUseProtocols}
+        >
+          <div className="sidebar-dashboard-icon">
+            <svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12a9 9 0 11-3.6-7.2" />
+              <polyline points="21 4 21 10 15 10" />
+            </svg>
+          </div>
+          <div className="sidebar-item-text">
+            <span className="sidebar-item-name">Ergopad Recovery</span>
+            <span className="sidebar-item-desc">v1 Stake Unlock</span>
+          </div>
+          <span className="sidebar-tooltip">Ergopad Recovery</span>
         </button>
       </div>
     </nav>

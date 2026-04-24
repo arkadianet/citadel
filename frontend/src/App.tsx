@@ -19,6 +19,7 @@ import { SigmaFiTab } from './components/SigmaFiTab'
 import { TimelockTab } from './components/TimelockTab'
 import { RouterTab } from './components/RouterTab'
 import { ArbScannerTab } from './components/ArbScannerTab'
+import { ErgopadRecoveryTab } from './components/ErgopadRecoveryTab'
 import { ExplorerNavProvider, type ExplorerTarget } from './contexts/ExplorerNavContext'
 import './App.css'
 
@@ -75,7 +76,7 @@ interface WalletBalance {
   }>
 }
 
-type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management'
+type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management' | 'ergopad-recovery'
 
 function App() {
   const [view, setView] = useState<View>('home')
@@ -523,6 +524,16 @@ function App() {
           {view === 'utxo-management' && (
             <UtxoManagementTab
               isConnected={isConnected}
+              walletAddress={walletAddress}
+              walletBalance={walletBalance}
+              explorerUrl={explorerUrl}
+            />
+          )}
+
+          {view === 'ergopad-recovery' && (
+            <ErgopadRecoveryTab
+              isConnected={isConnected}
+              capabilityTier={nodeStatus?.capability_tier}
               walletAddress={walletAddress}
               walletBalance={walletBalance}
               explorerUrl={explorerUrl}

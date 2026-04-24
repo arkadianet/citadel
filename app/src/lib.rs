@@ -147,6 +147,10 @@ pub fn run() {
             commands::mewlock_get_durations,
             commands::mewlock_build_lock,
             commands::mewlock_build_unlock,
+            // Ergopad v1 Stake Recovery
+            commands::scan_ergopad_recoverable_stakes,
+            commands::preview_ergopad_recovery,
+            commands::build_ergopad_recovery_tx,
             // Node Discovery
             commands::discover_nodes,
             commands::probe_single_node,
