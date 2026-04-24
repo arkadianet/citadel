@@ -23,6 +23,12 @@ use ergo_tx::{
 const TX_FEE: u64 = citadel_core::constants::TX_FEE_NANO as u64;
 const MIN_BOX_VALUE: u64 = citadel_core::constants::MIN_BOX_VALUE_NANO as u64;
 
+/// Spectrum N2T pool V1 hard-codes a `OUTPUTS(0).value > 10_000_000` check in
+/// the ErgoTree. Any state transition that leaves the pool with <= 0.01 ERG
+/// triggers "Script reduced to false". Confirmed by decompiling a live pool
+/// ErgoTree (see the `10000000: SLong` constant in the contract body).
+const POOL_MIN_ERG_STRICT: u64 = 10_000_000;
+
 #[derive(Debug)]
 pub struct LpRedeemBuildResult {
     pub unsigned_tx: Eip12UnsignedTx,
@@ -125,6 +131,13 @@ fn build_n2t_lp_redeem(
         .checked_sub(erg_out)
         .ok_or_else(|| AmmError::TxBuildError("Pool ERG underflow".to_string()))?;
 
+    if new_pool_erg <= POOL_MIN_ERG_STRICT {
+        return Err(AmmError::TxBuildError(format!(
+            "New pool box ERG ({}) must be strictly greater than {} nano (Spectrum V1 pool contract invariant)",
+            new_pool_erg, POOL_MIN_ERG_STRICT
+        )));
+    }
+    // Belt-and-suspenders: also reject anything the network per-byte rule would reject.
     if new_pool_erg < MIN_BOX_VALUE {
         return Err(AmmError::TxBuildError(
             "New pool box would have less than minimum ERG".to_string(),

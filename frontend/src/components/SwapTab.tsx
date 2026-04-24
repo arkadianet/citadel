@@ -14,6 +14,7 @@ import { formatTokenAmount, formatErg } from '../utils/format'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import { SwapModal } from './SwapModal'
 import { OrderHistory } from './OrderHistory'
+import { TxSuccess } from './TxSuccess'
 import { TokenIcon, PoolPairIcons } from './tokenIcons'
 import { SmartSwapView } from './SmartSwapView'
 import { Tabs, EmptyState } from './ui'
@@ -188,7 +189,9 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
     return false
   }, [userTokenIds])
 
-  // Filter pools by search, then pin user-token pools to top
+  // Filter by search; sort by liquidity (erg_reserves desc); pin user-held pools to top.
+  // On the Liquidity tab, "user-held" means holding the pool's LP token (they're already
+  // an LP). On other tabs it means holding either underlying token.
   useEffect(() => {
     let result = pools
     if (searchQuery.trim()) {
@@ -199,14 +202,24 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
       })
     }
 
-    if (userTokenIds.size > 0) {
-      const userPools = result.filter(p => isUserPool(p))
-      const otherPools = result.filter(p => !isUserPool(p))
-      setFilteredPools([...userPools, ...otherPools])
-    } else {
-      setFilteredPools(result)
+    const byLiquidityDesc = [...result].sort(
+      (a, b) => (b.erg_reserves ?? 0) - (a.erg_reserves ?? 0),
+    )
+
+    if (!walletBalance) {
+      setFilteredPools(byLiquidityDesc)
+      return
     }
-  }, [pools, searchQuery, walletBalance])
+
+    const pinPredicate = tabMode === 'liquidity'
+      ? (p: AmmPool) =>
+          walletBalance.tokens.some(t => t.token_id === p.lp_token_id && t.amount > 0)
+      : (p: AmmPool) => isUserPool(p)
+
+    const pinned = byLiquidityDesc.filter(pinPredicate)
+    const rest = byLiquidityDesc.filter(p => !pinPredicate(p))
+    setFilteredPools([...pinned, ...rest])
+  }, [pools, searchQuery, walletBalance, tabMode, isUserPool])
 
   // Auto-select first pool
   useEffect(() => {
@@ -303,7 +316,11 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
 
   const lpFlow = useTransactionFlow({
     pollStatus: getTxStatus,
-    isOpen: lpTxStep === 'signing',
+    // Go "open" as soon as the user clicks redeem/deposit (building), not on
+    // the 'signing' transition. useTransactionFlow auto-reset()s its state when
+    // isOpen flips to true; if that happens AFTER startSigning() it wipes the
+    // nautilusUrl we just set and the Nautilus button becomes a no-op.
+    isOpen: lpTxStep !== 'idle',
     onSuccess: (txId) => {
       void txId
       setLpTxStep('success')
@@ -324,6 +341,28 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
     const lpToken = walletBalance.tokens.find(t => t.token_id === pool.lp_token_id)
     return lpToken?.amount ?? 0
   }, [walletBalance])
+
+  // Spectrum N2T pool V1 contract hard-codes `OUTPUTS(0).value > 10_000_000`
+  // (0.01 ERG). Verified by decompiling a live pool ErgoTree. We keep a 1-nano
+  // buffer above the strict `>` so integer rounding in `erg_out` can't push
+  // new_pool_erg back down to exactly 10_000_000.
+  //
+  // We also cap LP so at least 1 unit of token_y remains (token_out rounding
+  // could otherwise drain Y to 0 which breaks future swaps).
+  //
+  // Only meaningful for N2T pools — T2T pools keep ERG constant on redeem.
+  const getMaxRedeemableLp = useCallback((pool: AmmPool): number => {
+    if (pool.pool_type !== 'N2T') return pool.lp_circulating
+    const POOL_MIN_ERG = 10_000_001 // Spectrum V1 contract invariant
+    const erg = pool.erg_reserves ?? 0
+    if (erg <= POOL_MIN_ERG || pool.lp_circulating === 0) return 0
+    // Cap from X (ERG): max_lp_x = floor((erg - POOL_MIN_ERG) * supply / erg)
+    const maxByErg = Math.floor((erg - POOL_MIN_ERG) * pool.lp_circulating / erg)
+    // Cap from Y (token): keep at least 1 unit of Y.
+    const y = pool.token_y.amount
+    const maxByY = y <= 1 ? 0 : Math.floor((y - 1) * pool.lp_circulating / y)
+    return Math.min(maxByErg, maxByY)
+  }, [])
 
   const handleDepositErgChange = useCallback((val: string) => {
     setDepositErgInput(val)
@@ -427,6 +466,9 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
 
     setLpTxLoading(true)
     setLpTxError(null)
+    // Enter 'building' BEFORE startSigning so useTransactionFlow's auto-reset
+    // fires now (on the isOpen transition) and not after startSigning wipes its state.
+    setLpTxStep('building')
     try {
       const utxos = await invoke<unknown[]>('get_user_utxos')
       const nodeStatus = await invoke<{ chain_height: number }>('get_node_status')
@@ -467,6 +509,9 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
 
     setLpTxLoading(true)
     setLpTxError(null)
+    // Enter 'building' BEFORE startSigning so useTransactionFlow's auto-reset
+    // fires now (on the isOpen transition) and not after startSigning wipes its state.
+    setLpTxStep('building')
     try {
       const utxos = await invoke<unknown[]>('get_user_utxos')
       const nodeStatus = await invoke<{ chain_height: number }>('get_node_status')
@@ -658,7 +703,15 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
         <SmartSwapView
           isConnected={isConnected}
           walletAddress={walletAddress}
-          walletBalance={walletBalance}
+          walletBalance={walletBalance ? {
+            erg_nano: walletBalance.erg_nano,
+            tokens: walletBalance.tokens.map(t => ({
+              token_id: t.token_id,
+              amount: String(t.amount),
+              name: t.name,
+              decimals: t.decimals,
+            })),
+          } : null}
           explorerUrl={explorerUrl}
           pools={pools}
         />
@@ -1324,9 +1377,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                 <div className="swap-input-section" style={{ textAlign: 'center', padding: 'var(--space-md)' }}>
                   <p style={{ color: 'var(--emerald-400)', fontWeight: 600, fontSize: 'var(--text-lg)' }}>Transaction Submitted!</p>
                   {lpFlow.txId && (
-                    <a href={`${explorerUrl}/en/transactions/${lpFlow.txId}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--slate-400)', fontSize: 'var(--text-xs)' }}>
-                      View on Explorer
-                    </a>
+                    <TxSuccess txId={lpFlow.txId} explorerUrl={explorerUrl} />
                   )}
                   <button className="btn btn-primary" onClick={() => { setLpTxStep('idle'); fetchPools() }} style={{ marginTop: 'var(--space-sm)' }}>Done</button>
                 </div>
@@ -1438,15 +1489,31 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                         <div className="swap-field-header">
                           <span className="swap-field-label">LP Tokens to Redeem</span>
                           <span className="swap-field-balance">
-                            {getUserLpBalance(lpPool) > 0 && <>Balance: {getUserLpBalance(lpPool).toLocaleString()}</>}
+                            {getUserLpBalance(lpPool) > 0 && (() => {
+                              const balance = getUserLpBalance(lpPool)
+                              const cap = getMaxRedeemableLp(lpPool)
+                              const capped = balance > cap
+                              return (
+                                <>
+                                  Balance: {balance.toLocaleString()}
+                                  {capped && (
+                                    <span className="swap-field-cap-hint" title="Pool must keep at least 0.001 ERG">
+                                      {' '}· max redeemable: {cap.toLocaleString()}
+                                    </span>
+                                  )}
+                                </>
+                              )
+                            })()}
                           </span>
                         </div>
                         <div className="swap-field-input">
                           <input type="number" value={redeemLpInput} onChange={e => handleRedeemLpChange(e.target.value)} placeholder="0" min="0" step="1" />
                           <button className="max-btn" onClick={() => {
                             const balance = getUserLpBalance(lpPool)
-                            if (balance > 0) handleRedeemLpChange(String(balance))
-                          }} disabled={getUserLpBalance(lpPool) === 0}>MAX</button>
+                            const cap = getMaxRedeemableLp(lpPool)
+                            const redeemable = Math.min(balance, cap)
+                            if (redeemable > 0) handleRedeemLpChange(String(redeemable))
+                          }} disabled={getUserLpBalance(lpPool) === 0 || getMaxRedeemableLp(lpPool) === 0}>MAX</button>
                           <span className="swap-field-token">LP</span>
                         </div>
                       </div>
