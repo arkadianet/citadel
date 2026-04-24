@@ -38,3 +38,8 @@ npm-debug.log*
 /docs/
 MVP_PLAN.md
 ergo-defi-design.md
+
+# AI tooling caches (not project code)
+.serena/
+.superpowers/
+.claude/
