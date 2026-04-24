@@ -380,10 +380,13 @@ async fn trace_amm_pools(client: &NodeClient, count: usize) -> Vec<ProtocolInter
     results
 }
 
+// Optional `max_age_secs`: only return interactions newer than this many
+// seconds. E.g. `86400` keeps the last 24 h. `None`/`0` = no age filter.
 #[tauri::command]
 pub async fn get_protocol_activity(
     state: State<'_, AppState>,
     count: u64,
+    max_age_secs: Option<u64>,
 ) -> Result<Vec<ProtocolInteraction>, String> {
     let client = state.require_node_client().await?;
     let capabilities = client.require_capabilities().await?;
@@ -528,6 +531,17 @@ pub async fn get_protocol_activity(
     all.extend(usd_lp);
     all.extend(amm_activity);
     all.sort_by(|a, b| b.height.cmp(&a.height));
+
+    if let Some(max_age) = max_age_secs.filter(|n| *n > 0) {
+        // `timestamp` is in ms since epoch (matches the rest of the app).
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        let cutoff_ms = now_ms.saturating_sub(max_age.saturating_mul(1000));
+        all.retain(|i| i.timestamp >= cutoff_ms);
+    }
+
     all.truncate(count);
 
     Ok(all)

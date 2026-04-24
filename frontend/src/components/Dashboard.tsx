@@ -204,7 +204,10 @@ export function Dashboard({
     }
     let cancelled = false
     setActivityLoading(true)
-    getProtocolActivity(5)
+    // Fetch up to 100 interactions from the last 24 hours. The UI shows the
+    // first ~10 in a fixed-height scrollable list; the rest are reachable by
+    // scrolling. 100 is plenty of headroom even during busy periods.
+    getProtocolActivity(100, 24 * 60 * 60)
       .then(data => {
         if (!cancelled) setActivity(data)
       })

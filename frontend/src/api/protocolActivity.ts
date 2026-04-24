@@ -11,8 +11,13 @@ export interface ProtocolInteraction {
   token_amount_change: number
 }
 
-export async function getProtocolActivity(count: number = 5): Promise<ProtocolInteraction[]> {
-  return invoke<ProtocolInteraction[]>('get_protocol_activity', { count })
+// `maxAgeSecs`: only return interactions newer than this many seconds
+// (e.g. 86400 for 24 hours). Omit or pass 0 for no age filter.
+export async function getProtocolActivity(
+  count: number = 5,
+  maxAgeSecs?: number,
+): Promise<ProtocolInteraction[]> {
+  return invoke<ProtocolInteraction[]>('get_protocol_activity', { count, maxAgeSecs })
 }
 
 export async function getDexyActivity(count: number = 10): Promise<ProtocolInteraction[]> {

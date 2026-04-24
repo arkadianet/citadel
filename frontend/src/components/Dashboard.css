@@ -397,6 +397,23 @@
 .activity-list {
   display: flex;
   flex-direction: column;
+  /* ~10 rows visible; scroll to see older items (up to 24h worth). */
+  max-height: calc(10 * 56px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.activity-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.activity-list::-webkit-scrollbar-thumb {
+  background: var(--glass-border);
+  border-radius: 4px;
+}
+
+.activity-list::-webkit-scrollbar-thumb:hover {
+  background: var(--slate-600, #475569);
 }
 
 .activity-row {
