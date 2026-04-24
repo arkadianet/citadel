@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import type { TxStatusResponse } from '../api/types'
 import { watchTx } from '../api/notifications'
@@ -41,6 +41,19 @@ export function useTransactionFlow({ pollStatus, isOpen, onSuccess, onError, wat
     if (isOpen) reset()
   }, [isOpen, reset])
 
+  // Refs so the poll effect doesn't reset when parent hands us new inline callbacks
+  // on every render. Without this, the 2s interval gets cleared/recreated on each
+  // re-render of the parent (e.g. SwapTab's 30s pool refresh + other state churn),
+  // and if renders happen faster than 2s the poll never fires.
+  const pollStatusRef = useRef(pollStatus)
+  const onSuccessRef = useRef(onSuccess)
+  const onErrorRef = useRef(onError)
+  const watchParamsRef = useRef(watchParams)
+  useEffect(() => { pollStatusRef.current = pollStatus }, [pollStatus])
+  useEffect(() => { onSuccessRef.current = onSuccess }, [onSuccess])
+  useEffect(() => { onErrorRef.current = onError }, [onError])
+  useEffect(() => { watchParamsRef.current = watchParams }, [watchParams])
+
   // Poll for tx status while signing
   useEffect(() => {
     if (!isSigning || !requestId) return
@@ -48,24 +61,21 @@ export function useTransactionFlow({ pollStatus, isOpen, onSuccess, onError, wat
     let active = true
     const interval = setInterval(async () => {
       try {
-        const status = await pollStatus(requestId)
+        const status = await pollStatusRef.current(requestId)
         if (!active) return
 
         if (status.status === 'submitted' && status.tx_id) {
           setTxId(status.tx_id)
           setIsSigning(false)
-          if (watchParams) {
-            watchTx(
-              status.tx_id,
-              watchParams.protocol,
-              watchParams.operation,
-              watchParams.description,
-            ).catch((e) => console.error('Failed to watch tx:', e))
+          const wp = watchParamsRef.current
+          if (wp) {
+            watchTx(status.tx_id, wp.protocol, wp.operation, wp.description)
+              .catch((e) => console.error('Failed to watch tx:', e))
           }
-          onSuccess?.(status.tx_id)
+          onSuccessRef.current?.(status.tx_id)
         } else if (status.status === 'failed' || status.status === 'expired') {
           setIsSigning(false)
-          onError?.(status.error || 'Transaction failed')
+          onErrorRef.current?.(status.error || 'Transaction failed')
         }
       } catch (e) {
         console.error('Poll error:', e)
@@ -76,7 +86,7 @@ export function useTransactionFlow({ pollStatus, isOpen, onSuccess, onError, wat
       active = false
       clearInterval(interval)
     }
-  }, [isSigning, requestId, pollStatus, onSuccess, onError])
+  }, [isSigning, requestId])
 
   const startSigning = useCallback((rid: string, qr: string, naut: string) => {
     setRequestId(rid)
