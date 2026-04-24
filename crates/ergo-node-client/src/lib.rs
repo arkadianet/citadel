@@ -11,6 +11,15 @@ use tokio::sync::RwLock;
 
 const NODE_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
+/// Pagination cap for address balance reads (cheap — 1 call per page).
+/// 100 pages × 500 boxes = up to 50,000 UTXOs scanned.
+const MAX_WALLET_PAGES: u32 = 100;
+
+/// Pagination cap for full EIP-12 UTXO fetches. We parse the node JSON response
+/// directly (no per-box round-trip), so this can match the balance cap.
+/// 100 pages × 500 boxes = up to 50,000 UTXOs reachable for tx building.
+const MAX_UTXO_PAGES: u32 = 100;
+
 pub use capabilities::{CapabilityTier, NodeCapabilities};
 
 #[derive(Debug, Clone)]
@@ -91,13 +100,12 @@ impl NodeClient {
     }
 
     /// Returns (nanoErgs, Vec<(token_id, amount)>). Requires extraIndex.
+    /// Paginates up to `MAX_WALLET_PAGES` × 500 boxes to support large wallets
+    /// (e.g. storage-rent bots) where the single 500-box call misses tokens.
     pub async fn get_address_balances(&self, address: &str) -> Result<(u64, Vec<(String, u64)>)> {
-        let boxes = timed_request(self.inner.unspent_boxes_by_address(
-            &address.to_string(),
-            0,
-            500,
-        ))
-        .await?;
+        let boxes = self
+            .fetch_all_unspent_by_address(address, MAX_WALLET_PAGES)
+            .await?;
 
         let erg_balance: u64 = boxes.iter().map(|b| *b.value.as_u64()).sum();
 
@@ -119,25 +127,109 @@ impl NodeClient {
     }
 
     /// Get unspent boxes for an address in EIP-12 format.
-    /// Makes an additional API call per box to fetch tx context (transactionId + index).
+    ///
+    /// Uses the raw `/blockchain/box/unspent/byAddress` JSON response to
+    /// extract `transactionId` + `index` per box in a single round-trip.
+    /// This avoids the N-per-box `/blockchain/box/byId` calls the older
+    /// implementation made, so we can paginate the full wallet affordably.
+    /// Paginates up to `MAX_UTXO_PAGES` × 500 boxes = 50,000 UTXOs.
     pub async fn get_address_utxos(&self, address: &str) -> Result<Vec<ergo_tx::Eip12InputBox>> {
-        let boxes = timed_request(self.inner.unspent_boxes_by_address(
-            &address.to_string(),
-            0,
-            500,
-        ))
-        .await?;
+        self.fetch_eip12_unspent_by_address(address, MAX_UTXO_PAGES)
+            .await
+    }
 
-        let mut eip12_boxes = Vec::new();
-        for ergo_box in boxes {
-            let box_id = ergo_box.box_id().to_string();
-            let (tx_id, index) = self.get_box_context(&box_id).await?;
-            eip12_boxes.push(ergo_tx::Eip12InputBox::from_ergo_box(
-                &ergo_box, tx_id, index,
-            ));
+    /// Internal: paginated fetch of all unspent boxes at an address, capped by `max_pages`.
+    async fn fetch_all_unspent_by_address(
+        &self,
+        address: &str,
+        max_pages: u32,
+    ) -> Result<Vec<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox>> {
+        const PAGE_SIZE: u64 = 500;
+        let addr = address.to_string();
+        let mut all = Vec::new();
+        for page in 0..max_pages {
+            let offset = (page as u64) * PAGE_SIZE;
+            let boxes = timed_request(self.inner.unspent_boxes_by_address(
+                &addr, offset, PAGE_SIZE,
+            ))
+            .await?;
+            let len = boxes.len();
+            all.extend(boxes);
+            if (len as u64) < PAGE_SIZE {
+                return Ok(all);
+            }
         }
+        tracing::warn!(
+            address,
+            max_pages,
+            fetched = all.len(),
+            "Hit wallet UTXO pagination cap; some balances may be truncated"
+        );
+        Ok(all)
+    }
 
-        Ok(eip12_boxes)
+    /// Internal: paginated fetch of all unspent boxes at an address as EIP-12
+    /// input boxes, parsing the raw JSON response so tx context
+    /// (`transactionId` + `index`) comes in the same call. This replaces the
+    /// older "fetch ErgoBox then look up context per-box" path — avoiding N
+    /// extra HTTP calls makes a 50k-UTXO wallet feasible.
+    async fn fetch_eip12_unspent_by_address(
+        &self,
+        address: &str,
+        max_pages: u32,
+    ) -> Result<Vec<ergo_tx::Eip12InputBox>> {
+        const PAGE_SIZE: u64 = 500;
+        let mut all: Vec<ergo_tx::Eip12InputBox> = Vec::new();
+        for page in 0..max_pages {
+            let offset = (page as u64) * PAGE_SIZE;
+            let endpoint = format!(
+                "/blockchain/box/unspent/byAddress?offset={}&limit={}",
+                offset, PAGE_SIZE
+            );
+            // POST body is a JSON-quoted address string.
+            let body = format!("\"{}\"", address);
+            let response =
+                timed_request(self.inner.send_post_req(&endpoint, body)).await?;
+            let text = response.text().await.map_err(|e| NodeError::ApiError {
+                message: format!("Failed to read unspent response: {}", e),
+            })?;
+            if text.is_empty() {
+                break;
+            }
+            let value: serde_json::Value =
+                serde_json::from_str(&text).map_err(|e| NodeError::ApiError {
+                    message: format!("Failed to parse unspent response: {}", e),
+                })?;
+
+            // Two shapes observed across node versions: a bare JSON array, or a
+            // paged object `{items: [...], total: N}`. Handle both.
+            let items: Vec<serde_json::Value> = match value {
+                serde_json::Value::Array(arr) => arr,
+                serde_json::Value::Object(ref map) => map
+                    .get("items")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default(),
+                _ => Vec::new(),
+            };
+
+            let page_len = items.len();
+            for item in items {
+                if let Some(box_) = json_box_to_eip12(&item) {
+                    all.push(box_);
+                }
+            }
+            if (page_len as u64) < PAGE_SIZE {
+                return Ok(all);
+            }
+        }
+        tracing::warn!(
+            address,
+            max_pages,
+            fetched = all.len(),
+            "Hit wallet UTXO pagination cap; some UTXOs may be unreachable for tx building"
+        );
+        Ok(all)
     }
 
     pub async fn get_token_info(&self, token_id: &str) -> Result<TokenInfo> {
@@ -269,7 +361,7 @@ impl NodeClient {
         self.get_unconfirmed_by_ergo_tree(&ergo_tree_hex).await
     }
 
-    async fn get_unconfirmed_by_ergo_tree(
+    pub async fn get_unconfirmed_by_ergo_tree(
         &self,
         ergo_tree_hex: &str,
     ) -> Result<Vec<serde_json::Value>> {
@@ -589,6 +681,62 @@ fn address_to_ergo_tree(address: &str) -> Option<String> {
     let tree = addr.script().ok()?;
     let bytes = tree.sigma_serialize_bytes().ok()?;
     Some(bytes.iter().map(|b| format!("{:02x}", b)).collect())
+}
+
+/// Build an Eip12InputBox from a `/blockchain/box/...` JSON item.
+/// Relies on `transactionId` + `index` being present in the response
+/// (they are on the unspent/byAddress, byId, byTokenId endpoints).
+fn json_box_to_eip12(item: &serde_json::Value) -> Option<ergo_tx::Eip12InputBox> {
+    let box_id = item["boxId"].as_str()?.to_string();
+    let transaction_id = item["transactionId"].as_str()?.to_string();
+    let index = item["index"].as_u64()? as u16;
+    let value = item["value"].as_u64()?.to_string();
+    let ergo_tree = item["ergoTree"].as_str()?.to_string();
+    let creation_height = item["creationHeight"].as_i64()? as i32;
+
+    let assets = item["assets"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|a| {
+                    Some(ergo_tx::Eip12Asset {
+                        token_id: a["tokenId"].as_str()?.to_string(),
+                        amount: a["amount"].as_u64()?.to_string(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let additional_registers = item["additionalRegisters"]
+        .as_object()
+        .map(|obj| {
+            obj.iter()
+                .filter_map(|(k, v)| {
+                    // Registers come either as a plain hex string or as an
+                    // object `{serializedValue, sigmaType, renderedValue}`.
+                    let hex = if let Some(s) = v.as_str() {
+                        s.to_string()
+                    } else {
+                        v["serializedValue"].as_str()?.to_string()
+                    };
+                    Some((k.clone(), hex))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Some(ergo_tx::Eip12InputBox {
+        box_id,
+        transaction_id,
+        index,
+        value,
+        ergo_tree,
+        assets,
+        creation_height,
+        additional_registers,
+        extension: std::collections::HashMap::new(),
+    })
 }
 
 fn json_output_to_eip12(
