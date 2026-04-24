@@ -26,7 +26,7 @@ const ERG_RESERVE_NANO = 10_000_000 // 0.01 ERG
 
 interface WalletToken {
   token_id: string
-  amount: number
+  amount: string
   name: string | null
   decimals: number
 }
@@ -86,14 +86,18 @@ function buildTokenList(
 
   if (mode === 'source') {
     const walletTokens: TokenEntry[] = (walletBalance?.tokens ?? [])
-      .filter((t) => t.amount > 0 && poolTokenMeta.has(t.token_id))
+      .filter((t) => t.amount !== '0' && t.amount !== '' && poolTokenMeta.has(t.token_id))
       .map((t) => {
         const meta = poolTokenMeta.get(t.token_id)
         return {
           token_id: t.token_id,
           name: meta?.name ?? t.name ?? null,
           decimals: meta?.decimals ?? t.decimals,
-          balance: t.amount,
+          // TokenEntry.balance is `number`; large LP-scale values will lose
+          // precision here but routing/display doesn't depend on exact low
+          // digits. Precise arithmetic happens elsewhere (BurnTab) via
+          // `amount_str` parsed to BigInt.
+          balance: Number(t.amount),
         }
       })
       .sort((a, b) => {
@@ -129,7 +133,7 @@ function buildTokenList(
       token_id: tokenId,
       name: meta?.name ?? walletToken?.name ?? null,
       decimals: meta?.decimals ?? walletToken?.decimals ?? 0,
-      balance: walletToken?.amount,
+      balance: walletToken ? Number(walletToken.amount) : undefined,
     }
 
     if (walletToken !== undefined) {
@@ -231,7 +235,8 @@ export function SmartSwapView({
   const sourceBalance: number | undefined = useMemo(() => {
     if (!sourceToken) return undefined
     if (sourceToken.token_id === ERG_TOKEN_ID) return walletBalance?.erg_nano
-    return walletBalance?.tokens.find((t) => t.token_id === sourceToken.token_id)?.amount
+    const raw = walletBalance?.tokens.find((t) => t.token_id === sourceToken.token_id)?.amount
+    return raw !== undefined ? Number(raw) : undefined
   }, [sourceToken, walletBalance])
 
   const insufficientBalance = useMemo<boolean>(() => {
@@ -325,7 +330,6 @@ export function SmartSwapView({
   const canExecute =
     selectedRoute !== null &&
     selectedRoute.route.hops.length === 1 &&
-    selectedRoute.route.hops[0].pool_type === 'N2T' &&
     walletAddress !== null &&
     !insufficientBalance
 
@@ -334,7 +338,6 @@ export function SmartSwapView({
     if (!walletAddress) return 'Connect wallet'
     if (insufficientBalance) return 'Insufficient balance'
     if (selectedRoute.route.hops.length > 1) return 'Multi-hop execution coming soon'
-    if (selectedRoute.route.hops[0].pool_type !== 'N2T') return 'T2T direct swap not yet supported'
     return null
   })()
 
