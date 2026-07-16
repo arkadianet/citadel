@@ -1,6 +1,6 @@
 import './Sidebar.css'
 
-type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management' | 'ergopad-recovery'
+type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management' | 'stake-recovery'
 
 interface SidebarProps {
   view: View
@@ -269,10 +269,10 @@ export function Sidebar({ view, onNavigate, isConnected, capabilityTier, collaps
           <span className="sidebar-tooltip">UTXO Management</span>
         </button>
 
-        {/* Ergopad Recovery */}
+        {/* Stake Recovery */}
         <button
-          className={`sidebar-item ${view === 'ergopad-recovery' ? 'active' : ''} ${!canUseProtocols ? 'disabled' : ''}`}
-          onClick={canUseProtocols ? () => onNavigate('ergopad-recovery') : undefined}
+          className={`sidebar-item ${view === 'stake-recovery' ? 'active' : ''} ${!canUseProtocols ? 'disabled' : ''}`}
+          onClick={canUseProtocols ? () => onNavigate('stake-recovery') : undefined}
           disabled={!canUseProtocols}
         >
           <div className="sidebar-dashboard-icon">
@@ -282,10 +282,10 @@ export function Sidebar({ view, onNavigate, isConnected, capabilityTier, collaps
             </svg>
           </div>
           <div className="sidebar-item-text">
-            <span className="sidebar-item-name">Ergopad Recovery</span>
+            <span className="sidebar-item-name">Stake Recovery</span>
             <span className="sidebar-item-desc">v1 Stake Unlock</span>
           </div>
-          <span className="sidebar-tooltip">Ergopad Recovery</span>
+          <span className="sidebar-tooltip">Stake Recovery</span>
         </button>
       </div>
     </nav>

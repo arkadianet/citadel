@@ -3,19 +3,17 @@ use std::collections::{HashMap, HashSet};
 use ergo_lib::ergotree_ir::chain::ergo_box::{ErgoBox, NonMandatoryRegisterId};
 use ergo_tx::ergo_box_utils::{extract_long_coll, get_register_coll_byte_hex};
 
-use crate::constants::{
-    ERGOPAD_DECIMALS, ERGOPAD_TOKEN, STAKE_BOX_ADDRESS, STAKE_BOX_MAX_PAGES,
-    STAKE_BOX_PAGE_SIZE, STAKE_STATE_ADDRESS, STAKE_STATE_NFT, STAKE_TOKEN,
-};
+use crate::constants::{StakeProtocolConfig, PROTOCOLS, STAKE_BOX_MAX_PAGES, STAKE_BOX_PAGE_SIZE};
 use crate::state::{RecoverableStake, RecoveryError, RecoveryScan, StakeStateSnapshot};
 
-/// Fetch the singleton StakeStateBox and parse its R4.
+/// Fetch the singleton StakeStateBox for `cfg` and parse its R4.
 pub async fn fetch_stake_state(
     node: &ergo_node_client::NodeClient,
+    cfg: &StakeProtocolConfig,
 ) -> Result<(ErgoBox, StakeStateSnapshot), RecoveryError> {
     let boxes = node
         .inner()
-        .unspent_boxes_by_address(&STAKE_STATE_ADDRESS.to_string(), 0, 16)
+        .unspent_boxes_by_address(&cfg.stake_state_address.to_string(), 0, 16)
         .await
         .map_err(|e| RecoveryError::NodeError(e.to_string()))?;
 
@@ -25,16 +23,19 @@ pub async fn fetch_stake_state(
             b.tokens
                 .as_ref()
                 .and_then(|t| t.get(0))
-                .map(|first| hex::encode(first.token_id.as_ref()) == STAKE_STATE_NFT)
+                .map(|first| hex::encode(first.token_id.as_ref()) == cfg.stake_state_nft)
                 .unwrap_or(false)
         })
-        .ok_or(RecoveryError::StateBoxNotFound)?;
+        .ok_or_else(|| RecoveryError::StateBoxNotFound(cfg.name.to_string()))?;
 
-    let snapshot = parse_stake_state(&ergo_box)?;
+    let snapshot = parse_stake_state(&ergo_box, cfg)?;
     Ok((ergo_box, snapshot))
 }
 
-fn parse_stake_state(ergo_box: &ErgoBox) -> Result<StakeStateSnapshot, RecoveryError> {
+fn parse_stake_state(
+    ergo_box: &ErgoBox,
+    cfg: &StakeProtocolConfig,
+) -> Result<StakeStateSnapshot, RecoveryError> {
     let r4 = ergo_box
         .additional_registers
         .get_constant(NonMandatoryRegisterId::R4)
@@ -56,11 +57,12 @@ fn parse_stake_state(ergo_box: &ErgoBox) -> Result<StakeStateSnapshot, RecoveryE
         .ok_or_else(|| RecoveryError::InvalidStateBox("no tokens".into()))?;
     let stake_token_amount = tokens
         .iter()
-        .find(|t| hex::encode(t.token_id.as_ref()) == STAKE_TOKEN)
+        .find(|t| hex::encode(t.token_id.as_ref()) == cfg.stake_token)
         .map(|t| u64::from(t.amount) as i64)
         .ok_or_else(|| RecoveryError::InvalidStateBox("no stake token".into()))?;
 
     Ok(StakeStateSnapshot {
+        protocol: cfg.name.to_string(),
         state_box_id: hex::encode(ergo_box.box_id().as_ref()),
         state_box_value_nano: u64::from(ergo_box.value) as i64,
         total_staked_raw: longs[0],
@@ -72,16 +74,17 @@ fn parse_stake_state(ergo_box: &ErgoBox) -> Result<StakeStateSnapshot, RecoveryE
     })
 }
 
-/// Fetch the unspent StakeBox whose R5 equals `stake_key_id`.
+/// Fetch the unspent StakeBox whose R5 equals `stake_key_id` on protocol `cfg`.
 pub async fn fetch_stake_box_by_key(
     node: &ergo_node_client::NodeClient,
+    cfg: &StakeProtocolConfig,
     stake_key_id: &str,
 ) -> Result<ErgoBox, RecoveryError> {
     for page in 0..STAKE_BOX_MAX_PAGES {
         let boxes = node
             .inner()
             .unspent_boxes_by_address(
-                &STAKE_BOX_ADDRESS.to_string(),
+                &cfg.stake_box_address.to_string(),
                 page * STAKE_BOX_PAGE_SIZE,
                 STAKE_BOX_PAGE_SIZE,
             )
@@ -102,76 +105,95 @@ pub async fn fetch_stake_box_by_key(
     Err(RecoveryError::StakeBoxNotFound(stake_key_id.to_string()))
 }
 
+/// Auto-detect which registered protocol holds an unspent StakeBox for `stake_key_id`.
+/// Tries each protocol's stake P2S in turn; returns the owning config plus the box.
+pub async fn find_stake_box_by_key(
+    node: &ergo_node_client::NodeClient,
+    stake_key_id: &str,
+) -> Result<(&'static StakeProtocolConfig, ErgoBox), RecoveryError> {
+    for cfg in PROTOCOLS {
+        match fetch_stake_box_by_key(node, cfg, stake_key_id).await {
+            Ok(ergo_box) => return Ok((cfg, ergo_box)),
+            Err(RecoveryError::StakeBoxNotFound(_)) => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    Err(RecoveryError::StakeBoxNotFound(stake_key_id.to_string()))
+}
+
 fn r5_matches(ergo_box: &ErgoBox, stake_key_id: &str) -> bool {
     get_register_coll_byte_hex(ergo_box, NonMandatoryRegisterId::R5)
         .map(|hex| hex == stake_key_id)
         .unwrap_or(false)
 }
 
-/// Scan the v1 stake P2S, matching R5 values against `candidate_token_ids`.
-/// Returns a snapshot of the live state plus every candidate that had a live StakeBox.
+/// Scan every registered protocol's stake P2S, matching R5 values against
+/// `candidate_token_ids`. Returns each reachable protocol's live state plus every
+/// candidate that had a live StakeBox (tagged with its owning protocol).
 pub async fn discover_recoverable_stakes(
     node: &ergo_node_client::NodeClient,
     candidate_token_ids: &[String],
 ) -> Result<RecoveryScan, RecoveryError> {
-    let (_state_box, state_snapshot) = fetch_stake_state(node).await?;
-
     let wanted: HashSet<&str> = candidate_token_ids.iter().map(|s| s.as_str()).collect();
     let candidates_checked = wanted.len() as u64;
-    if wanted.is_empty() {
-        return Ok(RecoveryScan {
-            state: state_snapshot,
-            stakes: vec![],
-            candidates_checked: 0,
-            boxes_scanned: 0,
-            pages_fetched: 0,
-            hit_page_limit: false,
-        });
-    }
 
+    let mut states: Vec<StakeStateSnapshot> = Vec::new();
     let mut found: HashMap<String, RecoverableStake> = HashMap::new();
     let mut boxes_scanned: u64 = 0;
     let mut pages_fetched: u64 = 0;
-    let mut hit_page_limit = true;
+    let mut hit_page_limit = false;
 
-    'outer: for page in 0..STAKE_BOX_MAX_PAGES {
-        let boxes = node
-            .inner()
-            .unspent_boxes_by_address(
-                &STAKE_BOX_ADDRESS.to_string(),
-                page * STAKE_BOX_PAGE_SIZE,
-                STAKE_BOX_PAGE_SIZE,
-            )
-            .await
-            .map_err(|e| RecoveryError::NodeError(e.to_string()))?;
+    for cfg in PROTOCOLS {
+        // A protocol whose state box can't be found is treated as inactive: record
+        // nothing and move on rather than failing the whole scan.
+        let state_snapshot = match fetch_stake_state(node, cfg).await {
+            Ok((_box, snap)) => snap,
+            Err(RecoveryError::StateBoxNotFound(_)) => continue,
+            Err(e) => return Err(e),
+        };
+        states.push(state_snapshot);
 
-        let page_len = boxes.len() as u64;
-        pages_fetched += 1;
-        boxes_scanned += page_len;
+        if wanted.is_empty() {
+            continue;
+        }
 
-        for ergo_box in boxes {
-            match parse_stake_box(&ergo_box) {
-                Ok(stake) if wanted.contains(stake.stake_key_id.as_str()) => {
-                    found.insert(stake.stake_key_id.clone(), stake);
-                    if found.len() == wanted.len() {
-                        hit_page_limit = false;
-                        break 'outer;
+        let mut protocol_hit_limit = true;
+        'outer: for page in 0..STAKE_BOX_MAX_PAGES {
+            let boxes = node
+                .inner()
+                .unspent_boxes_by_address(
+                    &cfg.stake_box_address.to_string(),
+                    page * STAKE_BOX_PAGE_SIZE,
+                    STAKE_BOX_PAGE_SIZE,
+                )
+                .await
+                .map_err(|e| RecoveryError::NodeError(e.to_string()))?;
+
+            let page_len = boxes.len() as u64;
+            pages_fetched += 1;
+            boxes_scanned += page_len;
+
+            for ergo_box in boxes {
+                match parse_stake_box(&ergo_box, cfg) {
+                    Ok(stake) if wanted.contains(stake.stake_key_id.as_str()) => {
+                        found.insert(stake.stake_key_id.clone(), stake);
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        tracing::debug!("Skipping unparseable stake box: {}", e);
                     }
                 }
-                Ok(_) => {}
-                Err(e) => {
-                    tracing::debug!("Skipping unparseable stake box: {}", e);
-                }
+            }
+            if page_len < STAKE_BOX_PAGE_SIZE {
+                protocol_hit_limit = false;
+                break 'outer;
             }
         }
-        if page_len < STAKE_BOX_PAGE_SIZE {
-            hit_page_limit = false;
-            break;
-        }
+        hit_page_limit |= protocol_hit_limit;
     }
 
     let mut stakes: Vec<RecoverableStake> = found.into_values().collect();
-    stakes.sort_by(|a, b| b.ergopad_amount_raw.cmp(&a.ergopad_amount_raw));
+    stakes.sort_by_key(|s| std::cmp::Reverse(s.reward_amount_raw));
 
     tracing::info!(
         candidates = candidates_checked,
@@ -179,11 +201,11 @@ pub async fn discover_recoverable_stakes(
         pages = pages_fetched,
         matched = stakes.len(),
         hit_page_limit,
-        "Ergopad recovery scan complete"
+        "Stake recovery scan complete"
     );
 
     Ok(RecoveryScan {
-        state: state_snapshot,
+        states,
         stakes,
         candidates_checked,
         boxes_scanned,
@@ -192,7 +214,10 @@ pub async fn discover_recoverable_stakes(
     })
 }
 
-pub fn parse_stake_box(ergo_box: &ErgoBox) -> Result<RecoverableStake, RecoveryError> {
+pub fn parse_stake_box(
+    ergo_box: &ErgoBox,
+    cfg: &StakeProtocolConfig,
+) -> Result<RecoverableStake, RecoveryError> {
     let stake_key_id = get_register_coll_byte_hex(ergo_box, NonMandatoryRegisterId::R5)
         .map_err(|e| RecoveryError::InvalidStakeBox(format!("R5: {e}")))?;
 
@@ -217,24 +242,36 @@ pub fn parse_stake_box(ergo_box: &ErgoBox) -> Result<RecoverableStake, RecoveryE
         .tokens
         .as_ref()
         .ok_or_else(|| RecoveryError::InvalidStakeBox("no tokens".into()))?;
-    let ergopad_amount_raw = tokens
+    let reward_amount_raw = tokens
         .iter()
-        .find(|t| hex::encode(t.token_id.as_ref()) == ERGOPAD_TOKEN)
+        .find(|t| hex::encode(t.token_id.as_ref()) == cfg.reward_token)
         .map(|t| u64::from(t.amount) as i64)
-        .ok_or_else(|| RecoveryError::InvalidStakeBox("no ERGOPAD".into()))?;
+        .ok_or_else(|| {
+            RecoveryError::InvalidStakeBox(format!("no {} reward token", cfg.reward_token_name))
+        })?;
 
-    let divisor = 10_i64.pow(ERGOPAD_DECIMALS);
-    let whole = ergopad_amount_raw / divisor;
-    let frac = (ergopad_amount_raw.abs() % divisor) as u64;
-    let ergopad_amount_display = format!("{}.{:02}", whole, frac);
+    let reward_amount_display = format_reward(reward_amount_raw, cfg.reward_decimals);
 
     Ok(RecoverableStake {
+        protocol: cfg.name.to_string(),
+        reward_token_name: cfg.reward_token_name.to_string(),
         stake_key_id,
         stake_box_id: hex::encode(ergo_box.box_id().as_ref()),
         stake_box_value_nano: u64::from(ergo_box.value) as i64,
-        ergopad_amount_raw,
+        reward_amount_raw,
         checkpoint,
         stake_time_ms,
-        ergopad_amount_display,
+        reward_amount_display,
     })
+}
+
+/// Format a raw reward amount with `decimals` fractional digits, e.g. `614.68`.
+fn format_reward(raw: i64, decimals: u32) -> String {
+    if decimals == 0 {
+        return raw.to_string();
+    }
+    let divisor = 10_i64.pow(decimals);
+    let whole = raw / divisor;
+    let frac = (raw.abs() % divisor) as u64;
+    format!("{}.{:0width$}", whole, frac, width = decimals as usize)
 }

@@ -1,10 +1,10 @@
 [package]
-name = "ergopad-recovery"
+name = "stake-recovery"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "Permissionless recovery from v1 Ergopad staking for holders of abandoned stake keys"
+description = "Permissionless recovery from v1 Paideia-template staking (Ergopad, EGIO) for holders of abandoned stake keys"
 
 [dependencies]
 citadel-core = { workspace = true }
