@@ -133,7 +133,13 @@ pub fn build_recovery_tx_eip12(
         .map_err(|_| RecoveryError::TxBuildError("Invalid key box value".into()))?;
 
     // Non-change output ERG burden, minus what the key box + stake box already cover.
-    let target = MIN_BOX_VALUE + MIN_MINER_FEE;
+    // Reserves for THREE min-box-value outputs, not two: the reward payout, the
+    // miner fee, and the change box — which is mandatory here (it always carries
+    // the stake-key NFT back to the signer, since `selected_boxes` always includes
+    // the key box). Omitting this third reservation could under-select inputs and
+    // spuriously fail the later `change_erg >= MIN_BOX_VALUE` check even when the
+    // wallet holds plenty of spare ERG.
+    let target = MIN_BOX_VALUE + MIN_BOX_VALUE + MIN_MINER_FEE;
     let already_have = stake_value_nano.saturating_add(key_erg);
     let additional_needed = target.saturating_sub(already_have);
 
@@ -249,10 +255,11 @@ pub fn build_recovery_tx_eip12(
 ///
 /// `amount` is the reward the StakeBox currently holds (full unstake). This is exact
 /// only when the position is already at the StakeStateBox's current checkpoint (no
-/// pending compound); callers should confirm `stake.checkpoint == state.checkpoint`
-/// before broadcasting.
+/// pending compound) — enforced below by comparing `stake.checkpoint` against
+/// `state.checkpoint` before the proxy (and therefore the stake key) is committed.
 pub fn build_paideia_proxy_tx(
     stake: &RecoverableStake,
+    state: &StakeStateSnapshot,
     user_utxos: &[Eip12InputBox],
     recipient_ergo_tree: &str,
     current_height: i32,
@@ -264,6 +271,16 @@ pub fn build_paideia_proxy_tx(
         return Err(RecoveryError::TxBuildError(format!(
             "{} is not a proxy-mechanism pool — use build_recovery_tx_eip12",
             cfg.name
+        )));
+    }
+    // Reject a stale position before the key is ever locked into a proxy: the
+    // executor tx (step 2) requires the StakeBox to be at the state's current
+    // checkpoint and would reject otherwise, forcing a refund. Catch that here so
+    // the user never has to sign a step-1 tx that's already known to be a dead end.
+    if stake.checkpoint != state.checkpoint {
+        return Err(RecoveryError::TxBuildError(format!(
+            "StakeBox checkpoint {} != StakeStateBox checkpoint {} — the position must be compounded to the current checkpoint before it can be unstaked",
+            stake.checkpoint, state.checkpoint
         )));
     }
 
@@ -309,7 +326,13 @@ pub fn build_paideia_proxy_tx(
         .parse()
         .map_err(|_| RecoveryError::TxBuildError("Invalid key box value".into()))?;
 
-    let target = PAIDEIA_PROXY_VALUE + MIN_MINER_FEE;
+    // Reserve headroom for a possible token-change box too: unlike the direct
+    // builder, the stake key itself never lands in change here (it goes into the
+    // proxy), but an extra input box selected below to cover the ERG shortfall may
+    // carry some other token, which forces a change output that wasn't budgeted
+    // for. Without this, `select_erg_boxes` could gather just enough to build the
+    // proxy + fee and then fail the later `change_erg >= MIN_BOX_VALUE` check.
+    let target = PAIDEIA_PROXY_VALUE + MIN_BOX_VALUE + MIN_MINER_FEE;
     let additional_needed = target.saturating_sub(key_erg);
 
     let other_utxos: Vec<Eip12InputBox> = user_utxos

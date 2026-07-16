@@ -3,9 +3,9 @@ use ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox;
 use serde::Serialize;
 use stake_recovery::{
     build_paideia_executor_tx, build_paideia_proxy_tx, build_paideia_refund_tx,
-    build_recovery_tx_eip12, discover_recoverable_stakes, fetch_stake_state, find_stake_box_by_key,
-    parse_stake_box, RecoverableStake, RecoveryMechanism, RecoveryScan, PAIDEIA,
-    PAIDEIA_PROXY_ERGO_TREE,
+    build_recovery_tx_eip12, discover_recoverable_stakes, fetch_stake_box_by_key,
+    fetch_stake_state, find_stake_box_by_key, parse_stake_box, RecoverableStake, RecoveryMechanism,
+    RecoveryScan, PAIDEIA, PAIDEIA_PROXY_ERGO_TREE,
 };
 use tauri::State;
 
@@ -54,7 +54,7 @@ pub async fn build_recovery_tx(
                 fetch_stake_state(&client, cfg).await.str_err()?;
             let state_box = ergo_box_to_eip12(&client, &state_ergo_box).await?;
             let stake_box = ergo_box_to_eip12(&client, &stake_ergo_box).await?;
-            let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
+            let user_ergo_tree = recipient_ergo_tree_for_key(&parsed_utxos, &stake.stake_key_id)?;
 
             let unsigned_tx = build_recovery_tx_eip12(
                 &state_box,
@@ -71,24 +71,37 @@ pub async fn build_recovery_tx(
         }
         RecoveryMechanism::PaideiaProxy => {
             // Payout recipient = the wallet address that holds the stake key (a P2PK).
-            let recipient_ergo_tree = parsed_utxos
-                .iter()
-                .find(|b| b.assets.iter().any(|a| a.token_id == stake.stake_key_id))
-                .map(|b| b.ergo_tree.clone())
-                .ok_or_else(|| {
-                    format!(
-                        "Stake key {} not found in provided utxos",
-                        stake.stake_key_id
-                    )
-                })?;
+            let recipient_ergo_tree =
+                recipient_ergo_tree_for_key(&parsed_utxos, &stake.stake_key_id)?;
+            let (_state_ergo_box, state_snapshot) =
+                fetch_stake_state(&client, cfg).await.str_err()?;
 
-            let unsigned_tx =
-                build_paideia_proxy_tx(&stake, &parsed_utxos, &recipient_ergo_tree, current_height)
-                    .str_err()?;
+            let unsigned_tx = build_paideia_proxy_tx(
+                &stake,
+                &state_snapshot,
+                &parsed_utxos,
+                &recipient_ergo_tree,
+                current_height,
+            )
+            .str_err()?;
             serde_json::to_value(&unsigned_tx)
                 .map_err(|e| format!("Failed to serialize transaction: {}", e))
         }
     }
+}
+
+/// Select the ErgoTree of the parsed UTXO that actually carries `stake_key_id` — the
+/// recipient of a recovery must be whoever holds the key, not just whichever UTXO
+/// happens to be first in the (arbitrarily ordered) wallet UTXO list.
+fn recipient_ergo_tree_for_key(
+    parsed_utxos: &[ergo_tx::Eip12InputBox],
+    stake_key_id: &str,
+) -> Result<String, String> {
+    parsed_utxos
+        .iter()
+        .find(|b| b.assets.iter().any(|a| a.token_id == stake_key_id))
+        .map(|b| b.ergo_tree.clone())
+        .ok_or_else(|| format!("Stake key {} not found in provided utxos", stake_key_id))
 }
 
 /// Expose the parsed stake for a given key (used by the UI to render confirm
@@ -218,12 +231,18 @@ async fn assemble_paideia_proxy_txs(
     let refund_tx = build_paideia_refund_tx(&proxy_box, current_height).str_err()?;
     let refund_json = eip12_tx_to_node_json(&refund_tx)?;
 
-    // Executor needs the live StakeStateBox and the matching StakeBox.
+    // Executor needs the live StakeStateBox and the matching StakeBox. Query the
+    // Paideia StakeBox directly rather than the generic multi-protocol
+    // `find_stake_box_by_key` — this key came out of a real Paideia proxy box, so
+    // its StakeBox must be Paideia's; using the auto-detector here would let it
+    // return a mismatched `cfg` (a decoy/foreign box at a different protocol's
+    // address) instead of erroring, silently pairing this box's data with the
+    // wrong protocol's `parse_stake_box`.
     let (state_ergo_box, state_snapshot) = fetch_stake_state(client, &PAIDEIA).await.str_err()?;
-    let (cfg, stake_ergo_box) = find_stake_box_by_key(client, &stake_key_id)
+    let stake_ergo_box = fetch_stake_box_by_key(client, &PAIDEIA, &stake_key_id)
         .await
         .str_err()?;
-    let stake = parse_stake_box(&stake_ergo_box, cfg).str_err()?;
+    let stake = parse_stake_box(&stake_ergo_box, &PAIDEIA).str_err()?;
     let state_box = ergo_box_to_eip12(client, &state_ergo_box).await?;
     let stake_box = ergo_box_to_eip12(client, &stake_ergo_box).await?;
 

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { QRCodeSVG } from 'qrcode.react'
 import {
@@ -65,6 +65,12 @@ export function StakeRecoveryTab({
   // Paideia step 2: after the step-1 proxy is confirmed, the reward payout and the
   // refund are both permissionless (no signature). We dry-run both against the exact
   // proxy box before broadcasting either.
+  //
+  // Two INDEPENDENT flows can be active at once — a live redemption just signed in
+  // this session (the modal) and a resumed step 2 from an older tx id (the card
+  // below) — so each gets its own state rather than sharing one, to guarantee a
+  // resumed ready/done proxy can never be mistaken for, or clobber, a freshly
+  // started recovery's step-2 state (or vice versa).
   type Step2Status =
     | 'idle'
     | 'resolving'
@@ -73,10 +79,15 @@ export function StakeRecoveryTab({
     | 'submitting'
     | 'done'
     | 'error'
-  const [step2Status, setStep2Status] = useState<Step2Status>('idle')
-  const [step2Error, setStep2Error] = useState<string | null>(null)
-  const [proxyCheck, setProxyCheck] = useState<PaideiaProxyCheck | null>(null)
-  const [step2TxId, setStep2TxId] = useState<string | null>(null)
+  interface Step2FlowState {
+    status: Step2Status
+    error: string | null
+    proxyCheck: PaideiaProxyCheck | null
+    txId: string | null
+  }
+  const idleStep2: Step2FlowState = { status: 'idle', error: null, proxyCheck: null, txId: null }
+  const [activeStep2, setActiveStep2] = useState<Step2FlowState>(idleStep2)
+  const [resumeStep2, setResumeStep2] = useState<Step2FlowState>(idleStep2)
 
   // Resume a Paideia step 2 from a step-1 tx id when the original signing session
   // (browser tab / app restart) is gone. Step 2 is fully re-derivable on-chain from
@@ -164,47 +175,46 @@ export function StakeRecoveryTab({
     setActiveKey(null)
     setRedeemStep('idle')
     setRedeemError(null)
-    setStep2Status('idle')
-    setStep2Error(null)
-    setProxyCheck(null)
-    setStep2TxId(null)
+    setActiveStep2(idleStep2)
     flow.reset()
   }, [flow])
 
   // Resolve the confirmed proxy box from a step-1 tx id, then dry-run both spend
-  // paths. Takes an explicit txId (rather than reading component state) so it works
-  // identically for the live post-signing flow and for a cold resume.
-  const handleStep2Check = useCallback(async (txId: string) => {
-    if (!txId) return
-    setStep2Status('resolving')
-    setStep2Error(null)
-    try {
-      const boxId = await paideiaProxyBoxId(txId)
-      setStep2Status('checking')
-      const check = await checkPaideiaProxy(boxId)
-      setProxyCheck(check)
-      setStep2Status('ready')
-    } catch (e) {
-      setStep2Error(String(e))
-      setStep2Status('error')
-    }
-  }, [])
-
-  const handleStep2Submit = useCallback(
-    async (which: 'executor' | 'refund') => {
-      if (!proxyCheck) return
-      setStep2Status('submitting')
-      setStep2Error(null)
+  // paths. Takes an explicit txId + its own setter (rather than reading/writing
+  // shared component state) so the live post-signing flow and a cold resume never
+  // interfere with each other.
+  const runStep2Check = useCallback(
+    async (txId: string, setState: Dispatch<SetStateAction<Step2FlowState>>) => {
+      if (!txId) return
+      setState(s => ({ ...s, status: 'resolving', error: null }))
       try {
-        const txId = await submitPaideiaProxyTx(proxyCheck.proxyBoxId, which)
-        setStep2TxId(txId)
-        setStep2Status('done')
+        const boxId = await paideiaProxyBoxId(txId)
+        setState(s => ({ ...s, status: 'checking' }))
+        const check = await checkPaideiaProxy(boxId)
+        setState(s => ({ ...s, status: 'ready', proxyCheck: check }))
       } catch (e) {
-        setStep2Error(String(e))
-        setStep2Status('error')
+        setState(s => ({ ...s, status: 'error', error: String(e) }))
       }
     },
-    [proxyCheck],
+    [],
+  )
+
+  const runStep2Submit = useCallback(
+    async (
+      which: 'executor' | 'refund',
+      state: Step2FlowState,
+      setState: Dispatch<SetStateAction<Step2FlowState>>,
+    ) => {
+      if (!state.proxyCheck) return
+      setState(s => ({ ...s, status: 'submitting', error: null }))
+      try {
+        const txId = await submitPaideiaProxyTx(state.proxyCheck.proxyBoxId, which)
+        setState(s => ({ ...s, status: 'done', txId }))
+      } catch (e) {
+        setState(s => ({ ...s, status: 'error', error: String(e) }))
+      }
+    },
+    [],
   )
 
   const handleRedeem = useCallback(async (stake: RecoverableStake) => {
@@ -303,7 +313,7 @@ export function StakeRecoveryTab({
           </div>
         </CardHeader>
         <CardBody>
-          {step2Status === 'idle' && (
+          {resumeStep2.status === 'idle' && (
             <div className="recovery-lookup">
               <input
                 type="text"
@@ -311,12 +321,12 @@ export function StakeRecoveryTab({
                 placeholder="Step-1 proxy-creation transaction ID (64 hex chars)..."
                 value={resumeTxIdInput}
                 onChange={e => setResumeTxIdInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleStep2Check(resumeTxIdInput.trim()) }}
+                onKeyDown={e => { if (e.key === 'Enter') runStep2Check(resumeTxIdInput.trim(), setResumeStep2) }}
                 spellCheck={false}
               />
               <button
                 className="btn btn-secondary"
-                onClick={() => handleStep2Check(resumeTxIdInput.trim())}
+                onClick={() => runStep2Check(resumeTxIdInput.trim(), setResumeStep2)}
                 disabled={!resumeTxIdInput.trim()}
               >
                 Check
@@ -324,46 +334,46 @@ export function StakeRecoveryTab({
             </div>
           )}
 
-          {(step2Status === 'resolving' || step2Status === 'checking') && (
+          {(resumeStep2.status === 'resolving' || resumeStep2.status === 'checking') && (
             <div className="recovery-centered">
               <div className="spinner-small" />
               <span>
-                {step2Status === 'resolving'
+                {resumeStep2.status === 'resolving'
                   ? 'Resolving the proxy box from that transaction...'
                   : 'Dry-running payout and refund against the node...'}
               </span>
             </div>
           )}
 
-          {(step2Status === 'ready' || step2Status === 'submitting') && proxyCheck && (
+          {(resumeStep2.status === 'ready' || resumeStep2.status === 'submitting') && resumeStep2.proxyCheck && (
             <div className="recovery-step2">
               <div className="recovery-stat">
                 <span className="recovery-stat-label">Reward payout</span>
                 <span className="recovery-stat-value">
-                  {proxyCheck.executor.valid ? '✓ validates' : '✗ not runnable yet'}
+                  {resumeStep2.proxyCheck.executor.valid ? '✓ validates' : '✗ not runnable yet'}
                 </span>
               </div>
-              {!proxyCheck.executor.valid && (
-                <div className="recovery-scan-detail">{proxyCheck.executor.message}</div>
+              {!resumeStep2.proxyCheck.executor.valid && (
+                <div className="recovery-scan-detail">{resumeStep2.proxyCheck.executor.message}</div>
               )}
               <div className="recovery-stat">
                 <span className="recovery-stat-label">Refund (safety net)</span>
                 <span className="recovery-stat-value">
-                  {proxyCheck.refund.valid ? '✓ validates' : '✗ ' + proxyCheck.refund.message}
+                  {resumeStep2.proxyCheck.refund.valid ? '✓ validates' : '✗ ' + resumeStep2.proxyCheck.refund.message}
                 </span>
               </div>
               <div className="recovery-step2-actions">
                 <button
                   className="btn btn-primary"
-                  disabled={!proxyCheck.executor.valid || step2Status === 'submitting'}
-                  onClick={() => handleStep2Submit('executor')}
+                  disabled={!resumeStep2.proxyCheck.executor.valid || resumeStep2.status === 'submitting'}
+                  onClick={() => runStep2Submit('executor', resumeStep2, setResumeStep2)}
                 >
-                  {step2Status === 'submitting' ? 'Submitting...' : 'Execute payout'}
+                  {resumeStep2.status === 'submitting' ? 'Submitting...' : 'Execute payout'}
                 </button>
                 <button
                   className="btn btn-secondary"
-                  disabled={!proxyCheck.refund.valid || step2Status === 'submitting'}
-                  onClick={() => handleStep2Submit('refund')}
+                  disabled={!resumeStep2.proxyCheck.refund.valid || resumeStep2.status === 'submitting'}
+                  onClick={() => runStep2Submit('refund', resumeStep2, setResumeStep2)}
                 >
                   Refund key instead
                 </button>
@@ -371,7 +381,7 @@ export function StakeRecoveryTab({
             </div>
           )}
 
-          {step2Status === 'done' && (
+          {resumeStep2.status === 'done' && (
             <div className="success-step">
               <div className="success-icon">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-500)" strokeWidth="2">
@@ -379,13 +389,11 @@ export function StakeRecoveryTab({
                 </svg>
               </div>
               <h3>Submitted</h3>
-              {step2TxId && <TxSuccess txId={step2TxId} explorerUrl={explorerUrl} />}
+              {resumeStep2.txId && <TxSuccess txId={resumeStep2.txId} explorerUrl={explorerUrl} />}
               <button
                 className="btn btn-primary"
                 onClick={() => {
-                  setStep2Status('idle')
-                  setProxyCheck(null)
-                  setStep2TxId(null)
+                  setResumeStep2(idleStep2)
                   setResumeTxIdInput('')
                   handleScan()
                 }}
@@ -395,15 +403,15 @@ export function StakeRecoveryTab({
             </div>
           )}
 
-          {step2Status === 'error' && (
+          {resumeStep2.status === 'error' && (
             <>
-              <p className="error-message">{step2Error}</p>
-              <button className="btn btn-secondary" onClick={() => handleStep2Check(resumeTxIdInput.trim())}>
+              <p className="error-message">{resumeStep2.error}</p>
+              <button className="btn btn-secondary" onClick={() => runStep2Check(resumeTxIdInput.trim(), setResumeStep2)}>
                 Retry
               </button>
               <button
                 className="btn btn-ghost"
-                onClick={() => { setStep2Status('idle'); setStep2Error(null) }}
+                onClick={() => setResumeStep2(idleStep2)}
               >
                 Start over
               </button>
@@ -629,7 +637,7 @@ export function StakeRecoveryTab({
 
               {redeemStep === 'success' && flow.txId && activeKey?.protocol === 'Paideia' && (
                 <div className="success-step">
-                  {step2Status === 'done' ? (
+                  {activeStep2.status === 'done' ? (
                     <>
                       <div className="success-icon">
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-500)" strokeWidth="2">
@@ -637,7 +645,7 @@ export function StakeRecoveryTab({
                         </svg>
                       </div>
                       <h3>Payout submitted</h3>
-                      {step2TxId && <TxSuccess txId={step2TxId} explorerUrl={explorerUrl} />}
+                      {activeStep2.txId && <TxSuccess txId={activeStep2.txId} explorerUrl={explorerUrl} />}
                       <button className="btn btn-primary" onClick={() => { closeRedeem(); handleScan() }}>
                         Done
                       </button>
@@ -655,51 +663,51 @@ export function StakeRecoveryTab({
                       <div className="recovery-scan-detail">Step 1 proxy tx:</div>
                       <TxSuccess txId={flow.txId} explorerUrl={explorerUrl} />
 
-                      {step2Status === 'idle' && (
-                        <button className="btn btn-primary" onClick={() => handleStep2Check(flow.txId!)}>
+                      {activeStep2.status === 'idle' && (
+                        <button className="btn btn-primary" onClick={() => runStep2Check(flow.txId!, setActiveStep2)}>
                           Verify payout &amp; refund (dry-run)
                         </button>
                       )}
-                      {(step2Status === 'resolving' || step2Status === 'checking') && (
+                      {(activeStep2.status === 'resolving' || activeStep2.status === 'checking') && (
                         <div className="recovery-centered">
                           <div className="spinner-small" />
                           <span>
-                            {step2Status === 'resolving'
+                            {activeStep2.status === 'resolving'
                               ? 'Waiting for the proxy box to confirm...'
                               : 'Dry-running payout and refund against the node...'}
                           </span>
                         </div>
                       )}
 
-                      {(step2Status === 'ready' || step2Status === 'submitting') && proxyCheck && (
+                      {(activeStep2.status === 'ready' || activeStep2.status === 'submitting') && activeStep2.proxyCheck && (
                         <div className="recovery-step2">
                           <div className="recovery-stat">
                             <span className="recovery-stat-label">Reward payout</span>
                             <span className="recovery-stat-value">
-                              {proxyCheck.executor.valid ? '✓ validates' : '✗ not runnable yet'}
+                              {activeStep2.proxyCheck.executor.valid ? '✓ validates' : '✗ not runnable yet'}
                             </span>
                           </div>
-                          {!proxyCheck.executor.valid && (
-                            <div className="recovery-scan-detail">{proxyCheck.executor.message}</div>
+                          {!activeStep2.proxyCheck.executor.valid && (
+                            <div className="recovery-scan-detail">{activeStep2.proxyCheck.executor.message}</div>
                           )}
                           <div className="recovery-stat">
                             <span className="recovery-stat-label">Refund (safety net)</span>
                             <span className="recovery-stat-value">
-                              {proxyCheck.refund.valid ? '✓ validates' : '✗ ' + proxyCheck.refund.message}
+                              {activeStep2.proxyCheck.refund.valid ? '✓ validates' : '✗ ' + activeStep2.proxyCheck.refund.message}
                             </span>
                           </div>
                           <div className="recovery-step2-actions">
                             <button
                               className="btn btn-primary"
-                              disabled={!proxyCheck.executor.valid || step2Status === 'submitting'}
-                              onClick={() => handleStep2Submit('executor')}
+                              disabled={!activeStep2.proxyCheck.executor.valid || activeStep2.status === 'submitting'}
+                              onClick={() => runStep2Submit('executor', activeStep2, setActiveStep2)}
                             >
-                              {step2Status === 'submitting' ? 'Submitting...' : `Execute payout (${activeKey.rewardAmountDisplay} ${activeKey.rewardTokenName})`}
+                              {activeStep2.status === 'submitting' ? 'Submitting...' : `Execute payout (${activeKey.rewardAmountDisplay} ${activeKey.rewardTokenName})`}
                             </button>
                             <button
                               className="btn btn-secondary"
-                              disabled={!proxyCheck.refund.valid || step2Status === 'submitting'}
-                              onClick={() => handleStep2Submit('refund')}
+                              disabled={!activeStep2.proxyCheck.refund.valid || activeStep2.status === 'submitting'}
+                              onClick={() => runStep2Submit('refund', activeStep2, setActiveStep2)}
                             >
                               Refund key instead
                             </button>
@@ -707,10 +715,10 @@ export function StakeRecoveryTab({
                         </div>
                       )}
 
-                      {step2Status === 'error' && (
+                      {activeStep2.status === 'error' && (
                         <>
-                          <p className="error-message">{step2Error}</p>
-                          <button className="btn btn-secondary" onClick={() => handleStep2Check(flow.txId!)}>
+                          <p className="error-message">{activeStep2.error}</p>
+                          <button className="btn btn-secondary" onClick={() => runStep2Check(flow.txId!, setActiveStep2)}>
                             Retry
                           </button>
                         </>

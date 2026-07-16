@@ -6,30 +6,42 @@ use ergo_tx::ergo_box_utils::{extract_long_coll, get_register_coll_byte_hex};
 use crate::constants::{StakeProtocolConfig, PROTOCOLS, STAKE_BOX_MAX_PAGES, STAKE_BOX_PAGE_SIZE};
 use crate::state::{RecoverableStake, RecoveryError, RecoveryScan, StakeStateSnapshot};
 
-/// Fetch the singleton StakeStateBox for `cfg` and parse its R4.
+/// Fetch the singleton StakeStateBox for `cfg` and parse its R4. Paginates the
+/// state address rather than assuming the box is among the first page: the
+/// address is a P2S anyone can send arbitrary boxes to (dust/spam), so the real
+/// singleton is not guaranteed to be near the front of an old, multi-year address.
 pub async fn fetch_stake_state(
     node: &ergo_node_client::NodeClient,
     cfg: &StakeProtocolConfig,
 ) -> Result<(ErgoBox, StakeStateSnapshot), RecoveryError> {
-    let boxes = node
-        .inner()
-        .unspent_boxes_by_address(&cfg.stake_state_address.to_string(), 0, 16)
-        .await
-        .map_err(|e| RecoveryError::NodeError(e.to_string()))?;
+    for page in 0..STAKE_BOX_MAX_PAGES {
+        let boxes = node
+            .inner()
+            .unspent_boxes_by_address(
+                &cfg.stake_state_address.to_string(),
+                page * STAKE_BOX_PAGE_SIZE,
+                STAKE_BOX_PAGE_SIZE,
+            )
+            .await
+            .map_err(|e| RecoveryError::NodeError(e.to_string()))?;
 
-    let ergo_box = boxes
-        .into_iter()
-        .find(|b| {
+        let page_len = boxes.len() as u64;
+        if let Some(ergo_box) = boxes.into_iter().find(|b| {
             b.tokens
                 .as_ref()
                 .and_then(|t| t.get(0))
                 .map(|first| hex::encode(first.token_id.as_ref()) == cfg.stake_state_nft)
                 .unwrap_or(false)
-        })
-        .ok_or_else(|| RecoveryError::StateBoxNotFound(cfg.name.to_string()))?;
+        }) {
+            let snapshot = parse_stake_state(&ergo_box, cfg)?;
+            return Ok((ergo_box, snapshot));
+        }
+        if page_len < STAKE_BOX_PAGE_SIZE {
+            break;
+        }
+    }
 
-    let snapshot = parse_stake_state(&ergo_box, cfg)?;
-    Ok((ergo_box, snapshot))
+    Err(RecoveryError::StateBoxNotFound(cfg.name.to_string()))
 }
 
 fn parse_stake_state(
@@ -107,14 +119,25 @@ pub async fn fetch_stake_box_by_key(
 
 /// Auto-detect which registered protocol holds an unspent StakeBox for `stake_key_id`.
 /// Tries each protocol's stake P2S in turn; returns the owning config plus the box.
+///
+/// An R5 match alone isn't proof the box belongs to `cfg`: a P2S address accepts
+/// arbitrary boxes from anyone, so a foreign/decoy box could coincidentally carry
+/// this key in R5. Each candidate is validated against `cfg`'s expected
+/// register/token layout via [`parse_stake_box`] before being accepted; a
+/// candidate that fails validation is skipped rather than returned, so a real
+/// match at a later protocol is never shadowed by an earlier false one.
 pub async fn find_stake_box_by_key(
     node: &ergo_node_client::NodeClient,
     stake_key_id: &str,
 ) -> Result<(&'static StakeProtocolConfig, ErgoBox), RecoveryError> {
     for cfg in PROTOCOLS {
         match fetch_stake_box_by_key(node, cfg, stake_key_id).await {
-            Ok(ergo_box) => return Ok((cfg, ergo_box)),
-            Err(RecoveryError::StakeBoxNotFound(_)) => continue,
+            Ok(ergo_box) => {
+                if parse_stake_box(&ergo_box, cfg).is_ok() {
+                    return Ok((cfg, ergo_box));
+                }
+            }
+            Err(RecoveryError::StakeBoxNotFound(_)) => {}
             Err(e) => return Err(e),
         }
     }

@@ -1,19 +1,24 @@
 //! Stake Recovery (v1 Paideia-template staking)
 //!
-//! Permissionless recovery from legacy v1 staking contracts built on the shared
-//! Paideia staking template (Ergopad, EGIO, …). Anyone holding a `Stake Key` NFT
-//! can combine it with the live StakeStateBox and the matching StakeBox to redeem
-//! the underlying reward tokens, without any action from the (now-defunct) operators.
+//! Permissionless recovery from legacy v1 staking contracts built on the Paideia
+//! staking tooling (Ergopad, EGIO, and Paideia's own v1 staking). Anyone holding an
+//! abandoned `Stake Key` NFT can redeem the underlying reward tokens, without any
+//! action from the (now-defunct) operators — via one of two [`RecoveryMechanism`]
+//! variants:
 //!
-//! The StakeBox contract only verifies that some input in the tx carries the token
-//! whose ID equals its R5 (the stake key). The key does not need to be burned or
-//! moved — it flows through the change output back to the signer.
+//! - **Direct** (Ergopad, EGIO): the StakeBox contract only verifies that some
+//!   input in the tx carries the token whose ID equals its R5 (the stake key). The
+//!   key does not need to be burned or moved — it flows through the change output
+//!   back to the signer. Both protocols share the same StakeBox / StakeStateBox
+//!   script *code* (verified byte-identical); only the embedded token/NFT
+//!   constants differ.
+//! - **PaideiaProxy** (Paideia): a structurally different contract family
+//!   (`101f` / `104e`) redeemed via a single-use unstake proxy box (`101b`)
+//!   instead of a single direct spend. The stake key is burned on a successful
+//!   unstake; a permissionless refund path is the fallback if it can't run.
 //!
-//! Registered protocols live in [`constants::PROTOCOLS`]. Every entry shares the
-//! same StakeBox / StakeStateBox script *code* (verified byte-identical across
-//! Ergopad and EGIO); only the embedded token/NFT constants differ. Protocols whose
-//! contract structure diverges (e.g. Paideia's own `101f`/`104e` v1 staking) are
-//! deliberately not registered — see `constants.rs`.
+//! Registered protocols live in [`constants::PROTOCOLS`] — see `constants.rs` and
+//! `tx_builder.rs` for the full detail on each mechanism.
 
 pub mod constants;
 pub mod fetch;

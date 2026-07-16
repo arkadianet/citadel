@@ -1,24 +1,28 @@
 //! Registry of v1 Paideia-template staking contracts eligible for permissionless
 //! stake recovery.
 //!
-//! Every protocol here shares the *same* StakeBox / StakeStateBox script templates
-//! (verified byte-identical code bodies across Ergopad and EGIO — only the embedded
-//! token/NFT constants differ). Recovery works because the StakeBox script only
-//! requires that *some* input in the redeeming tx carries the token whose ID equals
-//! the StakeBox R5 (the stake-key NFT); the key is neither burned nor moved, it flows
-//! back through the change output to the signer.
+//! Two redemption mechanisms are registered here, one per [`RecoveryMechanism`]
+//! variant, with differing stake-key handling:
 //!
-//! Paideia's *own* v1 staking uses a structurally different contract family
-//! (StakeBox `101f` / StakeStateBox `104e`, different opcode bodies) and a
-//! different *redemption mechanism*: unstaking is not a direct "combine the key box
-//! with the state box" spend, it routes through a single-use **unstake proxy** box
-//! (`101b`) that carries the stake key and names a payout recipient in its R5. It is
-//! registered here under [`RecoveryMechanism::PaideiaProxy`] so the Ergopad/EGIO
-//! [`RecoveryMechanism::Direct`] builder is never force-fit onto it. See
-//! [`crate::tx_builder`] for the two-step (proxy-create → unstake) flow and the
-//! on-chain evidence (`tx_builder` oracle tests) proving both StakeBox and
-//! StakeStateBox and the proxy are gated purely structurally (no signature/PK check
-//! anywhere; a real unstake spent all three inputs with empty proofs).
+//! - **[`RecoveryMechanism::Direct`]** (Ergopad, EGIO): both share the *same*
+//!   StakeBox / StakeStateBox script templates (verified byte-identical code
+//!   bodies — only the embedded token/NFT constants differ). The StakeBox script
+//!   only requires that *some* input in the redeeming tx carries the token whose
+//!   ID equals the StakeBox R5 (the stake-key NFT); the key is **neither burned
+//!   nor moved** — it flows back through the change output to the signer.
+//! - **[`RecoveryMechanism::PaideiaProxy`]** (Paideia's own v1 staking): a
+//!   structurally different contract family (StakeBox `101f` / StakeStateBox
+//!   `104e`, different opcode bodies). Unstaking is not a direct "combine the key
+//!   box with the state box" spend; it routes through a single-use **unstake
+//!   proxy** box (`101b`) that carries the stake key and names a payout recipient
+//!   in its R5. On a successful unstake the key **is burned** (consumed by the
+//!   executor tx); it is never a one-way trap, though — the proxy's equally
+//!   permissionless *refund* path returns the key (and the ERG) to the recipient
+//!   if the unstake can't run. See [`crate::tx_builder`] for the two-step
+//!   (proxy-create → unstake) flow and the on-chain evidence (`tx_builder`
+//!   oracle tests) proving both StakeBox/StakeStateBox and the proxy are gated
+//!   purely structurally (no signature/PK check anywhere; a real unstake spent
+//!   all three inputs with empty proofs).
 
 /// How a stake position is redeemed once its live StakeBox is located.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
