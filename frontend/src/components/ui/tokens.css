@@ -53,4 +53,41 @@
   --ds-card-padding: var(--ds-space-4);
   --ds-card-radius: var(--ds-radius-lg);
   --ds-card-gap: var(--ds-space-3);
+
+  /* ── Motion ── */
+  --ds-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ds-transition-fast: 120ms var(--ds-ease);
+  --ds-transition-base: 200ms var(--ds-ease);
+
+  /* ── Focus ── */
+  --ds-focus-ring: 0 0 0 2px rgba(2, 8, 18, 0.9), 0 0 0 4px var(--ds-info);
+
+  /* ── Buttons ── */
+  --ds-btn-height-sm: 28px;
+  --ds-btn-height-md: 36px;
+  --ds-btn-primary-bg: var(--emerald-500);
+  --ds-btn-primary-bg-hover: var(--emerald-400);
+  --ds-btn-primary-text: #04110b;
+  --ds-btn-secondary-bg: var(--ds-neutral-bg);
+  --ds-btn-secondary-bg-hover: rgba(148, 163, 184, 0.18);
+  --ds-btn-secondary-text: rgb(var(--text));
+  --ds-btn-danger-bg: var(--ds-danger-bg);
+  --ds-btn-danger-bg-hover: rgba(248, 113, 113, 0.22);
+  --ds-btn-danger-text: var(--ds-danger);
+  --ds-btn-ghost-text: var(--slate-400);
+  --ds-btn-ghost-bg-hover: var(--ds-neutral-bg);
+
+  /* ── Form controls ── */
+  --ds-input-height-sm: 32px;
+  --ds-input-height-md: 40px;
+  --ds-input-bg: rgba(2, 8, 18, 0.5);
+  --ds-input-border: var(--ds-border);
+  --ds-input-border-focus: var(--ds-info);
+  --ds-input-placeholder: var(--slate-600);
+
+  /* ── Modal ── */
+  --ds-modal-scrim: rgba(2, 8, 18, 0.7);
+  --ds-modal-width-sm: 400px;
+  --ds-modal-width-md: 520px;
+  --ds-modal-width-lg: 720px;
 }
