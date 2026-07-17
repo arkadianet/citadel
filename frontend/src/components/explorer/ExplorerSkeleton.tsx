@@ -1,11 +1,15 @@
 /**
  * ExplorerSkeleton — Shimmer loading placeholders for explorer views.
  *
+ * Composes the shared ui <Skeleton> into explorer-shaped layouts.
+ *
  * Three variants:
  *  - table:  rows × columns of shimmer bars
  *  - card:   key-value shimmer rows (info card shape)
  *  - text:   single line shimmer
  */
+
+import { Skeleton } from '../ui'
 
 interface TableSkeletonProps {
   variant: 'table'
@@ -34,13 +38,13 @@ export function ExplorerSkeleton(props: SkeletonProps) {
         <div className="skeleton-table">
           <div className="skeleton-table-header">
             {Array.from({ length: cols }, (_, i) => (
-              <div key={i} className="skeleton-bar" style={{ width: i === 0 ? '30%' : '15%' }} />
+              <Skeleton key={i} height="10px" width={i === 0 ? '30%' : '15%'} />
             ))}
           </div>
           {Array.from({ length: rows }, (_, r) => (
             <div key={r} className="skeleton-table-row">
               {Array.from({ length: cols }, (_, c) => (
-                <div key={c} className="skeleton-bar" style={{ width: c === 0 ? '60%' : `${40 + (c * 7) % 30}%` }} />
+                <Skeleton key={c} height="12px" width={c === 0 ? '60%' : `${40 + (c * 7) % 30}%`} />
               ))}
             </div>
           ))}
@@ -53,14 +57,14 @@ export function ExplorerSkeleton(props: SkeletonProps) {
         <div className="skeleton-card">
           {Array.from({ length: rows }, (_, i) => (
             <div key={i} className="skeleton-card-row">
-              <div className="skeleton-bar" style={{ width: '90px' }} />
-              <div className="skeleton-bar" style={{ width: `${50 + (i * 13) % 40}%` }} />
+              <Skeleton height="12px" width="90px" />
+              <Skeleton height="12px" width={`${50 + (i * 13) % 40}%`} />
             </div>
           ))}
         </div>
       )
     }
     case 'text':
-      return <div className="skeleton-bar" style={{ width: props.width ?? '200px', height: '14px' }} />
+      return <Skeleton width={props.width ?? '200px'} height="14px" />
   }
 }

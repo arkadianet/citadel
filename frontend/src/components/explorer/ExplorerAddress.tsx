@@ -5,6 +5,7 @@ import { ExplorerSkeleton } from './ExplorerSkeleton'
 import { Pagination } from './Pagination'
 import { TxTypeBadge } from './TxTypeBadge'
 import { TokenPopover } from './TokenPopover'
+import { Badge, Spinner } from '../ui'
 import type { ExplorerRoute } from '../ExplorerTab'
 
 interface Props {
@@ -100,7 +101,7 @@ export function ExplorerAddress({ address, onNavigate }: Props) {
         <>
           <h3 className="explorer-subsection-title">
             Unconfirmed
-            <span className="explorer-badge">{data.unconfirmedTransactions.length}</span>
+            <Badge variant="success">{data.unconfirmedTransactions.length}</Badge>
           </h3>
           <div className="explorer-table-wrap">
             <table className="explorer-table">
@@ -132,7 +133,7 @@ export function ExplorerAddress({ address, onNavigate }: Props) {
       {/* Transaction history */}
       <h3 className="explorer-subsection-title">
         Transactions
-        {loading && <span className="spinner-tiny ml-2" />}
+        {loading && <span className="ml-2"><Spinner size={12} /></span>}
       </h3>
       <div className="explorer-table-wrap">
         <table className="explorer-table">

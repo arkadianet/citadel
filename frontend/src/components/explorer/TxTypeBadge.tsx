@@ -1,7 +1,10 @@
 /**
  * TxTypeBadge — Colored pill badge showing transaction type.
+ *
+ * Thin wrapper over the shared ui <Badge>.
  */
 
+import { Badge } from '../ui'
 import { classifyTransaction } from '../../api/txClassifier'
 import type { Transaction } from '../../api/explorer'
 
@@ -9,15 +12,22 @@ interface Props {
   tx: Transaction
 }
 
+const TYPE_VARIANT: Record<string, 'success' | 'warning' | 'info' | 'neutral'> = {
+  reward: 'info',
+  dex: 'success',
+  sigmausd: 'warning',
+  transfer: 'neutral',
+}
+
 export function TxTypeBadge({ tx }: Props) {
   try {
     const classification = classifyTransaction(tx)
     return (
-      <span className={`tx-type-badge ${classification.cssClass}`}>
+      <Badge variant={TYPE_VARIANT[classification.type] ?? 'neutral'}>
         {classification.label}
-      </span>
+      </Badge>
     )
   } catch {
-    return <span className="tx-type-badge tx-type-transfer">Transfer</span>
+    return <Badge variant="neutral">Transfer</Badge>
   }
 }
