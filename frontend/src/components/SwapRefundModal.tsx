@@ -9,6 +9,7 @@ import { startSign, getTxStatus } from '../api/types'
 import { formatErg } from '../utils/format'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
 import { TxSuccess } from './TxSuccess'
+import { Modal, Button, Spinner } from './ui'
 
 interface SwapRefundModalProps {
   isOpen: boolean
@@ -143,18 +144,7 @@ export function SwapRefundModal({
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal swap-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Refund Swap Order</h2>
-          <button className="close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="modal-content">
+    <Modal open={isOpen} onClose={onClose} title="Refund Swap Order" size="md">
           {step === 'confirm' && (
             <div className="swap-preview-step">
               <div className="preview-section">
@@ -187,22 +177,21 @@ export function SwapRefundModal({
               </div>
 
               <div className="button-group">
-                <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-                <button
-                  className="btn btn-primary"
+                <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                <Button
+                  variant="danger"
                   onClick={handleConfirmRefund}
                   disabled={loading}
-                  style={{ background: 'var(--red-500, #ef4444)' }}
                 >
                   {loading ? 'Building...' : 'Confirm Refund'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
 
           {step === 'building' && (
             <div className="swap-preview-loading">
-              <div className="spinner-small" />
+              <Spinner size={20} />
               <span>Building refund transaction...</span>
             </div>
           )}
@@ -258,7 +247,7 @@ export function SwapRefundModal({
               <p>Approve the refund in Nautilus</p>
               <div className="nautilus-waiting">
                 <div className="nautilus-icon">
-                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-500)" strokeWidth="1.5">
+                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--ds-success)" strokeWidth="1.5">
                     <rect x="2" y="3" width="20" height="14" rx="2" />
                     <path d="M8 21h8" />
                     <path d="M12 17v4" />
@@ -267,8 +256,8 @@ export function SwapRefundModal({
                 <p className="signing-hint">Waiting for Nautilus approval...</p>
               </div>
               <div className="button-group">
-                <button className="btn btn-secondary" onClick={handleBackToChoice}>Back</button>
-                <button className="btn btn-primary" onClick={handleNautilusSign}>Open Nautilus Again</button>
+                <Button variant="secondary" onClick={handleBackToChoice}>Back</Button>
+                <Button variant="primary" onClick={handleNautilusSign}>Open Nautilus Again</Button>
               </div>
             </div>
           )}
@@ -280,14 +269,14 @@ export function SwapRefundModal({
                 <QRCodeSVG value={qrUrl} size={200} />
               </div>
               <p className="signing-hint">Waiting for signature...</p>
-              <button className="btn btn-secondary" onClick={handleBackToChoice}>Back</button>
+              <Button variant="secondary" onClick={handleBackToChoice}>Back</Button>
             </div>
           )}
 
           {step === 'success' && (
             <div className="success-step">
               <div className="success-icon">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-500)" strokeWidth="2">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--ds-success)" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />
                   <path d="M9 12l2 2 4-4" />
                 </svg>
@@ -295,14 +284,14 @@ export function SwapRefundModal({
               <h3>Refund Submitted!</h3>
               <p>Your funds will be returned to your wallet.</p>
               {txId && <TxSuccess txId={txId} explorerUrl={explorerUrl} />}
-              <button className="btn btn-primary" onClick={onSuccess}>Done</button>
+              <Button variant="primary" onClick={onSuccess}>Done</Button>
             </div>
           )}
 
           {step === 'error' && (
             <div className="error-step">
               <div className="error-icon">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--red-500)" strokeWidth="2">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--ds-danger)" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />
                   <path d="M15 9l-6 6M9 9l6 6" />
                 </svg>
@@ -310,15 +299,13 @@ export function SwapRefundModal({
               <h3>Refund Failed</h3>
               <p className="error-message">{error}</p>
               <div className="button-group">
-                <button className="btn btn-secondary" onClick={onClose}>Close</button>
-                <button className="btn btn-primary" onClick={() => { setStep('confirm'); setError(null) }}>
+                <Button variant="secondary" onClick={onClose}>Close</Button>
+                <Button variant="primary" onClick={() => { setStep('confirm'); setError(null) }}>
                   Try Again
-                </button>
+                </Button>
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

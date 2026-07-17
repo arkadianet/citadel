@@ -12,6 +12,7 @@ import { formatTokenAmount, formatErg } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
 import { AdvancedOptions, useRecipientAddress } from './AdvancedOptions'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
+import { Modal, Button, Spinner, FormField, Input } from './ui'
 
 interface SwapModalProps {
   isOpen: boolean
@@ -218,24 +219,18 @@ export function SwapModal({
   const outputLabel = getInputLabel(pool, inputSide === 'x' ? 'y' : 'x')
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal swap-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>{swapMode === 'direct' ? 'Direct Swap' : 'Swap'} {inputLabel} &rarr; {outputLabel}</h2>
-          <button className="close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
-
-        <div className="modal-content">
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title={<>{swapMode === 'direct' ? 'Direct Swap' : 'Swap'} {inputLabel} &rarr; {outputLabel}</>}
+      size="md"
+    >
           {/* Preview Step */}
           {step === 'preview' && (
             <div className="swap-preview-step">
               {loading && !preview && (
                 <div className="swap-preview-loading">
-                  <div className="spinner-small" />
+                  <Spinner size={20} />
                   <span>Fetching swap preview...</span>
                 </div>
               )}
@@ -243,7 +238,7 @@ export function SwapModal({
               {error && !preview && (
                 <div className="swap-preview-error">
                   <div className="message error">{error}</div>
-                  <button className="btn btn-secondary" onClick={fetchPreview}>Retry</button>
+                  <Button variant="secondary" onClick={fetchPreview}>Retry</Button>
                 </div>
               )}
 
@@ -319,36 +314,31 @@ export function SwapModal({
                   />
 
                   {swapMode === 'direct' && (
-                    <div className="form-group">
-                      <label className="form-label">
-                        Miner fee (ERG) <span style={{ color: 'var(--slate-500)', fontWeight: 400 }}>· optional</span>
-                      </label>
-                      <input
+                    <FormField
+                      label={<>Miner fee (ERG) <span style={{ color: 'var(--slate-500)', fontWeight: 400 }}>· optional</span></>}
+                      hint="Higher fee = better chance of landing in the next block when the pool is contested. Minimum 0.001 ERG."
+                    >
+                      <Input
                         type="text"
                         inputMode="decimal"
-                        className="input"
                         placeholder="0.0011 (default)"
                         value={customFeeErg}
                         onChange={e => setCustomFeeErg(e.target.value)}
                       />
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--slate-500)', marginTop: 4 }}>
-                        Higher fee = better chance of landing in the next block when the pool is contested.
-                        Minimum 0.001 ERG.
-                      </div>
-                    </div>
+                    </FormField>
                   )}
 
                   {error && <div className="message error">{error}</div>}
 
                   <div className="button-group">
-                    <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-                    <button
-                      className="btn btn-primary"
+                    <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                    <Button
+                      variant="primary"
                       onClick={handleConfirmSwap}
                       disabled={loading || (!!recipientAddress && addressValid !== true)}
                     >
                       {loading ? 'Building...' : 'Confirm Swap'}
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}
@@ -396,7 +386,7 @@ export function SwapModal({
               <p>Approve the transaction in Nautilus</p>
               <div className="nautilus-waiting">
                 <div className="nautilus-icon">
-                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-500)" strokeWidth="1.5">
+                  <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--ds-success)" strokeWidth="1.5">
                     <rect x="2" y="3" width="20" height="14" rx="2" />
                     <path d="M8 21h8" />
                     <path d="M12 17v4" />
@@ -405,8 +395,8 @@ export function SwapModal({
                 <p className="signing-hint">Waiting for Nautilus approval...</p>
               </div>
               <div className="button-group">
-                <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>Back</button>
-                <button className="btn btn-primary" onClick={flow.handleNautilusSign}>Open Nautilus Again</button>
+                <Button variant="secondary" onClick={flow.handleBackToChoice}>Back</Button>
+                <Button variant="primary" onClick={flow.handleNautilusSign}>Open Nautilus Again</Button>
               </div>
             </div>
           )}
@@ -419,7 +409,7 @@ export function SwapModal({
                 <QRCodeSVG value={flow.qrUrl} size={200} />
               </div>
               <p className="signing-hint">Waiting for signature...</p>
-              <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>Back</button>
+              <Button variant="secondary" onClick={flow.handleBackToChoice}>Back</Button>
             </div>
           )}
 
@@ -427,7 +417,7 @@ export function SwapModal({
           {step === 'success' && (
             <div className="success-step">
               <div className="success-icon">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-500)" strokeWidth="2">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--ds-success)" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />
                   <path d="M9 12l2 2 4-4" />
                 </svg>
@@ -435,7 +425,7 @@ export function SwapModal({
               <h3>Swap Submitted!</h3>
               <p>Your swap transaction has been submitted to the network.</p>
               {flow.txId && <TxSuccess txId={flow.txId} explorerUrl={explorerUrl} />}
-              <button className="btn btn-primary" onClick={() => { onSuccess() }}>Done</button>
+              <Button variant="primary" onClick={() => { onSuccess() }}>Done</Button>
             </div>
           )}
 
@@ -443,7 +433,7 @@ export function SwapModal({
           {step === 'error' && (
             <div className="error-step">
               <div className="error-icon">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--red-500)" strokeWidth="2">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--ds-danger)" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />
                   <path d="M15 9l-6 6M9 9l6 6" />
                 </svg>
@@ -456,15 +446,13 @@ export function SwapModal({
                 </p>
               )}
               <div className="button-group">
-                <button className="btn btn-secondary" onClick={onClose}>Close</button>
-                <button className="btn btn-primary" onClick={() => { setStep('preview'); setError(null); fetchPreview() }}>
+                <Button variant="secondary" onClick={onClose}>Close</Button>
+                <Button variant="primary" onClick={() => { setStep('preview'); setError(null); fetchPreview() }}>
                   Try Again
-                </button>
+                </Button>
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

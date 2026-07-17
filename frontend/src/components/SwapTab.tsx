@@ -17,7 +17,7 @@ import { OrderHistory } from './OrderHistory'
 import { TxSuccess } from './TxSuccess'
 import { TokenIcon, PoolPairIcons } from './tokenIcons'
 import { SmartSwapView } from './SmartSwapView'
-import { Tabs, EmptyState } from './ui'
+import { Tabs, EmptyState, Button, Spinner } from './ui'
 
 interface SwapTabProps {
   isConnected: boolean
@@ -756,7 +756,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
           <div className="pool-list">
             {poolsLoading && pools.length === 0 && (
               <div className="pool-list-empty">
-                <div className="spinner-small" />
+                <Spinner size={20} />
                 <span>Loading pools...</span>
               </div>
             )}
@@ -785,8 +785,8 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                     fontSize: 'var(--text-xxs, 10px)',
                     padding: '1px 5px',
                     borderRadius: 4,
-                    background: Math.abs(sigusdDivergence.pct) > 10 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)',
-                    color: Math.abs(sigusdDivergence.pct) > 10 ? 'var(--red-400)' : 'var(--amber-400)',
+                    background: Math.abs(sigusdDivergence.pct) > 10 ? 'var(--ds-danger-bg)' : 'var(--ds-warning-bg)',
+                    color: Math.abs(sigusdDivergence.pct) > 10 ? 'var(--ds-danger)' : 'var(--ds-warning)',
                     whiteSpace: 'nowrap',
                   }}>
                     {sigusdDivergence.pct > 0 ? '+' : ''}{sigusdDivergence.pct.toFixed(1)}%
@@ -844,8 +844,8 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                   marginBottom: 'var(--space-sm)',
                   borderRadius: 6,
                   fontSize: 'var(--text-xs)',
-                  background: Math.abs(sigusdDivergence.pct) > 10 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                  color: Math.abs(sigusdDivergence.pct) > 10 ? 'var(--red-400)' : 'var(--amber-400)',
+                  background: Math.abs(sigusdDivergence.pct) > 10 ? 'var(--ds-danger-bg)' : 'var(--ds-warning-bg)',
+                  color: Math.abs(sigusdDivergence.pct) > 10 ? 'var(--ds-danger)' : 'var(--ds-warning)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   gap: 8,
@@ -1027,8 +1027,9 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
               )}
 
               {/* Swap Button */}
-              <button
-                className="btn btn-primary swap-confirm-btn"
+              <Button
+                variant="primary"
+                className="swap-confirm-btn"
                 disabled={!canSwap}
                 onClick={handleSwapClick}
               >
@@ -1045,7 +1046,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                           : swapMode === 'direct'
                             ? 'Direct Swap'
                             : 'Swap'}
-              </button>
+              </Button>
             </>
           ) : (
             <div className="swap-form-empty">
@@ -1253,14 +1254,15 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
             </p>
           )}
           {createTxStep === 'done' && (
-            <p style={{ color: 'var(--emerald-400)', textAlign: 'center', marginTop: 'var(--space-sm)', fontWeight: 600 }}>
+            <p style={{ color: 'var(--ds-success)', textAlign: 'center', marginTop: 'var(--space-sm)', fontWeight: 600 }}>
               Pool created successfully!
             </p>
           )}
 
           {/* Create button */}
-          <button
-            className="btn btn-primary swap-confirm-btn"
+          <Button
+            variant="primary"
+            className="swap-confirm-btn"
             disabled={!walletAddress || createLoading || !createPreview || createTxStep !== 'idle'}
             onClick={handleCreatePool}
           >
@@ -1269,7 +1271,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
               : createTxStep === 'done'
                 ? 'Done'
                 : 'Create Pool'}
-          </button>
+          </Button>
         </div>
       ) : tabMode === 'liquidity' ? (
       /* ================================================================= */
@@ -1291,7 +1293,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
           <div className="pool-list">
             {poolsLoading && pools.length === 0 && (
               <div className="pool-list-empty">
-                <div className="spinner-small" />
+                <Spinner size={20} />
                 <span>Loading pools...</span>
               </div>
             )}
@@ -1373,16 +1375,16 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                       <div>
                         <p style={{ color: 'var(--slate-400)', marginBottom: 'var(--space-sm)' }}>Choose signing method:</p>
                         <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'center' }}>
-                          <button className="btn btn-primary" onClick={lpFlow.handleNautilusSign}>Nautilus</button>
-                          <button className="btn btn-secondary" onClick={lpFlow.handleMobileSign}>Mobile (QR)</button>
+                          <Button variant="primary" onClick={lpFlow.handleNautilusSign}>Nautilus</Button>
+                          <Button variant="secondary" onClick={lpFlow.handleMobileSign}>Mobile (QR)</Button>
                         </div>
                       </div>
                     )}
                     {lpFlow.signMethod === 'nautilus' && (
                       <div>
-                        <div className="spinner-small" style={{ margin: '0 auto var(--space-sm)' }} />
+                        <div style={{ marginBottom: 'var(--space-sm)' }}><Spinner size={20} /></div>
                         <p style={{ color: 'var(--slate-400)' }}>Waiting for Nautilus...</p>
-                        <button className="btn btn-secondary" onClick={lpFlow.handleBackToChoice} style={{ marginTop: 'var(--space-sm)' }}>Back</button>
+                        <Button variant="secondary" onClick={lpFlow.handleBackToChoice} style={{ marginTop: 'var(--space-sm)' }}>Back</Button>
                       </div>
                     )}
                     {lpFlow.signMethod === 'mobile' && lpFlow.qrUrl && (
@@ -1391,7 +1393,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                         <div style={{ background: 'white', display: 'inline-block', padding: 8, borderRadius: 8 }}>
                           <QRCodeSVG value={lpFlow.qrUrl} size={200} level="M" includeMargin bgColor="white" fgColor="black" />
                         </div>
-                        <button className="btn btn-secondary" onClick={lpFlow.handleBackToChoice} style={{ marginTop: 'var(--space-sm)', display: 'block', margin: 'var(--space-sm) auto 0' }}>Back</button>
+                        <Button variant="secondary" onClick={lpFlow.handleBackToChoice} style={{ marginTop: 'var(--space-sm)', display: 'block', margin: 'var(--space-sm) auto 0' }}>Back</Button>
                       </div>
                     )}
                   </div>
@@ -1400,19 +1402,19 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
 
               {lpTxStep === 'success' && (
                 <div className="swap-input-section" style={{ textAlign: 'center', padding: 'var(--space-md)' }}>
-                  <p style={{ color: 'var(--emerald-400)', fontWeight: 600, fontSize: 'var(--text-lg)' }}>Transaction Submitted!</p>
+                  <p style={{ color: 'var(--ds-success)', fontWeight: 600, fontSize: 'var(--text-lg)' }}>Transaction Submitted!</p>
                   {lpFlow.txId && (
                     <TxSuccess txId={lpFlow.txId} explorerUrl={explorerUrl} />
                   )}
-                  <button className="btn btn-primary" onClick={() => { setLpTxStep('idle'); fetchPools() }} style={{ marginTop: 'var(--space-sm)' }}>Done</button>
+                  <Button variant="primary" onClick={() => { setLpTxStep('idle'); fetchPools() }} style={{ marginTop: 'var(--space-sm)' }}>Done</Button>
                 </div>
               )}
 
               {lpTxStep === 'error' && (
                 <div className="swap-input-section" style={{ textAlign: 'center', padding: 'var(--space-md)' }}>
-                  <p style={{ color: 'var(--red-400)', fontWeight: 600 }}>Transaction Failed</p>
+                  <p style={{ color: 'var(--ds-danger)', fontWeight: 600 }}>Transaction Failed</p>
                   <p style={{ color: 'var(--slate-500)', fontSize: 'var(--text-xs)', marginTop: 4 }}>{lpTxError}</p>
-                  <button className="btn btn-primary" onClick={() => setLpTxStep('idle')} style={{ marginTop: 'var(--space-sm)' }}>Try Again</button>
+                  <Button variant="primary" onClick={() => setLpTxStep('idle')} style={{ marginTop: 'var(--space-sm)' }}>Try Again</Button>
                 </div>
               )}
 
@@ -1596,8 +1598,9 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                 )}
 
                 {/* Action Button */}
-                <button
-                  className="btn btn-primary swap-confirm-btn"
+                <Button
+                  variant="primary"
+                  className="swap-confirm-btn"
                   disabled={
                     !walletAddress || lpTxLoading ||
                     (lpMode === 'deposit' ? (!depositErgInput || !depositTokenInput || parseFloat(depositErgInput) <= 0 || parseFloat(depositTokenInput) <= 0) : (!redeemLpInput || parseFloat(redeemLpInput) <= 0))
@@ -1611,7 +1614,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                       : lpMode === 'deposit'
                         ? (lpSwapMode === 'direct' ? 'Direct Deposit' : 'Deposit Liquidity')
                         : (lpSwapMode === 'direct' ? 'Direct Redeem' : 'Redeem Liquidity')}
-                </button>
+                </Button>
               </>)}
             </>
           ) : (

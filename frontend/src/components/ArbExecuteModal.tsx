@@ -6,6 +6,7 @@ import {
 } from '../api/arb'
 import { getTxStatus } from '../api/types'
 import { formatErg } from '../utils/format'
+import { Modal, Button, Spinner } from './ui'
 
 interface ArbExecuteModalProps {
   isOpen: boolean
@@ -125,17 +126,10 @@ export function ArbExecuteModal({ isOpen, onClose, arb, onDone }: ArbExecuteModa
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={handleClose}>
-      <div className="modal arb-execute-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>Execute Arb: {arb.path_label}</h3>
-          <button className="close-btn" onClick={handleClose}>&times;</button>
-        </div>
-
-        <div className="modal-content">
+    <Modal open={isOpen} onClose={handleClose} title={`Execute Arb: ${arb.path_label}`} size="md">
           {step === 'building' && (
             <div className="swap-preview-loading">
-              <div className="spinner-small" />
+              <Spinner size={20} />
               <p>Re-fetching pools and pre-building {arb.pool_ids.length} chained legs...</p>
             </div>
           )}
@@ -176,10 +170,10 @@ export function ArbExecuteModal({ isOpen, onClose, arb, onDone }: ArbExecuteModa
               </div>
 
               <div className="button-group">
-                <button className="btn btn-secondary" onClick={handleClose}>Cancel</button>
-                <button className="btn btn-primary" onClick={() => signLeg(0, [])}>
+                <Button variant="secondary" onClick={handleClose}>Cancel</Button>
+                <Button variant="primary" onClick={() => signLeg(0, [])}>
                   Sign {build.legs.length} legs in Nautilus
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -196,18 +190,18 @@ export function ArbExecuteModal({ isOpen, onClose, arb, onDone }: ArbExecuteModa
                   </span>
                 ))}
               </div>
-              <div className="spinner-small" />
+              <Spinner size={20} />
               <p>Sign leg {signingLeg + 1} of {build.legs.length} in Nautilus...</p>
               <p className="arb-exec-hint">The Nautilus window opened in your browser. Nothing broadcasts yet.</p>
               <div className="button-group">
-                <button className="btn btn-secondary" onClick={handleClose}>Abort (nothing broadcast)</button>
+                <Button variant="secondary" onClick={handleClose}>Abort (nothing broadcast)</Button>
               </div>
             </div>
           )}
 
           {step === 'submitting' && (
             <div className="swap-preview-loading">
-              <div className="spinner-small" />
+              <Spinner size={20} />
               <p>All legs signed. Broadcasting chain in order...</p>
             </div>
           )}
@@ -243,7 +237,7 @@ export function ArbExecuteModal({ isOpen, onClose, arb, onDone }: ArbExecuteModa
                 </>
               )}
               <div className="button-group">
-                <button className="btn btn-primary" onClick={handleClose}>Close</button>
+                <Button variant="primary" onClick={handleClose}>Close</Button>
               </div>
             </>
           )}
@@ -252,13 +246,11 @@ export function ArbExecuteModal({ isOpen, onClose, arb, onDone }: ArbExecuteModa
             <>
               <div className="message error">{error}</div>
               <div className="button-group">
-                <button className="btn btn-secondary" onClick={handleClose}>Close</button>
-                <button className="btn btn-primary" onClick={doBuild}>Rebuild</button>
+                <Button variant="secondary" onClick={handleClose}>Close</Button>
+                <Button variant="primary" onClick={doBuild}>Rebuild</Button>
               </div>
             </>
           )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
