@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { QRCodeSVG } from 'qrcode.react'
+import { Button, Spinner } from './ui'
 import './WalletConnect.css'
 
 interface WalletConnectResponse {
@@ -120,7 +121,7 @@ export function WalletConnect({ onConnected, onCancel, onClose }: WalletConnectP
     return (
       <div className="wallet-connect">
         <div className="wallet-connect-loading">
-          <div className="spinner" />
+          <Spinner size={32} />
           <p>Starting connection...</p>
         </div>
       </div>
@@ -132,9 +133,9 @@ export function WalletConnect({ onConnected, onCancel, onClose }: WalletConnectP
       <div className="wallet-connect">
         <div className="wallet-connect-error">
           <p className="error-message">{error}</p>
-          <button className="btn btn-primary" onClick={() => window.location.reload()}>
+          <Button variant="primary" onClick={() => window.location.reload()}>
             Try Again
-          </button>
+          </Button>
         </div>
       </div>
     )
@@ -144,7 +145,7 @@ export function WalletConnect({ onConnected, onCancel, onClose }: WalletConnectP
     return (
       <div className="wallet-connect">
         <div className="wallet-connect-success">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--ds-success)" strokeWidth="2">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
             <polyline points="22 4 12 14.01 9 11.01" />
           </svg>
@@ -194,9 +195,9 @@ export function WalletConnect({ onConnected, onCancel, onClose }: WalletConnectP
           </div>
 
           {onCancel && (
-            <button className="btn btn-secondary" onClick={onCancel}>
+            <Button variant="secondary" onClick={onCancel}>
               Cancel
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -215,7 +216,7 @@ export function WalletConnect({ onConnected, onCancel, onClose }: WalletConnectP
 
           <div className="nautilus-waiting">
             <div className="nautilus-icon">
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.5">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-400)" strokeWidth="1.5">
                 <rect x="2" y="3" width="20" height="14" rx="2" />
                 <path d="M8 21h8" />
                 <path d="M12 17v4" />
@@ -228,12 +229,12 @@ export function WalletConnect({ onConnected, onCancel, onClose }: WalletConnectP
           </div>
 
           <div className="wallet-connect-actions">
-            <button className="btn btn-secondary" onClick={handleBackToChoice}>
+            <Button variant="secondary" onClick={handleBackToChoice}>
               Back
-            </button>
-            <button className="btn btn-primary" onClick={handleNautilusConnect}>
+            </Button>
+            <Button variant="primary" onClick={handleNautilusConnect}>
               Open Nautilus Again
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -268,13 +269,13 @@ export function WalletConnect({ onConnected, onCancel, onClose }: WalletConnectP
         </p>
 
         <div className="wallet-connect-actions">
-          <button className="btn btn-secondary" onClick={handleBackToChoice}>
+          <Button variant="secondary" onClick={handleBackToChoice}>
             Back
-          </button>
+          </Button>
           {onCancel && (
-            <button className="btn btn-secondary" onClick={onCancel}>
+            <Button variant="secondary" onClick={onCancel}>
               Cancel
-            </button>
+            </Button>
           )}
         </div>
       </div>

@@ -16,20 +16,20 @@
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-md);
-  background: var(--glass-display);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
+  background: var(--ds-surface-elevated);
+  backdrop-filter: var(--ds-blur);
+  -webkit-backdrop-filter: var(--ds-blur);
+  border: 1px solid var(--ds-border);
+  box-shadow: var(--glass-inner-edge);
   min-width: 280px;
   max-width: 380px;
   cursor: pointer;
-  animation: toast-slide-in 0.3s ease-out;
-  transition: opacity 0.3s ease;
+  animation: toast-slide-in var(--ds-transition-base);
+  transition: opacity var(--ds-transition-base);
 }
 
 .toast:hover {
-  background: rgba(148, 163, 184, 0.06);
+  background: var(--ds-neutral-bg);
 }
 
 .toast-icon {
@@ -41,15 +41,28 @@
 
 .toast.confirmed .toast-icon,
 .toast.filled .toast-icon {
-  color: var(--emerald-400);
+  color: var(--ds-success);
+}
+
+.toast.confirmed,
+.toast.filled {
+  border-color: var(--ds-success-bg);
 }
 
 .toast.dropped .toast-icon {
-  color: var(--red-400);
+  color: var(--ds-danger);
+}
+
+.toast.dropped {
+  border-color: var(--ds-danger-bg);
 }
 
 .toast.timeout .toast-icon {
-  color: var(--amber-400);
+  color: var(--ds-warning);
+}
+
+.toast.timeout {
+  border-color: var(--ds-warning-bg);
 }
 
 .toast-body {
@@ -60,13 +73,13 @@
 .toast-title {
   font-size: var(--text-sm);
   font-weight: 600;
-  color: rgb(var(--text));
+  color: var(--text-strong);
   margin-bottom: 2px;
 }
 
 .toast-desc {
   font-size: var(--text-xs);
-  color: rgb(var(--text-secondary));
+  color: var(--slate-400);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -76,14 +89,14 @@
   flex-shrink: 0;
   background: none;
   border: none;
-  color: rgb(var(--muted));
+  color: var(--slate-500);
   cursor: pointer;
   padding: 2px;
   line-height: 1;
 }
 
 .toast-close:hover {
-  color: rgb(var(--text));
+  color: var(--text-strong);
 }
 
 @keyframes toast-slide-in {
