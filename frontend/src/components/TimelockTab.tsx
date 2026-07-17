@@ -16,7 +16,21 @@ import { formatErg, blocksToTime, truncateAddress } from '../utils/format'
 import { startSign, getTxStatus } from '../api/types'
 import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
-import { PageHeader, Tabs, Card, CardHeader, CardBody, CardFooter, Badge, EmptyState } from './ui'
+import {
+  PageHeader,
+  Tabs,
+  Card,
+  CardHeader,
+  CardBody,
+  CardFooter,
+  Badge,
+  EmptyState,
+  Button,
+  Modal,
+  FormField,
+  Input,
+  Skeleton,
+} from './ui'
 import './TimelockTab.css'
 
 interface WalletBalance {
@@ -175,9 +189,10 @@ export function TimelockTab({
 
       {/* Loading */}
       {loading && !state && (
-        <div className="timelock-loading">
-          <span className="spinner-small" />
-          Loading timelocks...
+        <div className="timelock-grid view-grid">
+          {[0, 1, 2].map(i => (
+            <Skeleton key={i} height="220px" />
+          ))}
         </div>
       )}
 
@@ -320,9 +335,9 @@ function LockCard({
 
       {lock.isUnlockable && (
         <CardFooter className="timelock-card-actions">
-          <button className="timelock-action-btn primary" onClick={onUnlock}>
+          <Button variant="primary" style={{ flex: 1 }} onClick={onUnlock}>
             Unlock
-          </button>
+          </Button>
         </CardFooter>
       )}
     </Card>
@@ -414,18 +429,8 @@ function CreateLockModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
-        <div className="modal-header">
-          <h2>Create Timelock</h2>
-          <button className="modal-close" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div style={{ padding: '16px 24px' }}>
+    <Modal open={true} onClose={onClose} title="Create Timelock">
+      <>
           {step === 'input' && (
             <div className="timelock-modal-form">
               {/* Duration Selection */}
@@ -449,9 +454,8 @@ function CreateLockModal({
                   </button>
                 </div>
                 {selectedDuration === null && (
-                  <input
+                  <Input
                     type="number"
-                    className="input"
                     placeholder="Blocks (e.g. 43200 for ~60 days)"
                     value={customBlocks}
                     onChange={e => setCustomBlocks(e.target.value)}
@@ -469,23 +473,16 @@ function CreateLockModal({
               )}
 
               {/* ERG Amount */}
-              <div className="form-group">
-                <label className="form-label">
-                  ERG Amount
-                  <span style={{ float: 'right', color: 'var(--slate-500)', fontWeight: 400 }}>
-                    Balance: {walletBalance.erg_formatted} ERG
-                  </span>
-                </label>
-                <input
+              <FormField label="ERG Amount" hint={`Balance: ${walletBalance.erg_formatted} ERG`}>
+                <Input
                   type="number"
-                  className="input"
                   placeholder="0.00"
                   value={ergAmount}
                   onChange={e => setErgAmount(e.target.value)}
                   min="0"
                   step="0.01"
                 />
-              </div>
+              </FormField>
 
               {/* Fee Preview */}
               {ergNano > 0 && (
@@ -495,53 +492,50 @@ function CreateLockModal({
               )}
 
               {/* Lock Name */}
-              <div className="form-group">
-                <label className="form-label">Lock Name (optional)</label>
-                <input
+              <FormField label="Lock Name (optional)">
+                <Input
                   type="text"
-                  className="input"
                   placeholder="My savings lock"
                   value={lockName}
                   onChange={e => setLockName(e.target.value)}
                   maxLength={64}
                 />
-              </div>
+              </FormField>
 
               {/* Lock Description */}
-              <div className="form-group">
-                <label className="form-label">Description (optional)</label>
-                <input
+              <FormField label="Description (optional)">
+                <Input
                   type="text"
-                  className="input"
                   placeholder="Locking until..."
                   value={lockDescription}
                   onChange={e => setLockDescription(e.target.value)}
                   maxLength={128}
                 />
-              </div>
+              </FormField>
 
               {error && <div className="timelock-error">{error}</div>}
 
-              <button
-                className="btn btn-primary"
+              <Button
+                variant="primary"
                 onClick={handleSubmit}
                 disabled={!canSubmit || buildLoading}
+                loading={buildLoading}
                 style={{ width: '100%' }}
               >
                 {buildLoading ? 'Building...' : 'Create Lock'}
-              </button>
+              </Button>
             </div>
           )}
 
           {step === 'signing' && flow.signMethod === 'choose' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', padding: '24px 0' }}>
               <p style={{ color: 'var(--slate-400)', textAlign: 'center' }}>Choose signing method</p>
-              <button className="btn btn-primary" onClick={flow.handleNautilusSign} style={{ width: '100%' }}>
+              <Button variant="primary" onClick={flow.handleNautilusSign} style={{ width: '100%' }}>
                 Sign with Nautilus
-              </button>
-              <button className="btn btn-secondary" onClick={flow.handleMobileSign} style={{ width: '100%' }}>
+              </Button>
+              <Button variant="secondary" onClick={flow.handleMobileSign} style={{ width: '100%' }}>
                 Scan QR Code (ErgoPay)
-              </button>
+              </Button>
             </div>
           )}
 
@@ -549,9 +543,9 @@ function CreateLockModal({
             <div style={{ textAlign: 'center', padding: '24px 0' }}>
               <p style={{ color: 'var(--slate-400)' }}>Waiting for Nautilus confirmation...</p>
               <div className="spinner-small" style={{ margin: '16px auto' }} />
-              <button className="btn btn-secondary" onClick={flow.handleBackToChoice} style={{ marginTop: 12 }}>
+              <Button variant="secondary" onClick={flow.handleBackToChoice} style={{ marginTop: 12 }}>
                 Back
-              </button>
+              </Button>
             </div>
           )}
 
@@ -559,9 +553,9 @@ function CreateLockModal({
             <div style={{ textAlign: 'center', padding: '16px 0' }}>
               <p style={{ color: 'var(--slate-400)', marginBottom: 12 }}>Scan with ErgoPay wallet</p>
               <QRCodeSVG value={flow.qrUrl} size={200} bgColor="transparent" fgColor="#e2e8f0" />
-              <button className="btn btn-secondary" onClick={flow.handleBackToChoice} style={{ marginTop: 12 }}>
+              <Button variant="secondary" onClick={flow.handleBackToChoice} style={{ marginTop: 12 }}>
                 Back
-              </button>
+              </Button>
             </div>
           )}
 
@@ -572,14 +566,13 @@ function CreateLockModal({
           {step === 'error' && (
             <div style={{ textAlign: 'center', padding: '24px 0' }}>
               <div className="timelock-error" style={{ marginBottom: 12 }}>{error}</div>
-              <button className="btn btn-secondary" onClick={() => { setStep('input'); setError(null) }}>
+              <Button variant="secondary" onClick={() => { setStep('input'); setError(null) }}>
                 Try Again
-              </button>
+              </Button>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+      </>
+    </Modal>
   )
 }
 
@@ -647,18 +640,8 @@ function UnlockModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-        <div className="modal-header">
-          <h2>Unlock Timelock</h2>
-          <button className="modal-close" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div style={{ padding: '16px 24px' }}>
+    <Modal open={true} onClose={onClose} title="Unlock Timelock" size="sm">
+      <>
           {step === 'confirm' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {lock.lockName && (
@@ -684,7 +667,7 @@ function UnlockModal({
 
               {lock.tokens.length > 0 && (
                 <>
-                  <div style={{ borderTop: '1px solid rgba(51,65,85,0.5)', margin: '4px 0' }} />
+                  <div style={{ borderTop: '1px solid var(--ds-border)', margin: '4px 0' }} />
                   {lock.tokens.map(t => {
                     const tokenFee = t.amount > 34 ? Math.floor((t.amount * 3000) / 100000) : 0
                     return (
@@ -704,26 +687,27 @@ function UnlockModal({
 
               {error && <div className="timelock-error">{error}</div>}
 
-              <button
-                className="btn btn-primary"
+              <Button
+                variant="primary"
                 onClick={handleUnlock}
                 disabled={buildLoading}
+                loading={buildLoading}
                 style={{ width: '100%', marginTop: 8 }}
               >
                 {buildLoading ? 'Building...' : 'Confirm Unlock'}
-              </button>
+              </Button>
             </div>
           )}
 
           {step === 'signing' && flow.signMethod === 'choose' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', padding: '24px 0' }}>
               <p style={{ color: 'var(--slate-400)', textAlign: 'center' }}>Choose signing method</p>
-              <button className="btn btn-primary" onClick={flow.handleNautilusSign} style={{ width: '100%' }}>
+              <Button variant="primary" onClick={flow.handleNautilusSign} style={{ width: '100%' }}>
                 Sign with Nautilus
-              </button>
-              <button className="btn btn-secondary" onClick={flow.handleMobileSign} style={{ width: '100%' }}>
+              </Button>
+              <Button variant="secondary" onClick={flow.handleMobileSign} style={{ width: '100%' }}>
                 Scan QR Code (ErgoPay)
-              </button>
+              </Button>
             </div>
           )}
 
@@ -731,9 +715,9 @@ function UnlockModal({
             <div style={{ textAlign: 'center', padding: '24px 0' }}>
               <p style={{ color: 'var(--slate-400)' }}>Waiting for Nautilus confirmation...</p>
               <div className="spinner-small" style={{ margin: '16px auto' }} />
-              <button className="btn btn-secondary" onClick={flow.handleBackToChoice} style={{ marginTop: 12 }}>
+              <Button variant="secondary" onClick={flow.handleBackToChoice} style={{ marginTop: 12 }}>
                 Back
-              </button>
+              </Button>
             </div>
           )}
 
@@ -741,9 +725,9 @@ function UnlockModal({
             <div style={{ textAlign: 'center', padding: '16px 0' }}>
               <p style={{ color: 'var(--slate-400)', marginBottom: 12 }}>Scan with ErgoPay wallet</p>
               <QRCodeSVG value={flow.qrUrl} size={200} bgColor="transparent" fgColor="#e2e8f0" />
-              <button className="btn btn-secondary" onClick={flow.handleBackToChoice} style={{ marginTop: 12 }}>
+              <Button variant="secondary" onClick={flow.handleBackToChoice} style={{ marginTop: 12 }}>
                 Back
-              </button>
+              </Button>
             </div>
           )}
 
@@ -754,13 +738,12 @@ function UnlockModal({
           {step === 'error' && (
             <div style={{ textAlign: 'center', padding: '24px 0' }}>
               <div className="timelock-error" style={{ marginBottom: 12 }}>{error}</div>
-              <button className="btn btn-secondary" onClick={() => { setStep('confirm'); setError(null) }}>
+              <Button variant="secondary" onClick={() => { setStep('confirm'); setError(null) }}>
                 Try Again
-              </button>
+              </Button>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+      </>
+    </Modal>
   )
 }

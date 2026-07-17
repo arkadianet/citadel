@@ -3,6 +3,9 @@
    ============================================================================ */
 
 .timelock-tab {
+  --protocol-accent: #6366f1; /* protocol accent */
+  --protocol-accent-deep: #8b5cf6; /* protocol accent */
+  --protocol-accent-soft: #818cf8; /* protocol accent */
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -29,12 +32,12 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, var(--protocol-accent), var(--protocol-accent-deep));
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: white;
+  color: var(--text-strong);
 }
 
 .timelock-icon svg {
@@ -46,13 +49,12 @@
   margin-left: auto;
   padding: var(--space-xs) var(--space-md);
   border: none;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white;
-  font-size: var(--text-sm);
-  font-weight: 500;
+  border-radius: var(--ds-radius-md);
+  background: linear-gradient(135deg, var(--protocol-accent), var(--protocol-accent-deep));
+  color: var(--text-strong);
+  font: var(--ds-text-card-title);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--ds-transition-fast);
 }
 
 .timelock-create-btn:hover:not(:disabled) {
@@ -66,35 +68,6 @@
 }
 
 /* Info bar and filter tabs now handled by PageHeader + Tabs components */
-
-.timelock-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-left: auto;
-}
-
-.timelock-refresh-btn {
-  padding: var(--space-xs) var(--space-sm);
-  border: 1px solid var(--slate-700);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--slate-400);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.timelock-refresh-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--slate-200);
-  border-color: var(--slate-600);
-}
-
-.timelock-refresh-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 
 /* ============================================================================
    Sort Bar
@@ -140,11 +113,11 @@
 }
 
 .timelock-card.own {
-  border-color: rgba(99, 102, 241, 0.3);
+  border-color: color-mix(in srgb, var(--protocol-accent) 30%, transparent);
 }
 
 .timelock-card.unlockable {
-  border-color: rgba(16, 185, 129, 0.4);
+  border-color: color-mix(in srgb, var(--emerald-500) 40%, transparent);
 }
 
 /* Card Header */
@@ -153,12 +126,12 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-sm) var(--space-md);
-  background: rgba(99, 102, 241, 0.06);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+  background: color-mix(in srgb, var(--protocol-accent) 6%, transparent);
+  border-bottom: 1px solid var(--ds-border);
 }
 
 .timelock-card.unlockable .timelock-card-header {
-  background: rgba(16, 185, 129, 0.06);
+  background: color-mix(in srgb, var(--emerald-500) 6%, transparent);
 }
 
 .timelock-card-header-left {
@@ -169,44 +142,11 @@
 }
 
 .timelock-lock-name {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: rgb(var(--text));
+  font: var(--ds-text-card-title);
+  color: var(--text-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.timelock-own-badge {
-  padding: 2px var(--space-sm);
-  border-radius: var(--radius-sm);
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: rgba(99, 102, 241, 0.12);
-  color: #818cf8;
-  flex-shrink: 0;
-}
-
-.timelock-status-badge {
-  padding: 2px var(--space-sm);
-  border-radius: var(--radius-sm);
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  flex-shrink: 0;
-}
-
-.timelock-status-badge.locked {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
-}
-
-.timelock-status-badge.unlockable {
-  background: rgba(16, 185, 129, 0.12);
-  color: var(--emerald-400);
 }
 
 /* Card Body */
@@ -231,19 +171,17 @@
 }
 
 .timelock-row-value {
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: rgb(var(--text));
-  font-family: 'JetBrains Mono', monospace;
+  font: var(--ds-text-metric-sm);
+  color: var(--text-strong);
   font-variant-numeric: tabular-nums;
 }
 
 .timelock-row-value.highlight {
-  color: #818cf8;
+  color: var(--protocol-accent-soft);
 }
 
 .timelock-row-value.success {
-  color: var(--emerald-400);
+  color: var(--ds-success);
 }
 
 .timelock-row-value.mono {
@@ -256,35 +194,7 @@
   display: flex;
   gap: var(--space-xs);
   padding: var(--space-sm) var(--space-md);
-  border-top: 1px solid rgba(148, 163, 184, 0.06);
-}
-
-.timelock-action-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  transition: all 0.15s;
-}
-
-.timelock-action-btn.primary {
-  background: var(--emerald-500);
-  color: white;
-}
-
-.timelock-action-btn.primary:hover:not(:disabled) {
-  background: var(--emerald-600);
-}
-
-.timelock-action-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  border-top: 1px solid var(--ds-border);
 }
 
 /* ============================================================================
@@ -306,12 +216,12 @@
 .timelock-duration-btn {
   padding: var(--space-sm);
   border: 1px solid var(--slate-700);
-  border-radius: var(--radius-md);
+  border-radius: var(--ds-radius-md);
   background: transparent;
   color: var(--slate-400);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--ds-transition-fast);
   text-align: center;
 }
 
@@ -321,70 +231,35 @@
 }
 
 .timelock-duration-btn.active {
-  border-color: #6366f1;
-  background: rgba(99, 102, 241, 0.1);
-  color: #818cf8;
+  border-color: var(--protocol-accent);
+  background: color-mix(in srgb, var(--protocol-accent) 10%, transparent);
+  color: var(--protocol-accent-soft);
 }
 
 .timelock-fee-preview {
   padding: var(--space-sm);
-  border-radius: var(--radius-md);
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: var(--ds-radius-md);
+  background: color-mix(in srgb, var(--slate-800) 50%, transparent);
+  border: 1px solid color-mix(in srgb, var(--slate-700) 50%, transparent);
   font-size: var(--text-xs);
   color: var(--slate-400);
 }
 
 .timelock-fee-preview span {
-  color: rgb(var(--text));
+  color: var(--text-strong);
   font-weight: 500;
 }
 
 /* ============================================================================
-   Empty / Loading / Error States
+   Error State
    ============================================================================ */
-
-.timelock-tab .empty-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
-  padding: var(--space-xl);
-  text-align: center;
-  color: var(--slate-500);
-  font-size: var(--text-sm);
-}
-
-.timelock-loading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-lg);
-  justify-content: center;
-  color: var(--slate-400);
-}
 
 .timelock-error {
   padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-md);
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--red-500) 30%, transparent);
   color: var(--red-400);
   font-size: var(--text-sm);
   flex-shrink: 0;
-}
-
-.timelock-notice {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
-  padding: var(--space-xl);
-  text-align: center;
-  color: var(--slate-400);
-  font-size: var(--text-sm);
 }
