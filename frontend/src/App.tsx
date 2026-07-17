@@ -19,7 +19,7 @@ import { SigmaFiTab } from './components/SigmaFiTab'
 import { TimelockTab } from './components/TimelockTab'
 import { RouterTab } from './components/RouterTab'
 import { ArbScannerTab } from './components/ArbScannerTab'
-import { ErgopadRecoveryTab } from './components/ErgopadRecoveryTab'
+import { StakeRecoveryTab } from './components/StakeRecoveryTab'
 import { ExplorerNavProvider, type ExplorerTarget } from './contexts/ExplorerNavContext'
 import './App.css'
 
@@ -76,7 +76,7 @@ interface WalletBalance {
   }>
 }
 
-type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management' | 'ergopad-recovery'
+type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management' | 'stake-recovery'
 
 function App() {
   const [view, setView] = useState<View>('home')
@@ -530,8 +530,8 @@ function App() {
             />
           )}
 
-          {view === 'ergopad-recovery' && (
-            <ErgopadRecoveryTab
+          {view === 'stake-recovery' && (
+            <StakeRecoveryTab
               isConnected={isConnected}
               capabilityTier={nodeStatus?.capability_tier}
               walletAddress={walletAddress}

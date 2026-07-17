@@ -139,7 +139,7 @@ pub fn select_token_boxes(
             }
         })
         .collect();
-    token_indices.sort_by(|a, b| b.1.cmp(&a.1));
+    token_indices.sort_by_key(|b| std::cmp::Reverse(b.1));
 
     let mut selected_indices = Vec::new();
     let mut total_tokens: u64 = 0;
@@ -170,7 +170,7 @@ pub fn select_token_boxes(
             .filter(|(i, _)| !selected_indices.contains(i))
             .map(|(i, u)| (i, u.value.parse::<u64>().unwrap_or(0)))
             .collect();
-        erg_indices.sort_by(|a, b| b.1.cmp(&a.1));
+        erg_indices.sort_by_key(|b| std::cmp::Reverse(b.1));
 
         for &(idx, erg) in &erg_indices {
             if total_erg >= min_erg {
@@ -229,7 +229,7 @@ pub fn select_multi_token_boxes(
         })
         .filter(|(_, count)| *count > 0)
         .collect();
-    scored_indices.sort_by(|a, b| b.1.cmp(&a.1));
+    scored_indices.sort_by_key(|b| std::cmp::Reverse(b.1));
 
     for &(idx, _) in &scored_indices {
         if remaining.is_empty() {
@@ -279,7 +279,7 @@ pub fn select_multi_token_boxes(
             .filter(|(i, _)| !selected_indices.contains(i))
             .map(|(i, u)| (i, u.value.parse::<u64>().unwrap_or(0)))
             .collect();
-        erg_indices.sort_by(|a, b| b.1.cmp(&a.1));
+        erg_indices.sort_by_key(|b| std::cmp::Reverse(b.1));
 
         for &(idx, erg) in &erg_indices {
             if total_erg >= min_erg {

@@ -149,9 +149,10 @@ impl NodeClient {
         let mut all = Vec::new();
         for page in 0..max_pages {
             let offset = (page as u64) * PAGE_SIZE;
-            let boxes = timed_request(self.inner.unspent_boxes_by_address(
-                &addr, offset, PAGE_SIZE,
-            ))
+            let boxes = timed_request(
+                self.inner
+                    .unspent_boxes_by_address(&addr, offset, PAGE_SIZE),
+            )
             .await?;
             let len = boxes.len();
             all.extend(boxes);
@@ -188,8 +189,7 @@ impl NodeClient {
             );
             // POST body is a JSON-quoted address string.
             let body = format!("\"{}\"", address);
-            let response =
-                timed_request(self.inner.send_post_req(&endpoint, body)).await?;
+            let response = timed_request(self.inner.send_post_req(&endpoint, body)).await?;
             let text = response.text().await.map_err(|e| NodeError::ApiError {
                 message: format!("Failed to read unspent response: {}", e),
             })?;
@@ -391,7 +391,10 @@ impl NodeClient {
     }
 
     /// Works regardless of extraIndex availability.
-    pub async fn get_box_by_id(&self, box_id: &citadel_core::BoxId) -> Result<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox> {
+    pub async fn get_box_by_id(
+        &self,
+        box_id: &citadel_core::BoxId,
+    ) -> Result<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox> {
         timed_request(self.inner.box_from_id_with_pool(box_id.as_str()))
             .await
             .map_err(|e| {
@@ -420,9 +423,11 @@ impl NodeClient {
                         message: format!("Invalid token ID format: {}", e),
                     })?;
 
-                let boxes = timed_request(
-                    self.inner.unspent_boxes_by_token_id(&ergo_token_id, 0, limit),
-                )
+                let boxes = timed_request(self.inner.unspent_boxes_by_token_id(
+                    &ergo_token_id,
+                    0,
+                    limit,
+                ))
                 .await?;
 
                 if capabilities.capability_tier == CapabilityTier::IndexLagging {
@@ -446,7 +451,9 @@ impl NodeClient {
         capabilities: &NodeCapabilities,
         token_id: &citadel_core::TokenId,
     ) -> Result<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox> {
-        let boxes = self.get_boxes_by_token_id(capabilities, token_id, 1).await?;
+        let boxes = self
+            .get_boxes_by_token_id(capabilities, token_id, 1)
+            .await?;
 
         boxes
             .into_iter()
@@ -572,6 +579,63 @@ impl NodeClient {
         Ok(ergo_tx::Eip12InputBox::from_ergo_box(
             &ergo_box, tx_id, index,
         ))
+    }
+
+    /// Dry-run a fully-assembled transaction through the node's `POST /transactions/check`
+    /// endpoint WITHOUT broadcasting it. `tx_json` must be a complete `ErgoTransaction`
+    /// (inputs with `spendingProof`, dataInputs, outputs). Returns `Ok(tx_id)` if the node
+    /// would accept it, or `Err` with the node's rejection message. This validates the
+    /// full script execution against the live UTXO set — the strongest pre-broadcast check
+    /// available. Note the inputs must be currently unspent for the check to run.
+    pub async fn check_transaction(&self, tx_json: &serde_json::Value) -> Result<String> {
+        let body = serde_json::to_string(tx_json).map_err(|e| NodeError::ApiError {
+            message: format!("Failed to serialize tx for check: {}", e),
+        })?;
+        let response = timed_request(self.inner.send_post_req("/transactions/check", body)).await?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| NodeError::ApiError {
+            message: format!("Failed to read /transactions/check response: {}", e),
+        })?;
+        if status.is_success() {
+            // Body is the accepted tx id, JSON-quoted.
+            Ok(text.trim().trim_matches('"').to_string())
+        } else {
+            // Body is a JSON error object; surface `detail`/`reason` if present.
+            let detail = serde_json::from_str::<serde_json::Value>(&text)
+                .ok()
+                .and_then(|v| {
+                    v.get("detail")
+                        .or_else(|| v.get("reason"))
+                        .and_then(|d| d.as_str())
+                        .map(|s| s.to_string())
+                })
+                .unwrap_or(text);
+            Err(NodeError::ApiError {
+                message: format!("transaction rejected ({}): {}", status.as_u16(), detail),
+            })
+        }
+    }
+
+    /// Broadcast a fully-assembled transaction via `POST /transactions`. `tx_json` must be
+    /// a complete `ErgoTransaction`. Returns the accepted tx id. Used for the signature-
+    /// free Paideia unstake/refund txs, which carry empty spending proofs and therefore
+    /// need no wallet. Prefer [`Self::check_transaction`] first.
+    pub async fn submit_transaction(&self, tx_json: &serde_json::Value) -> Result<String> {
+        let body = serde_json::to_string(tx_json).map_err(|e| NodeError::ApiError {
+            message: format!("Failed to serialize tx for submit: {}", e),
+        })?;
+        let response = timed_request(self.inner.send_post_req("/transactions", body)).await?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| NodeError::ApiError {
+            message: format!("Failed to read /transactions response: {}", e),
+        })?;
+        if status.is_success() {
+            Ok(text.trim().trim_matches('"').to_string())
+        } else {
+            Err(NodeError::ApiError {
+                message: format!("transaction not accepted ({}): {}", status.as_u16(), text),
+            })
+        }
     }
 }
 
