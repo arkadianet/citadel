@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { TransactionModal, type SigmaUsdAction } from './TransactionModal'
 import { getSigmaUsdActivity, type ProtocolInteraction } from '../api/protocolActivity'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
-import { PageHeader, Card, CardBody, EmptyState } from './ui'
+import { PageHeader, Card, CardBody, EmptyState, Spinner } from './ui'
 import './SigmaUsdTab.css'
 
 interface SigmaUsdState {
@@ -272,10 +272,10 @@ export function SigmaUsdTab({
   const strokeDashoffset = circumference - (percentage / 100) * circumference
 
   const getGaugeStatus = () => {
-    if (ratio < 100) return { color: '#EF4444', label: 'Critical', cls: 'critical' }
-    if (ratio < 400) return { color: '#F59E0B', label: 'Below Minimum', cls: 'danger' }
-    if (ratio > 800) return { color: '#3B82F6', label: 'Above Maximum', cls: 'excess' }
-    return { color: '#10B981', label: 'Healthy', cls: 'healthy' }
+    if (ratio < 100) return { label: 'Critical', cls: 'critical' }
+    if (ratio < 400) return { label: 'Below Minimum', cls: 'danger' }
+    if (ratio > 800) return { label: 'Above Maximum', cls: 'excess' }
+    return { label: 'Healthy', cls: 'healthy' }
   }
   const gaugeStatus = getGaugeStatus()
 
@@ -325,9 +325,8 @@ export function SigmaUsdTab({
                     <svg className="gauge-svg" viewBox="0 0 100 100">
                       <circle className="gauge-bg" cx="50" cy="50" r="40" />
                       <circle
-                        className="gauge-progress"
+                        className={`gauge-progress ${gaugeStatus.cls}`}
                         cx="50" cy="50" r="40"
-                        stroke={gaugeStatus.color}
                         strokeDasharray={circumference}
                         strokeDashoffset={strokeDashoffset}
                       />
@@ -542,7 +541,7 @@ export function SigmaUsdTab({
                   <div className="holdings-grid">
                     <div className="holding-card orange">
                       <div className="holding-header">
-                        <div className="holding-icon" style={{ background: 'rgba(249, 115, 22, 0.3)', width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, color: '#fb923c' }}>Σ</div>
+                        <div className="holding-icon holding-icon-erg">Σ</div>
                         <span className="holding-name">ERG</span>
                       </div>
                       <div className="holding-amount">{ergBalance.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</div>
@@ -593,7 +592,7 @@ export function SigmaUsdTab({
                 <div className="sigmausd-activity-empty">Connect wallet to see your activity</div>
               ) : userTxsLoading ? (
                 <div className="sigmausd-activity-loading">
-                  <div className="spinner-small" />
+                  <Spinner size={16} />
                   <span>Loading...</span>
                 </div>
               ) : userTxs.length === 0 ? (
@@ -656,7 +655,7 @@ export function SigmaUsdTab({
               <CardBody>
               {activityLoading ? (
                 <div className="sigmausd-activity-loading">
-                  <div className="spinner-small" />
+                  <Spinner size={16} />
                   <span>Loading activity...</span>
                 </div>
               ) : activity.length === 0 ? (
