@@ -3,6 +3,9 @@
    ============================================================ */
 
 .arb-scanner-tab {
+  --protocol-accent: var(--amber-500); /* protocol accent */
+  --protocol-accent-deep: #d97706; /* protocol accent */
+
   padding: var(--space-lg);
   max-width: 900px;
 }
@@ -12,51 +15,29 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
+  background: linear-gradient(135deg, var(--protocol-accent), var(--protocol-accent-deep));
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: white;
-}
-
-.arb-scanner-refresh {
-  padding: var(--space-xs) var(--space-md);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--glass-border);
-  background: var(--glass-display);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  color: var(--slate-200);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  transition: border-color 0.15s;
-}
-
-.arb-scanner-refresh:hover:not(:disabled) {
-  border-color: var(--emerald-400);
-}
-
-.arb-scanner-refresh:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  color: var(--text-strong);
 }
 
 /* Summary bar */
 .arb-scanner-summary {
   /* base from .view-info-bar */
-  gap: 1.5rem;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
+  gap: var(--ds-space-6);
+  box-shadow: var(--glass-inner-edge);
 }
 
 .arb-scanner-count {
-  color: var(--emerald-400);
+  color: var(--ds-success);
   font-weight: 600;
 }
 
 .arb-scanner-total {
   color: var(--slate-200);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--ds-font-mono);
 }
 
 .arb-scanner-time {
@@ -68,58 +49,57 @@
 .arb-scanner-cards {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--ds-space-3);
 }
 
 .arb-card {
-  background: var(--glass-display);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
-  padding: 1rem;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
+  background: var(--ds-surface-base);
+  backdrop-filter: var(--ds-blur);
+  -webkit-backdrop-filter: var(--ds-blur);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  padding: var(--ds-space-4);
+  box-shadow: var(--glass-inner-edge);
 }
 
 .arb-card-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  gap: var(--ds-space-3);
+  margin-bottom: var(--ds-space-3);
 }
 
 .arb-card-path {
-  font-weight: 600;
-  font-size: 0.9rem;
+  font: var(--ds-text-card-title);
   color: var(--slate-100);
 }
 
 .arb-card-hops {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--slate-500);
   padding: 0.15rem 0.5rem;
-  border: 1px solid var(--glass-border);
-  border-radius: 4px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
 }
 
 .arb-card-profit-badge {
   margin-left: auto;
   font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--emerald-400);
-  background: rgba(52, 211, 153, 0.1);
+  font-size: var(--text-sm);
+  color: var(--ds-success);
+  background: var(--ds-success-bg);
   padding: 0.2rem 0.6rem;
-  border-radius: 6px;
+  border-radius: var(--ds-radius-sm);
 }
 
 /* Amounts row */
 .arb-card-amounts {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+  gap: var(--ds-space-2);
+  margin-bottom: var(--ds-space-3);
+  padding-bottom: var(--ds-space-3);
+  border-bottom: 1px solid var(--ds-border);
 }
 
 .arb-card-amount,
@@ -130,13 +110,13 @@
 }
 
 .arb-card-label {
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   color: var(--slate-400);
 }
 
 .arb-card-value {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.85rem;
+  font-family: var(--ds-font-mono);
+  font-size: var(--text-sm);
   color: var(--slate-200);
 }
 
@@ -144,28 +124,28 @@
 .arb-card-hops-detail {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+  gap: var(--ds-space-2);
+  margin-bottom: var(--ds-space-3);
+  padding-bottom: var(--ds-space-3);
+  border-bottom: 1px solid var(--ds-border);
 }
 
 .arb-hop {
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--glass-border);
-  border-radius: 6px;
-  padding: 0.5rem 0.75rem;
+  background: var(--ds-input-bg);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  padding: var(--ds-space-2) var(--ds-space-3);
 }
 
 .arb-hop-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--ds-space-2);
   margin-bottom: 0.35rem;
 }
 
 .arb-hop-index {
-  font-size: 0.7rem;
+  font: var(--ds-text-micro);
   font-weight: 600;
   color: var(--slate-400);
   text-transform: uppercase;
@@ -173,49 +153,49 @@
 }
 
 .arb-hop-pool {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--slate-200);
 }
 
 .arb-hop-pool-id {
-  font-size: 0.7rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--text-xs);
+  font-family: var(--ds-font-mono);
   color: var(--slate-500);
 }
 
 .arb-hop-impact {
   margin-left: auto;
-  font-size: 0.75rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--text-xs);
+  font-family: var(--ds-font-mono);
 }
 
-.arb-hop-impact.impact-low { color: var(--emerald-400); }
-.arb-hop-impact.impact-medium { color: var(--amber-400, #fbbf24); }
-.arb-hop-impact.impact-high { color: var(--red-400, #f87171); }
+.arb-hop-impact.impact-low { color: var(--ds-success); }
+.arb-hop-impact.impact-medium { color: var(--ds-warning); }
+.arb-hop-impact.impact-high { color: var(--ds-danger); }
 
 .arb-hop-swap {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--ds-space-2);
   flex-wrap: wrap;
 }
 
 .arb-hop-amount {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.8rem;
+  font-family: var(--ds-font-mono);
+  font-size: var(--text-sm);
   color: var(--slate-200);
 }
 
 .arb-hop-arrow {
   color: var(--slate-500);
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
 }
 
 .arb-hop-fee {
   margin-left: auto;
-  font-size: 0.7rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--text-xs);
+  font-family: var(--ds-font-mono);
   color: var(--slate-500);
 }
 
@@ -223,11 +203,11 @@
 .arb-card-breakdown {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--ds-space-2);
+  margin-bottom: var(--ds-space-2);
 }
 
-.arb-card-value.profit { color: var(--emerald-400); }
+.arb-card-value.profit { color: var(--ds-success); }
 .arb-card-value.fee { color: var(--slate-500); }
 .arb-card-value.net { color: var(--emerald-300); font-weight: 600; }
 
@@ -238,13 +218,13 @@
 }
 
 .arb-card-impact {
-  font-size: 0.8rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-size: var(--text-sm);
+  font-family: var(--ds-font-mono);
 }
 
-.arb-card-impact.impact-low { color: var(--emerald-400); }
-.arb-card-impact.impact-medium { color: var(--amber-400, #fbbf24); }
-.arb-card-impact.impact-high { color: var(--red-400, #f87171); }
+.arb-card-impact.impact-low { color: var(--ds-success); }
+.arb-card-impact.impact-medium { color: var(--ds-warning); }
+.arb-card-impact.impact-high { color: var(--ds-danger); }
 
 /* Empty state */
 .arb-scanner-empty {
@@ -254,20 +234,18 @@
 }
 
 .arb-scanner-empty p:first-child {
-  font-size: 1rem;
-  margin-bottom: 0.5rem;
+  font-size: var(--text-base);
+  margin-bottom: var(--ds-space-2);
 }
 
 .arb-scanner-empty-hint {
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   color: var(--slate-500);
 }
 
 /* Execute button + chain execution modal */
 .arb-card-execute {
   margin-left: auto;
-  padding: 0.3rem 0.9rem;
-  font-size: 0.8rem;
 }
 
 .arb-execute-modal { max-width: 480px; }
@@ -276,7 +254,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  margin: 0.75rem 0;
+  margin: var(--ds-space-3) 0;
 }
 
 .arb-exec-leg {
@@ -284,21 +262,21 @@
   gap: 0.6rem;
   align-items: center;
   padding: 0.4rem 0.6rem;
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 0.85rem;
+  background: var(--ds-surface-base);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  font-size: var(--text-sm);
 }
 
 .arb-exec-leg-index {
-  color: var(--emerald-400);
+  color: var(--ds-success);
   font-weight: 600;
   white-space: nowrap;
 }
 
 .arb-exec-leg-swap {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.8rem;
+  font-family: var(--ds-font-mono);
+  font-size: var(--text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -306,9 +284,9 @@
 
 .arb-exec-stepper {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--ds-space-2);
   justify-content: center;
-  margin-bottom: 1rem;
+  margin-bottom: var(--ds-space-4);
 }
 
 .arb-exec-step {
@@ -318,29 +296,29 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--ds-border);
   color: var(--slate-400);
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
 }
 
 .arb-exec-step.active {
-  border-color: var(--emerald-400);
-  color: var(--emerald-400);
+  border-color: var(--ds-success);
+  color: var(--ds-success);
 }
 
 .arb-exec-step.done {
-  background: var(--emerald-400);
-  color: #0f172a;
-  border-color: var(--emerald-400);
+  background: var(--ds-success);
+  color: var(--slate-900);
+  border-color: var(--ds-success);
 }
 
 .arb-exec-hint {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   color: var(--slate-400);
-  margin-top: 0.5rem;
+  margin-top: var(--ds-space-2);
 }
 
 .arb-exec-txid {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.8rem;
+  font-family: var(--ds-font-mono);
+  font-size: var(--text-sm);
 }
