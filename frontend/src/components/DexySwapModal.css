@@ -99,6 +99,11 @@
   color: var(--slate-300);
 }
 
+.slippage-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
+}
+
 .slippage-custom-input {
   display: flex;
   align-items: center;

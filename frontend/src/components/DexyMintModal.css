@@ -148,6 +148,11 @@
   background: color-mix(in srgb, var(--emerald-500) 25%, transparent);
 }
 
+.max-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
+}
+
 .max-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -323,6 +328,11 @@
   background: var(--ds-success-bg);
 }
 
+.sign-method-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
+}
+
 .sign-method-btn svg {
   color: var(--slate-400);
 }
@@ -439,19 +449,8 @@
   margin-top: var(--ds-space-2);
 }
 
-.modal-actions .btn,
 .modal-actions .ds-btn {
   flex: 1;
-}
-
-.modal-actions .btn {
-  padding: var(--ds-space-3) 20px;
-  border-radius: var(--ds-radius-sm);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--ds-transition-fast);
-  border: none;
 }
 
 .modal-actions .btn-primary {

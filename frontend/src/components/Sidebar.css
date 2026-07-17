@@ -56,6 +56,11 @@
   color: var(--text-strong);
 }
 
+.sidebar-item:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
+}
+
 .sidebar-item.active {
   border-left: 2px solid var(--emerald-400);
   background: var(--ds-success-bg);

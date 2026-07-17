@@ -143,6 +143,11 @@
   background: color-mix(in srgb, var(--blue-500) 25%, transparent);
 }
 
+.lend-modal .max-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
+}
+
 /* ============================================================================
    Slippage Control
    ============================================================================ */
@@ -354,6 +359,11 @@
 .lend-modal .sign-method-btn:hover {
   border-color: var(--blue-500);
   background: color-mix(in srgb, var(--blue-500) 10%, transparent);
+}
+
+.lend-modal .sign-method-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
 }
 
 .lend-modal .sign-method-btn svg {

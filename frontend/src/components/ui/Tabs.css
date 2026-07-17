@@ -22,7 +22,7 @@
   color: var(--slate-400);
   font: var(--ds-text-label);
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--ds-transition-fast), background var(--ds-transition-fast);
   text-align: center;
 }
 

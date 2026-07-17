@@ -4,7 +4,7 @@
   gap: var(--ds-space-3);
   padding: var(--ds-space-2) var(--ds-space-3);
   border-bottom: 1px solid rgba(148, 163, 184, 0.06);
-  transition: background 0.15s;
+  transition: background var(--ds-transition-fast);
 }
 
 .ds-activity-row:last-child { border-bottom: none; }

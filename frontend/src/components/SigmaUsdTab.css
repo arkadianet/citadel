@@ -207,7 +207,7 @@
   fill: none;
   stroke-width: 10;
   stroke-linecap: round;
-  transition: stroke-dashoffset 1s ease-out, stroke 0.3s;
+  transition: stroke-dashoffset 1s ease-out, stroke var(--ds-transition-base);
 }
 
 .gauge-progress.healthy { stroke: var(--emerald-500); }

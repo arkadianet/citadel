@@ -20,7 +20,7 @@
 
 .ds-card[role="button"] {
   cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  transition: border-color var(--ds-transition-fast), transform var(--ds-transition-base), box-shadow var(--ds-transition-fast);
 }
 
 .ds-card[role="button"]:hover {

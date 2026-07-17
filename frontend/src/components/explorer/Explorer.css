@@ -346,6 +346,11 @@
   color: var(--text-strong);
 }
 
+.pagination-page-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
+}
+
 .pagination-page-btn.active {
   background: color-mix(in srgb, var(--emerald-500) 12%, transparent);
   color: var(--emerald-400);

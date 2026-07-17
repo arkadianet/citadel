@@ -20,6 +20,7 @@ import { TimelockTab } from './components/TimelockTab'
 import { RouterTab } from './components/RouterTab'
 import { ArbScannerTab } from './components/ArbScannerTab'
 import { StakeRecoveryTab } from './components/StakeRecoveryTab'
+import { Button } from './components/ui'
 import { ExplorerNavProvider, type ExplorerTarget } from './contexts/ExplorerNavContext'
 import './App.css'
 
@@ -595,13 +596,13 @@ function App() {
                   />
                 </div>
 
-                <button
-                  className="btn btn-primary"
+                <Button
+                  variant="primary"
                   onClick={() => handleConnect()}
                   disabled={connecting || !nodeUrl}
                 >
                   {connecting ? 'Connecting...' : isConnected ? 'Reconnect' : 'Connect'}
-                </button>
+                </Button>
 
                 {error && <div className="message error">{error}</div>}
 

@@ -7,6 +7,7 @@ import {
 import { getTxStatus } from '../api/types'
 import type { RouteQuote } from '../api/router'
 import { formatTokenAmount } from '../utils/format'
+import { Button } from './ui'
 
 interface SwapChainModalProps {
   isOpen: boolean
@@ -182,10 +183,10 @@ export function SwapChainModal({ isOpen, onClose, routeQuote, sourceAmount, onSu
               </div>
 
               <div className="button-group">
-                <button className="btn btn-secondary" onClick={handleClose}>Cancel</button>
-                <button className="btn btn-primary" onClick={() => signLeg(0, [])}>
+                <Button variant="secondary" onClick={handleClose}>Cancel</Button>
+                <Button variant="primary" onClick={() => signLeg(0, [])}>
                   Sign {build.legs.length} legs in Nautilus
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -206,7 +207,7 @@ export function SwapChainModal({ isOpen, onClose, routeQuote, sourceAmount, onSu
               <p>Sign leg {signingLeg + 1} of {build.legs.length} in Nautilus...</p>
               <p className="arb-exec-hint">The Nautilus window opened in your browser. Nothing broadcasts yet.</p>
               <div className="button-group">
-                <button className="btn btn-secondary" onClick={handleClose}>Abort (nothing broadcast)</button>
+                <Button variant="secondary" onClick={handleClose}>Abort (nothing broadcast)</Button>
               </div>
             </div>
           )}
@@ -249,7 +250,7 @@ export function SwapChainModal({ isOpen, onClose, routeQuote, sourceAmount, onSu
                 </>
               )}
               <div className="button-group">
-                <button className="btn btn-primary" onClick={handleClose}>Close</button>
+                <Button variant="primary" onClick={handleClose}>Close</Button>
               </div>
             </>
           )}
@@ -258,8 +259,8 @@ export function SwapChainModal({ isOpen, onClose, routeQuote, sourceAmount, onSu
             <>
               <div className="message error">{error}</div>
               <div className="button-group">
-                <button className="btn btn-secondary" onClick={handleClose}>Close</button>
-                <button className="btn btn-primary" onClick={doBuild}>Rebuild</button>
+                <Button variant="secondary" onClick={handleClose}>Close</Button>
+                <Button variant="primary" onClick={doBuild}>Rebuild</Button>
               </div>
             </>
           )}

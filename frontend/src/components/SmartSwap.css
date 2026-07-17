@@ -249,6 +249,11 @@
   border-color: var(--ds-success);
 }
 
+.smart-swap-slippage-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
+}
+
 .smart-swap-target-row {
   display: flex;
   flex-direction: column;
@@ -383,6 +388,11 @@
 .smart-route-card:hover {
   border-color: var(--ds-border-hover);
   background: var(--ds-surface-elevated);
+}
+
+.smart-route-card:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
 }
 
 .smart-route-card.best {

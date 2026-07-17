@@ -28,6 +28,11 @@
   background: var(--ds-info-bg);
 }
 
+.dexy-path-card:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
+}
+
 .dexy-path-card.selected {
   border-color: var(--emerald-500);
   background: var(--ds-success-bg);
