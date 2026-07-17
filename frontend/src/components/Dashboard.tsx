@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
 import { getProtocolActivity, type ProtocolInteraction } from '../api/protocolActivity'
 import { getAmmPools, type AmmPool } from '../api/amm'
-import { StatTile, Card, CardBody, EmptyState } from './ui'
+import { StatTile, Card, CardBody, EmptyState, Skeleton } from './ui'
 import './Dashboard.css'
 
 interface DexyState {
@@ -119,13 +119,13 @@ const TOKEN_DECIMALS: Record<string, number> = {
 }
 
 const PROTOCOL_GRID: Array<{ id: View; name: string; desc: string; color: string; letter: string }> = [
-  { id: 'sigmausd', name: 'SigmaUSD', desc: 'AgeUSD Stablecoin', color: '#10b981', letter: '$' },
-  { id: 'dexy', name: 'Dexy', desc: 'Oracle Pegged', color: '#f59e0b', letter: 'D' },
-  { id: 'lending', name: 'Lending', desc: 'Duckpools', color: '#3b82f6', letter: 'L' },
-  { id: 'dex', name: 'DEX', desc: 'AMM Swaps', color: '#8b5cf6', letter: 'S' },
-  { id: 'hodlcoin', name: 'HodlCoin', desc: 'Hold & Earn', color: '#f97316', letter: 'H' },
-  { id: 'bonds', name: 'Bonds', desc: 'SigmaFi P2P', color: '#ec4899', letter: 'B' },
-  { id: 'timelocks', name: 'Timelocks', desc: 'MewLock', color: '#64748b', letter: 'T' },
+  { id: 'sigmausd', name: 'SigmaUSD', desc: 'AgeUSD Stablecoin', color: 'var(--emerald-500)', letter: '$' },
+  { id: 'dexy', name: 'Dexy', desc: 'Oracle Pegged', color: 'var(--amber-500)', letter: 'D' },
+  { id: 'lending', name: 'Lending', desc: 'Duckpools', color: 'var(--blue-500)', letter: 'L' },
+  { id: 'dex', name: 'DEX', desc: 'AMM Swaps', color: '#8b5cf6', letter: 'S' }, /* protocol accent: violet, no token */
+  { id: 'hodlcoin', name: 'HodlCoin', desc: 'Hold & Earn', color: 'var(--orange-500)', letter: 'H' },
+  { id: 'bonds', name: 'Bonds', desc: 'SigmaFi P2P', color: '#ec4899', letter: 'B' }, /* protocol accent: pink, no token */
+  { id: 'timelocks', name: 'Timelocks', desc: 'MewLock', color: 'var(--slate-600)', letter: 'T' },
 ]
 
 export function Dashboard({
@@ -295,7 +295,7 @@ export function Dashboard({
           </div>
           <div className="portfolio-hero-holdings">
             <div className="hero-holding orange">
-              <div className="hero-holding-icon" style={{ background: 'rgba(249, 115, 22, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: '#fb923c' }}>
+              <div className="hero-holding-icon" style={{ background: 'color-mix(in srgb, var(--orange-500) 30%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: 'var(--orange-400)' }}>
                 E
               </div>
               <div className="hero-holding-info">
@@ -336,7 +336,7 @@ export function Dashboard({
               .slice(0, 4)
               .map(t => (
                 <div key={t.token_id} className="hero-holding slate">
-                  <div className="hero-holding-icon" style={{ background: 'rgba(100, 116, 139, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 600, color: '#94a3b8' }}>
+                  <div className="hero-holding-icon" style={{ background: 'color-mix(in srgb, var(--slate-600) 30%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 600, color: 'var(--slate-400)' }}>
                     {(t.name ?? '?')[0].toUpperCase()}
                   </div>
                   <div className="hero-holding-info">
@@ -454,8 +454,8 @@ export function Dashboard({
                       marginTop: 6,
                       borderRadius: 6,
                       fontSize: 'var(--text-xs)',
-                      background: Math.abs(divergencePct) > 10 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                      color: Math.abs(divergencePct) > 10 ? 'var(--red-400)' : 'var(--amber-400)',
+                      background: Math.abs(divergencePct) > 10 ? 'var(--ds-danger-bg)' : 'var(--ds-warning-bg)',
+                      color: Math.abs(divergencePct) > 10 ? 'var(--ds-danger)' : 'var(--ds-warning)',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
@@ -480,8 +480,8 @@ export function Dashboard({
                       marginTop: 6,
                       borderRadius: 6,
                       fontSize: 'var(--text-xs)',
-                      background: 'rgba(99, 102, 241, 0.1)',
-                      color: 'var(--indigo-300, #a5b4fc)',
+                      background: 'var(--ds-info-bg)',
+                      color: 'var(--ds-info)',
                     }}>
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>RR Recovery to 400%</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, opacity: 0.9 }}>
@@ -535,9 +535,10 @@ export function Dashboard({
             <h3 className="dashboard-section-header view-section-label">Protocol Activity</h3>
             <div className="activity-feed-card">
               {activityLoading ? (
-                <div className="activity-loading">
-                  <div className="spinner-small" />
-                  <span>Loading activity...</span>
+                <div className="activity-skeleton">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} height="40px" />
+                  ))}
                 </div>
               ) : activity.length === 0 ? (
                 <div className="activity-empty">No recent protocol activity</div>
@@ -635,9 +636,10 @@ export function Dashboard({
         <section className="recent-txs-section">
           <h3 className="dashboard-section-header view-section-label">Your Recent Transactions</h3>
           {txsLoading ? (
-            <div className="txs-loading">
-              <div className="spinner-small" />
-              <span>Loading transactions...</span>
+            <div className="txs-skeleton">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} height="44px" />
+              ))}
             </div>
           ) : recentTxs.length === 0 ? (
             <div className="txs-empty">No recent transactions</div>
