@@ -1071,7 +1071,10 @@ pub async fn find_swap_routes(
         .await
         .str_err()?;
 
-    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    let mut graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    // The requested pair is always routable even if its pools sit below the
+    // liquidity floor -- price impact on the quote conveys thinness.
+    amm::ensure_direct_pair_edges(&mut graph, &pools, &source_token, &target_token);
     let max_hops = max_hops.unwrap_or(3);
     let max_routes = max_routes.unwrap_or(5);
     let slippage_pct = slippage.unwrap_or(0.5);
@@ -1131,7 +1134,8 @@ pub async fn find_split_route(
         .await
         .str_err()?;
 
-    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    let mut graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    amm::ensure_direct_pair_edges(&mut graph, &pools, &source_token, &target_token);
     let max_hops = 3;
     let max_splits = max_splits.unwrap_or(2);
     let _slippage_pct = slippage.unwrap_or(0.5);
@@ -1248,7 +1252,8 @@ pub async fn find_swap_routes_by_output(
         .await
         .str_err()?;
 
-    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    let mut graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    amm::ensure_direct_pair_edges(&mut graph, &pools, &source_token, &target_token);
     let max_hops = max_hops.unwrap_or(3);
     let max_routes = max_routes.unwrap_or(5);
     let slippage_pct = slippage.unwrap_or(0.5);
@@ -1466,5 +1471,80 @@ pub async fn submit_arb_chain(
         tx_ids,
         failed_leg: None,
         error: None,
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SwapChainBuildResponse {
+    pub legs: Vec<ArbChainLegDto>,
+    /// Token the chain ends in (null = ERG).
+    pub final_token: Option<String>,
+    pub final_output: u64,
+}
+
+/// Build a multi-hop swap chain over `pool_ids` (hop order) starting from
+/// `source_token` (None = ERG). Same 0-conf pre-built chaining as arb
+/// execution, but for open routes (ends in the target token).
+#[tauri::command]
+pub async fn build_swap_chain_tx(
+    state: State<'_, AppState>,
+    pool_ids: Vec<String>,
+    source_token: Option<String>,
+    input_amount: u64,
+    user_utxos: Vec<serde_json::Value>,
+    current_height: i32,
+) -> Result<SwapChainBuildResponse, String> {
+    let client = state.require_node_client().await?;
+
+    let all_pools = amm::discover_pools(&client).await.str_err()?;
+    let mut pools: Vec<(amm::AmmPool, ergo_tx::Eip12InputBox)> = Vec::with_capacity(pool_ids.len());
+    for pool_id in &pool_ids {
+        let pool = all_pools
+            .iter()
+            .find(|p| &p.pool_id == pool_id)
+            .cloned()
+            .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+        let pool_box = client
+            .get_eip12_box_by_id(&pool.box_id)
+            .await
+            .map_err(|e| format!("Failed to fetch pool box: {}", e))?;
+        pools.push((pool, pool_box));
+    }
+
+    let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
+    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
+
+    // Frontend sends "ERG" for the native side; the builder wants None.
+    let source = source_token.filter(|t| t != "ERG");
+
+    let build = amm::build_swap_chain(
+        &pools,
+        source,
+        input_amount,
+        &parsed_utxos,
+        &user_ergo_tree,
+        current_height,
+    )
+    .str_err()?;
+
+    let legs = build
+        .legs
+        .into_iter()
+        .map(|leg| {
+            Ok(ArbChainLegDto {
+                pool_id: leg.pool_id,
+                tx_id: leg.tx_id,
+                unsigned_tx: serde_json::to_value(&leg.unsigned_tx)
+                    .map_err(|e| format!("Failed to serialize leg tx: {}", e))?,
+                summary: leg.summary,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    Ok(SwapChainBuildResponse {
+        legs,
+        final_token: build.final_token,
+        final_output: build.final_output,
     })
 }

@@ -81,6 +81,30 @@ export async function buildArbChain(
   })
 }
 
+export interface SwapChainBuild {
+  legs: ArbChainLeg[]
+  /** Token the chain ends in (null = ERG). */
+  finalToken: string | null
+  finalOutput: number
+}
+
+/** Pre-build a multi-hop swap chain (open route) from a fresh pool snapshot. */
+export async function buildSwapChain(
+  poolIds: string[],
+  sourceToken: string | null,
+  inputAmount: number,
+  userUtxos: object[],
+  currentHeight: number,
+): Promise<SwapChainBuild> {
+  return await invoke<SwapChainBuild>('build_swap_chain_tx', {
+    poolIds,
+    sourceToken,
+    inputAmount,
+    userUtxos,
+    currentHeight,
+  })
+}
+
 export interface ArbLegSignResponse {
   requestId: string
   nautilusUrl: string

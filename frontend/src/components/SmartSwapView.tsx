@@ -9,6 +9,7 @@ import {
 import { TokenSelector, type TokenEntry } from './TokenSelector'
 import { RouteList } from './RouteList'
 import { SmartSwapModal } from './SmartSwapModal'
+import { SwapChainModal } from './SwapChainModal'
 import { formatTokenAmount } from '../utils/format'
 import './SmartSwap.css'
 
@@ -329,15 +330,15 @@ export function SmartSwapView({
 
   const canExecute =
     selectedRoute !== null &&
-    selectedRoute.route.hops.length === 1 &&
     walletAddress !== null &&
     !insufficientBalance
+
+  const isMultiHop = (selectedRoute?.route.hops.length ?? 0) > 1
 
   const executionBlockReason: string | null = (() => {
     if (!selectedRoute) return useSplit ? 'Split execution not yet supported' : null
     if (!walletAddress) return 'Connect wallet'
     if (insufficientBalance) return 'Insufficient balance'
-    if (selectedRoute.route.hops.length > 1) return 'Multi-hop execution coming soon'
     return null
   })()
 
@@ -552,10 +553,10 @@ export function SmartSwapView({
         onClick={() => setShowSwapModal(true)}
         title={executionBlockReason ?? undefined}
       >
-        {executionBlockReason ?? 'Swap'}
+        {executionBlockReason ?? (isMultiHop ? `Swap (${selectedRoute?.route.hops.length} hops, Nautilus)` : 'Swap')}
       </button>
 
-      {showSwapModal && selectedRoute && walletAddress && (
+      {showSwapModal && selectedRoute && walletAddress && !isMultiHop && (
         <SmartSwapModal
           isOpen={showSwapModal}
           onClose={() => setShowSwapModal(false)}
@@ -565,6 +566,16 @@ export function SmartSwapView({
           walletAddress={walletAddress}
           explorerUrl={_explorerUrl}
           onSuccess={() => setShowSwapModal(false)}
+        />
+      )}
+
+      {showSwapModal && selectedRoute && walletAddress && isMultiHop && (
+        <SwapChainModal
+          isOpen={showSwapModal}
+          onClose={() => setShowSwapModal(false)}
+          routeQuote={selectedRoute}
+          sourceAmount={rawInput}
+          onSuccess={() => findRoutes()}
         />
       )}
     </div>

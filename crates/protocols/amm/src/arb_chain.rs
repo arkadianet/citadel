@@ -34,6 +34,16 @@ pub struct ArbChainBuild {
     pub projected_profit_nano: i64,
 }
 
+/// A generic multi-hop swap chain (open route, may end in any token).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwapChainBuild {
+    pub legs: Vec<ArbChainLeg>,
+    /// Token the chain ends in (None = ERG).
+    pub final_token: Option<String>,
+    /// Amount of `final_token` the last leg pays out.
+    pub final_output: u64,
+}
+
 /// Build a full ERG -> ... -> ERG arb chain over `pools` (in hop order).
 ///
 /// `pools` must be freshly fetched (pool state + current pool box). The
@@ -46,21 +56,90 @@ pub fn build_arb_chain(
     current_height: i32,
     min_profit_nano: i64,
 ) -> Result<ArbChainBuild, AmmError> {
-    if pools.is_empty() {
-        return Err(AmmError::TxBuildError("Empty arb route".to_string()));
+    let initial_erg = sum_erg(user_utxos)?;
+
+    let (legs, final_token, _final_amount, available) = build_chain_core(
+        pools,
+        None,
+        input_nano,
+        user_utxos,
+        user_ergo_tree,
+        current_height,
+    )?;
+
+    if final_token.is_some() {
+        return Err(AmmError::TxBuildError(
+            "Arb route does not end in ERG".to_string(),
+        ));
     }
-    if input_nano == 0 {
+
+    let final_erg = sum_erg(&available)?;
+    let projected_profit_nano = final_erg as i64 - initial_erg as i64;
+
+    if projected_profit_nano < min_profit_nano {
+        return Err(AmmError::TxBuildError(format!(
+            "Arb no longer profitable: projected {} nanoERG (minimum {})",
+            projected_profit_nano, min_profit_nano
+        )));
+    }
+
+    Ok(ArbChainBuild {
+        legs,
+        projected_profit_nano,
+    })
+}
+
+/// Build a multi-hop swap chain over `pools` (in hop order), starting from
+/// `source_token` (None = ERG). Open route: may end in any token.
+pub fn build_swap_chain(
+    pools: &[(AmmPool, Eip12InputBox)],
+    source_token: Option<String>,
+    input_amount: u64,
+    user_utxos: &[Eip12InputBox],
+    user_ergo_tree: &str,
+    current_height: i32,
+) -> Result<SwapChainBuild, AmmError> {
+    let (legs, final_token, final_output, _available) = build_chain_core(
+        pools,
+        source_token,
+        input_amount,
+        user_utxos,
+        user_ergo_tree,
+        current_height,
+    )?;
+
+    Ok(SwapChainBuild {
+        legs,
+        final_token,
+        final_output,
+    })
+}
+
+/// Shared chain-building loop. Returns (legs, final token, final amount,
+/// remaining spendable user boxes after all legs).
+#[allow(clippy::type_complexity)]
+fn build_chain_core(
+    pools: &[(AmmPool, Eip12InputBox)],
+    start_token: Option<String>,
+    input_amount: u64,
+    user_utxos: &[Eip12InputBox],
+    user_ergo_tree: &str,
+    current_height: i32,
+) -> Result<(Vec<ArbChainLeg>, Option<String>, u64, Vec<Eip12InputBox>), AmmError> {
+    if pools.is_empty() {
+        return Err(AmmError::TxBuildError("Empty route".to_string()));
+    }
+    if input_amount == 0 {
         return Err(AmmError::TxBuildError("Input must be > 0".to_string()));
     }
 
     // Boxes the user can spend at each step: wallet UTXOs initially, then
     // shrinks by leg inputs and grows by derived leg outputs.
     let mut available: Vec<Eip12InputBox> = user_utxos.to_vec();
-    let initial_erg = sum_erg(&available)?;
 
     // None = ERG, Some(id) = token
-    let mut current_token: Option<String> = None;
-    let mut current_amount = input_nano;
+    let mut current_token: Option<String> = start_token;
+    let mut current_amount = input_amount;
 
     let mut legs: Vec<ArbChainLeg> = Vec::with_capacity(pools.len());
 
@@ -119,26 +198,7 @@ pub fn build_arb_chain(
         });
     }
 
-    if current_token.is_some() {
-        return Err(AmmError::TxBuildError(
-            "Arb route does not end in ERG".to_string(),
-        ));
-    }
-
-    let final_erg = sum_erg(&available)?;
-    let projected_profit_nano = final_erg as i64 - initial_erg as i64;
-
-    if projected_profit_nano < min_profit_nano {
-        return Err(AmmError::TxBuildError(format!(
-            "Arb no longer profitable: projected {} nanoERG (minimum {})",
-            projected_profit_nano, min_profit_nano
-        )));
-    }
-
-    Ok(ArbChainBuild {
-        legs,
-        projected_profit_nano,
-    })
+    Ok((legs, current_token, current_amount, available))
 }
 
 /// The token this pool outputs given the input token (None = ERG).
@@ -383,5 +443,69 @@ mod tests {
         let utxos = vec![user_utxo(50_000_000)]; // 0.05 ERG, far below input
         let result = build_arb_chain(&pools, 1_000_000_000, &utxos, USER_TREE, 1_000_000, 0);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn swap_chain_erg_to_token_single_hop() {
+        let pool = n2t_pool(0x01, 0x33, 100_000_000_000, 1_000_000);
+        let bx = pool_box(&pool);
+        let pools = vec![(pool, bx)];
+        let utxos = vec![user_utxo(10_000_000_000)];
+
+        let result =
+            build_swap_chain(&pools, None, 1_000_000_000, &utxos, USER_TREE, 1_000_000).unwrap();
+        assert_eq!(result.legs.len(), 1);
+        assert_eq!(result.final_token, Some(hex_id(0x33)));
+        assert_eq!(result.final_output, result.legs[0].summary.output_amount);
+        assert!(result.final_output > 0);
+    }
+
+    #[test]
+    fn swap_chain_token_to_token_via_erg() {
+        // token A -> ERG (pool A), ERG -> token B (pool B)
+        let pool_a = n2t_pool(0x01, 0x33, 100_000_000_000, 1_000_000);
+        let pool_b = n2t_pool(0x11, 0x44, 100_000_000_000, 5_000_000);
+        let box_a = pool_box(&pool_a);
+        let box_b = pool_box(&pool_b);
+        let pools = vec![(pool_a, box_a), (pool_b, box_b)];
+
+        // User holds token A plus ERG for fees.
+        let mut utxo = user_utxo(5_000_000_000);
+        utxo.assets.push(Eip12Asset {
+            token_id: hex_id(0x33),
+            amount: "10000".to_string(),
+        });
+        let utxos = vec![utxo];
+
+        let result = build_swap_chain(
+            &pools,
+            Some(hex_id(0x33)),
+            10_000,
+            &utxos,
+            USER_TREE,
+            1_000_000,
+        )
+        .unwrap();
+
+        assert_eq!(result.legs.len(), 2);
+        assert_eq!(result.final_token, Some(hex_id(0x44)));
+        // Leg 2 consumes exactly leg 1's ERG output.
+        assert_eq!(
+            result.legs[0].summary.output_amount,
+            result.legs[1].summary.input_amount
+        );
+        // Chain wiring: leg 2 user inputs come from leg 1 derived outputs.
+        let (_, leg1_outputs) = derive_output_boxes(&result.legs[0].unsigned_tx).unwrap();
+        let leg1_ids: Vec<&String> = leg1_outputs
+            .iter()
+            .filter(|b| b.ergo_tree == USER_TREE)
+            .map(|b| &b.box_id)
+            .collect();
+        assert!(result.legs[1]
+            .unsigned_tx
+            .inputs
+            .iter()
+            .skip(1)
+            .all(|i| leg1_ids.contains(&&i.box_id)));
     }
 }
