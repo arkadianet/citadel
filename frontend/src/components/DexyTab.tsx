@@ -16,7 +16,7 @@ import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import type { TxStatusResponse } from '../api/types'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
-import { PageHeader, Tabs, Card, CardBody, EmptyState } from './ui'
+import { PageHeader, Tabs, Card, CardBody, EmptyState, Button, Spinner } from './ui'
 import './DexyTab.css'
 
 interface DexyState {
@@ -510,7 +510,7 @@ export function DexyTab({
     return (
       <div className="dexy-tab">
         <div className="empty-state">
-          <div className="spinner" />
+          <Spinner size={32} />
           <p>Loading Dexy protocol state...</p>
         </div>
       </div>
@@ -601,7 +601,7 @@ export function DexyTab({
           <div className="dexy-holdings-grid">
             <div className="dexy-holding-card orange">
               <div className="dexy-holding-header">
-                <div className="dexy-holding-icon" style={{ background: 'rgba(249, 115, 22, 0.3)', color: '#fb923c' }}>
+                <div className="dexy-holding-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14">
                     <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z" />
                   </svg>
@@ -691,7 +691,7 @@ export function DexyTab({
               <div className="dexy-activity-empty">Connect wallet to see your activity</div>
             ) : userTxsLoading ? (
               <div className="dexy-activity-loading">
-                <div className="spinner-small" />
+                <Spinner size={16} />
                 <span>Loading...</span>
               </div>
             ) : userTxs.length === 0 ? (
@@ -754,7 +754,7 @@ export function DexyTab({
             <CardBody>
             {activityLoading ? (
               <div className="dexy-activity-loading">
-                <div className="spinner-small" />
+                <Spinner size={16} />
                 <span>Loading activity...</span>
               </div>
             ) : activity.length === 0 ? (
@@ -917,7 +917,7 @@ export function DexyTab({
                       </div>
                       <p>Approve in Nautilus</p>
                       <div className="waiting-spinner" />
-                      <button className="btn btn-secondary" onClick={lpFlow.handleBackToChoice}>Back</button>
+                      <Button variant="secondary" onClick={lpFlow.handleBackToChoice}>Back</Button>
                     </div>
                   )}
                   {lpFlow.signMethod === 'mobile' && lpFlow.qrUrl && (
@@ -927,7 +927,7 @@ export function DexyTab({
                         <QRCodeSVG value={lpFlow.qrUrl} size={200} level="M" includeMargin bgColor="white" fgColor="black" />
                       </div>
                       <div className="waiting-spinner" />
-                      <button className="btn btn-secondary" onClick={lpFlow.handleBackToChoice}>Back</button>
+                      <Button variant="secondary" onClick={lpFlow.handleBackToChoice}>Back</Button>
                     </div>
                   )}
                 </div>
@@ -945,7 +945,7 @@ export function DexyTab({
                   </div>
                   <h3>Transaction Submitted!</h3>
                   {lpFlow.txId && <TxSuccess txId={lpFlow.txId} explorerUrl={explorerUrl} />}
-                  <button className="btn btn-primary" onClick={() => {
+                  <Button variant="primary" onClick={() => {
                     setLpTxStep('idle')
                     setDepositErg('')
                     setDepositDexy('')
@@ -955,7 +955,7 @@ export function DexyTab({
                     fetchAllStates()
                   }}>
                     Done
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -972,9 +972,9 @@ export function DexyTab({
                   </div>
                   <h3>Transaction Failed</h3>
                   <p className="error-message">{lpTxError}</p>
-                  <button className="btn btn-primary" onClick={() => setLpTxStep('idle')}>
+                  <Button variant="primary" onClick={() => setLpTxStep('idle')}>
                     Try Again
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -1114,13 +1114,13 @@ export function DexyTab({
                   {depositPreview && !depositPreview.can_execute && depositPreview.error && (
                     <div className="dexy-lp-error">{depositPreview.error}</div>
                   )}
-                  <button
-                    className="dexy-action-btn"
+                  <Button
+                    variant="primary"
                     disabled={!depositPreview?.can_execute || !isConnected || !walletAddress || lpTxLoading}
                     onClick={handleDeposit}
                   >
                     {lpTxLoading ? 'Building...' : 'Add Liquidity'}
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -1252,13 +1252,13 @@ export function DexyTab({
                   {redeemPreview && !redeemPreview.can_execute && redeemPreview.error && (
                     <div className="dexy-lp-error">{redeemPreview.error}</div>
                   )}
-                  <button
-                    className="dexy-action-btn"
+                  <Button
+                    variant="primary"
                     disabled={!redeemPreview?.can_execute || !isConnected || !walletAddress || userLpBalance === 0 || lpTxLoading}
                     onClick={handleRedeem}
                   >
                     {lpTxLoading ? 'Building...' : 'Remove Liquidity'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </>)}
@@ -1375,7 +1375,7 @@ function DexyAssetCard({
         </div>
         <div className="token-card-body">
           <div className="asset-loading">
-            <div className="spinner-small" />
+            <Spinner size={16} />
             <span>Loading...</span>
           </div>
         </div>

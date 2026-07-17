@@ -1,99 +1,27 @@
 /* ============================================================================
    Dexy Mint Modal - Kadia-inspired styling
+   Note: several classes here (.modal-actions, .swap-field, .mint-signing-step,
+   .sign-method-btn, .mint-success-step, ...) are shared by other protocol
+   modals across the app — keep them defined here.
    ============================================================================ */
 
+:root {
+  --text-strong: rgb(var(--text)); /* protocol accent exemption: token alias, not a hardcoded color */
+}
+
+/* Kept: TransactionModal.tsx still uses this class for its shell */
 .dexy-mint-modal {
   max-width: 420px;
-}
-
-/* ============================================================================
-   Path Toggle
-   ============================================================================ */
-
-.path-toggle {
-  display: flex;
-  gap: 2px;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid var(--slate-700);
-  border-radius: 10px;
-  padding: 3px;
-}
-
-.path-toggle-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.15s;
-  color: var(--slate-400);
-}
-
-.path-toggle-btn:hover:not(.disabled):not(.active) {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--slate-300);
-}
-
-.path-toggle-btn.active {
-  background: rgba(16, 185, 129, 0.15);
-  color: var(--emerald-400);
-  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.3);
-}
-
-.path-toggle-btn.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.path-toggle-name {
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.path-toggle-rate {
-  font-size: 0.8rem;
-  font-family: 'JetBrains Mono', monospace;
-  font-variant-numeric: tabular-nums;
-}
-
-.path-toggle-unavail {
-  font-size: 0.75rem;
-  font-style: italic;
-}
-
-.path-toggle-best {
-  font-size: 0.6rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(16, 185, 129, 0.25);
-  color: var(--emerald-400);
 }
 
 .path-toggle-loading {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--ds-space-2);
   padding: 10px;
   color: var(--slate-400);
-  font-size: 0.85rem;
-}
-
-.path-toggle-loading .spinner-small {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--slate-700);
-  border-top-color: var(--emerald-500);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+  font-size: var(--text-sm);
 }
 
 /* ============================================================================
@@ -103,7 +31,7 @@
 .mint-input-step {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--ds-space-4);
 }
 
 /* ============================================================================
@@ -119,42 +47,42 @@
 
 .swap-field {
   width: 100%;
-  background: rgba(15, 23, 42, 0.8);
+  background: var(--ds-input-bg);
   border: 1px solid var(--slate-700);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: var(--ds-radius-md);
+  padding: var(--ds-space-4);
 }
 
 .swap-field-header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: var(--ds-space-2);
 }
 
 .swap-field-label {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--slate-400);
 }
 
 .swap-field-balance {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   color: var(--slate-500);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--ds-font-mono);
 }
 
 .swap-field-input {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ds-space-2);
 }
 
 .swap-field-input input {
   flex: 1;
   border: none;
   background: transparent;
-  color: rgb(var(--text));
-  font-size: 1.5rem;
-  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-strong);
+  font-size: var(--text-2xl);
+  font-family: var(--ds-font-mono);
   outline: none;
   min-width: 0;
 }
@@ -181,9 +109,9 @@
 .swap-field-token {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ds-space-2);
   font-weight: 600;
-  color: rgb(var(--text));
+  color: var(--text-strong);
   white-space: nowrap;
 }
 
@@ -199,23 +127,23 @@
   border: 2px solid var(--slate-700);
   border-radius: 50%;
   color: var(--slate-400);
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .max-btn {
   padding: 6px 10px;
-  background: rgba(16, 185, 129, 0.15);
+  background: var(--ds-success-bg);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--ds-radius-sm);
   color: var(--emerald-400);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--ds-transition-fast);
 }
 
 .max-btn:hover:not(:disabled) {
-  background: rgba(16, 185, 129, 0.25);
+  background: color-mix(in srgb, var(--emerald-500) 25%, transparent);
 }
 
 .max-btn:disabled {
@@ -228,12 +156,12 @@
    ============================================================================ */
 
 .message.warning {
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: var(--ds-warning-bg);
+  border: 1px solid color-mix(in srgb, var(--amber-500) 30%, transparent);
   color: var(--amber-400);
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 0.875rem;
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-radius: var(--ds-radius-sm);
+  font-size: var(--text-sm);
 }
 
 /* ============================================================================
@@ -241,19 +169,19 @@
    ============================================================================ */
 
 .mint-info {
-  background: rgba(15, 23, 42, 0.8);
+  background: var(--ds-surface-base);
   border: 1px solid var(--slate-700);
-  padding: 16px;
-  border-radius: 8px;
+  padding: var(--ds-space-4);
+  border-radius: var(--ds-radius-sm);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--ds-space-2);
 }
 
 .info-row {
   display: flex;
   justify-content: space-between;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .info-row span:first-child {
@@ -261,7 +189,7 @@
 }
 
 .info-row span:last-child {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--ds-font-mono);
 }
 
 .info-row .positive {
@@ -283,44 +211,42 @@
 }
 
 .preview-summary {
-  background: rgba(15, 23, 42, 0.8);
+  background: var(--ds-surface-base);
   border: 1px solid var(--slate-700);
   padding: 20px;
-  border-radius: 12px;
+  border-radius: var(--ds-radius-md);
 }
 
 .preview-header {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-bottom: 16px;
+  padding-bottom: var(--ds-space-4);
   border-bottom: 1px solid var(--slate-700);
-  margin-bottom: 16px;
+  margin-bottom: var(--ds-space-4);
 }
 
 .preview-label {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--slate-400);
 }
 
 .preview-value {
-  font-size: 1.75rem;
-  font-weight: 700;
-  font-family: 'JetBrains Mono', monospace;
-  margin-top: 4px;
+  font: var(--ds-text-metric);
+  margin-top: var(--ds-space-1);
   color: var(--emerald-400);
 }
 
 .preview-details {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--ds-space-2);
 }
 
 .detail-row {
   display: flex;
   justify-content: space-between;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .detail-row span:first-child {
@@ -328,21 +254,21 @@
 }
 
 .detail-row span:last-child {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--ds-font-mono);
 }
 
 .detail-row.total {
-  padding-top: 12px;
-  margin-top: 8px;
+  padding-top: var(--ds-space-3);
+  margin-top: var(--ds-space-2);
   border-top: 1px solid var(--slate-700);
   font-weight: 600;
 }
 
 .preview-note {
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   color: var(--slate-500);
   text-align: center;
-  margin-top: 16px;
+  margin-top: var(--ds-space-4);
   margin-bottom: 0;
 }
 
@@ -355,7 +281,7 @@
   flex-direction: column;
   align-items: center;
   gap: 20px;
-  padding: 16px 0;
+  padding: var(--ds-space-4) 0;
 }
 
 .sign-method-choice {
@@ -365,31 +291,31 @@
 
 .sign-method-choice p {
   color: var(--slate-400);
-  margin-bottom: 16px;
+  margin-bottom: var(--ds-space-4);
 }
 
 .sign-methods {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: var(--ds-space-4);
 }
 
 .sign-method-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 24px 16px;
-  background: rgba(15, 23, 42, 0.8);
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-6) var(--ds-space-4);
+  background: var(--ds-surface-base);
   border: 1px solid var(--slate-700);
-  border-radius: 12px;
+  border-radius: var(--ds-radius-md);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--ds-transition-fast);
 }
 
 .sign-method-btn:hover {
   border-color: var(--emerald-500);
-  background: rgba(16, 185, 129, 0.1);
+  background: var(--ds-success-bg);
 }
 
 .sign-method-btn svg {
@@ -398,11 +324,11 @@
 
 .sign-method-btn span {
   font-weight: 500;
-  color: rgb(var(--text));
+  color: var(--text-strong);
 }
 
 .sign-method-btn small {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--slate-500);
 }
 
@@ -411,8 +337,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--ds-space-4);
+  padding: var(--ds-space-4);
 }
 
 .waiting-icon {
@@ -438,9 +364,9 @@
 }
 
 .qr-container {
-  padding: 16px;
+  padding: var(--ds-space-4);
   background: white;
-  border-radius: 12px;
+  border-radius: var(--ds-radius-md);
 }
 
 /* ============================================================================
@@ -451,30 +377,20 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 32px 16px;
+  gap: var(--ds-space-4);
+  padding: var(--ds-space-8) var(--ds-space-4);
   text-align: center;
 }
 
 .success-icon {
-  margin-bottom: 8px;
+  margin-bottom: var(--ds-space-2);
 }
 
 .mint-success-step h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
-  color: rgb(var(--text));
+  color: var(--text-strong);
   margin: 0;
-}
-
-.tx-id {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.85rem;
-  color: var(--slate-400);
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid var(--slate-700);
-  padding: 8px 16px;
-  border-radius: 6px;
 }
 
 /* ============================================================================
@@ -485,25 +401,25 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 32px 16px;
+  gap: var(--ds-space-4);
+  padding: var(--ds-space-8) var(--ds-space-4);
   text-align: center;
 }
 
 .error-icon {
-  margin-bottom: 8px;
+  margin-bottom: var(--ds-space-2);
 }
 
 .mint-error-step h3 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
-  color: rgb(var(--text));
+  color: var(--text-strong);
   margin: 0;
 }
 
 .error-message {
   color: var(--red-400);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   max-width: 100%;
   word-break: break-word;
 }
@@ -514,18 +430,22 @@
 
 .modal-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 8px;
+  gap: var(--ds-space-3);
+  margin-top: var(--ds-space-2);
+}
+
+.modal-actions .btn,
+.modal-actions .ds-btn {
+  flex: 1;
 }
 
 .modal-actions .btn {
-  flex: 1;
-  padding: 12px 20px;
-  border-radius: 8px;
-  font-size: 0.875rem;
+  padding: var(--ds-space-3) 20px;
+  border-radius: var(--ds-radius-sm);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--ds-transition-fast);
   border: none;
 }
 
@@ -545,7 +465,7 @@
 
 .modal-actions .btn-secondary {
   background: var(--slate-700);
-  color: rgb(var(--text));
+  color: var(--text-strong);
 }
 
 .modal-actions .btn-secondary:hover {

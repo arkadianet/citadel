@@ -9,6 +9,7 @@ import { TX_FEE_NANO } from '../constants'
 import { AdvancedOptions, useRecipientAddress } from './AdvancedOptions'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import type { TxStatusResponse } from '../api/types'
+import { Modal, Button, Spinner } from './ui'
 
 interface DexyState {
   variant: string
@@ -356,23 +357,12 @@ export function DexyMintModal({
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal dexy-mint-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Mint {config.name}</h2>
-          <button className="close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
-
-        <div className="modal-content">
+    <Modal open={isOpen} onClose={onClose} title={`Mint ${config.name}`} size="sm">
           {step === 'input' && (
             <div className="mint-input-step">
               {ratesLoading && (
                 <div className="path-toggle-loading">
-                  <div className="spinner-small" /> Loading rate...
+                  <Spinner size={16} /> Loading rate...
                 </div>
               )}
               {ratesError && (
@@ -514,16 +504,16 @@ export function DexyMintModal({
               {error && <div className="message error">{error}</div>}
 
               <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={onClose}>
+                <Button variant="secondary" onClick={onClose}>
                   Cancel
-                </button>
-                <button
-                  className="btn btn-primary"
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={handlePreview}
                   disabled={loading || !calculated.isValid || (!!recipientAddress && addressValid !== true)}
                 >
                   {loading ? 'Loading...' : 'Preview'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -565,16 +555,16 @@ export function DexyMintModal({
               {error && <div className="message error">{error}</div>}
 
               <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={() => setStep('input')}>
+                <Button variant="secondary" onClick={() => setStep('input')}>
                   Back
-                </button>
-                <button
-                  className="btn btn-primary"
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={handleSign}
                   disabled={loading}
                 >
                   {loading ? 'Building...' : 'Sign Transaction'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -617,9 +607,9 @@ export function DexyMintModal({
                   </div>
                   <p>Approve in Nautilus</p>
                   <div className="waiting-spinner" />
-                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>
+                  <Button variant="secondary" onClick={flow.handleBackToChoice}>
                     Back
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -637,9 +627,9 @@ export function DexyMintModal({
                     />
                   </div>
                   <div className="waiting-spinner" />
-                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>
+                  <Button variant="secondary" onClick={flow.handleBackToChoice}>
                     Back
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -655,9 +645,9 @@ export function DexyMintModal({
               </div>
               <h3>Transaction Submitted!</h3>
               {flow.txId && <TxSuccess txId={flow.txId} explorerUrl={explorerUrl} />}
-              <button className="btn btn-primary" onClick={onSuccess}>
+              <Button variant="primary" onClick={onSuccess}>
                 Done
-              </button>
+              </Button>
             </div>
           )}
 
@@ -673,17 +663,15 @@ export function DexyMintModal({
               <h3>Transaction Failed</h3>
               <p className="error-message">{error}</p>
               <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={onClose}>
+                <Button variant="secondary" onClick={onClose}>
                   Close
-                </button>
-                <button className="btn btn-primary" onClick={() => setStep('input')}>
+                </Button>
+                <Button variant="primary" onClick={() => setStep('input')}>
                   Try Again
-                </button>
+                </Button>
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
