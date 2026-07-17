@@ -3,6 +3,10 @@
    ============================================================================ */
 
 .burn-tab {
+  --protocol-accent: var(--red-500); /* protocol accent */
+  --protocol-accent-deep: #dc2626; /* protocol accent */
+  --protocol-accent-bg: rgba(239, 68, 68, 0.1); /* protocol accent */
+
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -17,12 +21,12 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: linear-gradient(135deg, var(--protocol-accent), var(--protocol-accent-deep));
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: white;
+  color: var(--text-strong);
 }
 
 /* Layout: token list + burn form side by side */
@@ -47,16 +51,16 @@
    ============================================================================ */
 
 .burn-token-panel {
-  background: var(--glass-display);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
+  background: var(--ds-surface-base);
+  backdrop-filter: var(--ds-blur);
+  -webkit-backdrop-filter: var(--ds-blur);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
+  box-shadow: var(--glass-inner-edge);
 }
 
 /* Toolbar: Select All / Deselect All + cart count */
@@ -65,24 +69,13 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+  border-bottom: 1px solid var(--ds-border);
   flex-shrink: 0;
 }
 
 .burn-toolbar-actions {
   display: flex;
   gap: var(--space-xs);
-}
-
-.burn-toolbar-btn {
-  /* base from .view-sort-btn; override border */
-  border-color: var(--slate-700);
-}
-
-.burn-toolbar-btn:hover {
-  background: rgba(148, 163, 184, 0.06);
-  color: rgb(var(--text));
-  border-color: var(--slate-600);
 }
 
 .burn-cart-badge {
@@ -93,37 +86,16 @@
   height: 20px;
   padding: 0 6px;
   border-radius: 10px;
-  background: var(--red-500);
-  color: white;
+  background: var(--protocol-accent);
+  color: var(--text-strong);
   font-size: 0.65rem;
   font-weight: 700;
 }
 
 .burn-token-search {
   padding: var(--space-sm);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--ds-border);
   flex-shrink: 0;
-}
-
-.burn-token-search input {
-  width: 100%;
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  background: var(--slate-800);
-  border: 1px solid var(--slate-700);
-  color: rgb(var(--text));
-  font-size: var(--text-sm);
-  transition: all 0.15s;
-}
-
-.burn-token-search input:focus {
-  outline: none;
-  border-color: var(--red-500);
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
-}
-
-.burn-token-search input::placeholder {
-  color: var(--slate-500);
 }
 
 .burn-token-list {
@@ -153,19 +125,19 @@
   padding: var(--space-sm);
   background: none;
   border: none;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+  border-bottom: 1px solid var(--ds-border);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--ds-transition-fast);
   text-align: left;
-  color: rgb(var(--text));
+  color: var(--text-strong);
 }
 
 .burn-token-item:hover {
-  background: rgba(148, 163, 184, 0.06);
+  background: var(--ds-neutral-bg);
 }
 
 .burn-token-item.in-cart {
-  background: rgba(239, 68, 68, 0.08);
+  background: var(--protocol-accent-bg);
 }
 
 /* Avatar with checkmark overlay */
@@ -182,8 +154,8 @@
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 0.75rem;
-  color: white;
+  font-size: var(--text-xs);
+  color: var(--text-strong);
   flex-shrink: 0;
   background: var(--slate-600);
 }
@@ -195,7 +167,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--red-500);
+  background: var(--protocol-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -212,14 +184,14 @@
 .burn-token-name {
   font-weight: 600;
   font-size: var(--text-sm);
-  color: rgb(var(--text));
+  color: var(--text-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .burn-token-id {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--ds-font-mono);
   font-size: clamp(0.55rem, 0.6vw, 0.65rem);
   color: var(--slate-500);
   white-space: nowrap;
@@ -228,7 +200,7 @@
 }
 
 .burn-token-balance {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--ds-font-mono);
   font-size: var(--text-xs);
   color: var(--slate-400);
   white-space: nowrap;
@@ -252,7 +224,7 @@
   padding: var(--space-xs) var(--space-sm);
   font-size: var(--text-xs);
   color: var(--slate-500);
-  border-top: 1px solid rgba(148, 163, 184, 0.06);
+  border-top: 1px solid var(--ds-border);
   flex-shrink: 0;
 }
 
@@ -261,17 +233,17 @@
    ============================================================================ */
 
 .burn-form-panel {
-  background: var(--glass-action);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
+  background: var(--ds-surface-elevated);
+  backdrop-filter: var(--ds-blur);
+  -webkit-backdrop-filter: var(--ds-blur);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
   padding: var(--space-md);
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
+  box-shadow: var(--glass-inner-edge);
 }
 
 .burn-form-empty {
@@ -314,9 +286,9 @@
 
 /* Basket item: compact row */
 .burn-basket-item {
-  background: rgba(15, 23, 42, 0.5);
+  background: color-mix(in srgb, var(--slate-900) 50%, transparent);
   border: 1px solid var(--slate-700);
-  border-radius: var(--radius-md);
+  border-radius: var(--ds-radius-md);
   padding: var(--space-sm);
   display: flex;
   flex-direction: column;
@@ -339,7 +311,7 @@
   flex: 1;
   font-weight: 600;
   font-size: var(--text-sm);
-  color: rgb(var(--text));
+  color: var(--text-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -354,12 +326,12 @@
   border-radius: 3px;
   display: flex;
   align-items: center;
-  transition: all 0.15s;
+  transition: all var(--ds-transition-fast);
 }
 
 .burn-basket-remove:hover {
-  color: var(--red-400);
-  background: rgba(239, 68, 68, 0.1);
+  color: var(--ds-danger);
+  background: var(--ds-danger-bg);
 }
 
 .burn-basket-amount-row {
@@ -375,29 +347,14 @@
   flex: 1;
 }
 
-.burn-basket-amount-wrapper input {
-  width: 100%;
-  padding: 4px var(--space-sm);
+.burn-basket-amount-wrapper .ds-input {
   padding-right: 48px;
-  border-radius: var(--radius-sm);
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid var(--slate-700);
-  color: rgb(var(--text));
-  font-size: var(--text-sm);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--ds-font-mono);
   font-variant-numeric: tabular-nums;
-  transition: all 0.15s;
 }
 
-.burn-basket-amount-wrapper input:focus {
-  outline: none;
-  border-color: var(--red-500);
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.12);
-}
-
-.burn-basket-amount-wrapper input.over-balance {
-  border-color: var(--red-500);
-  color: var(--red-400);
+.burn-basket-amount-wrapper .ds-input--invalid {
+  color: var(--ds-danger);
 }
 
 .burn-basket-amount-wrapper .burn-max-btn {
@@ -410,7 +367,7 @@
 .burn-basket-balance {
   font-size: var(--text-xs);
   color: var(--slate-500);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--ds-font-mono);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -421,7 +378,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  border-top: 1px solid rgba(148, 163, 184, 0.06);
+  border-top: 1px solid var(--ds-border);
   padding-top: var(--space-sm);
 }
 
@@ -434,37 +391,37 @@
 }
 
 .burn-basket-fee {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--ds-font-mono);
   font-variant-numeric: tabular-nums;
 }
 
-/* Max button (shared between old single-burn and basket) */
+/* Max button (overlaid on amount inputs) */
 .burn-max-btn {
   position: absolute;
   right: var(--space-sm);
   padding: 3px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--red-400);
+  border-radius: var(--ds-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 30%, transparent);
+  background: var(--ds-danger-bg);
+  color: var(--ds-danger);
   font-size: var(--text-xs);
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--ds-transition-fast);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .burn-max-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.5);
+  background: color-mix(in srgb, var(--ds-danger) 20%, transparent);
+  border-color: color-mix(in srgb, var(--ds-danger) 50%, transparent);
 }
 
 /* Burn warning */
 .burn-danger-box {
-  background: rgba(239, 68, 68, 0.06);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: var(--radius-md);
+  background: var(--ds-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 20%, transparent);
+  border-radius: var(--ds-radius-md);
   padding: var(--space-sm) var(--space-md);
   display: flex;
   align-items: flex-start;
@@ -479,33 +436,14 @@
 .burn-danger-box p {
   margin: 0;
   font-size: var(--text-sm);
-  color: var(--red-400);
+  color: var(--ds-danger);
   line-height: 1.5;
 }
 
-/* Burn button */
+/* Burn button (full-width danger CTA in basket footer) */
 .burn-submit-btn {
   width: 100%;
-  padding: var(--space-sm) var(--space-md);
-  font-size: var(--text-base);
-  font-weight: 600;
-  border-radius: var(--radius-md);
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s;
-  background: var(--red-500);
-  color: white;
   flex-shrink: 0;
-}
-
-.burn-submit-btn:hover:not(:disabled) {
-  background: #dc2626;
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
-}
-
-.burn-submit-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 /* ============================================================================
@@ -513,9 +451,9 @@
    ============================================================================ */
 
 .burn-confirm-summary {
-  background: rgba(15, 23, 42, 0.8);
+  background: color-mix(in srgb, var(--slate-900) 80%, transparent);
   border: 1px solid var(--slate-700);
-  border-radius: var(--radius-md);
+  border-radius: var(--ds-radius-md);
   padding: var(--space-md);
   display: flex;
   flex-direction: column;
@@ -534,12 +472,12 @@
 }
 
 .burn-confirm-row span:last-child {
-  font-family: 'JetBrains Mono', monospace;
-  color: rgb(var(--text));
+  font-family: var(--ds-font-mono);
+  color: var(--text-strong);
 }
 
 .burn-confirm-row.burn-amount-row span:last-child {
-  color: var(--red-400);
+  color: var(--ds-danger);
   font-weight: 700;
   font-size: var(--text-base);
 }
@@ -548,9 +486,9 @@
 .burn-confirm-token-list {
   max-height: 240px;
   overflow-y: auto;
-  background: rgba(15, 23, 42, 0.8);
+  background: color-mix(in srgb, var(--slate-900) 80%, transparent);
   border: 1px solid var(--slate-700);
-  border-radius: var(--radius-md);
+  border-radius: var(--ds-radius-md);
   padding: var(--space-sm);
   display: flex;
   flex-direction: column;
@@ -584,9 +522,9 @@
    ============================================================================ */
 
 .burn-success-list {
-  background: rgba(15, 23, 42, 0.8);
+  background: color-mix(in srgb, var(--slate-900) 80%, transparent);
   border: 1px solid var(--slate-700);
-  border-radius: var(--radius-md);
+  border-radius: var(--ds-radius-md);
   padding: var(--space-sm) var(--space-md);
   margin: var(--space-sm) 0;
   max-height: 200px;
@@ -609,8 +547,8 @@
 }
 
 .burn-success-item span:last-child {
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--red-400);
+  font-family: var(--ds-font-mono);
+  color: var(--ds-danger);
   font-weight: 600;
 }
 
