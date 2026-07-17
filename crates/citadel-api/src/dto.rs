@@ -241,6 +241,10 @@ pub struct TokenBalance {
     pub amount_str: String,
     pub name: Option<String>,
     pub decimals: u8,
+    /// Unconfirmed (mempool) delta vs confirmed balance. Positive = incoming
+    /// tokens not yet in a block; negative = confirmed tokens spent in mempool.
+    #[serde(default)]
+    pub pending_amount: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -252,6 +256,9 @@ pub struct WalletBalanceResponse {
     pub sigusd_formatted: String,
     pub sigrsv_amount: u64,
     pub tokens: Vec<TokenBalance>,
+    /// Unconfirmed (mempool) ERG delta vs confirmed balance.
+    #[serde(default)]
+    pub pending_erg_nano: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

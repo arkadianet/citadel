@@ -94,10 +94,23 @@ pub async fn get_wallet_balance(
         return Err("Balance queries require extraIndex enabled on the node".to_string());
     }
 
-    let (erg_nano, tokens) = client
+    let (confirmed_erg, confirmed_tokens) = client
         .get_address_balances(&wallet.address)
         .await
         .str_err()?;
+
+    // Effective = confirmed − mempool-spent + unconfirmed outputs. Enables the
+    // UI to show (and immediately re-spend) 0-conf swap proceeds. Falls back to
+    // confirmed-only inside get_effective_utxos if the mempool query fails.
+    let effective_utxos = client
+        .get_effective_utxos(&wallet.address)
+        .await
+        .str_err()?;
+    let (erg_nano, tokens) = sum_eip12_utxos(&effective_utxos);
+
+    let pending_erg_nano = erg_nano as i64 - confirmed_erg as i64;
+    let confirmed_map: std::collections::HashMap<String, u64> =
+        confirmed_tokens.into_iter().collect();
 
     let sigusd_token_id = sigmausd::constants::mainnet::SIGUSD_TOKEN_ID;
     let sigrsv_token_id = sigmausd::constants::mainnet::SIGRSV_TOKEN_ID;
@@ -130,12 +143,15 @@ pub async fn get_wallet_balance(
                 None => (None, 0u8),
             }
         };
+        let pending_amount =
+            amount as i64 - confirmed_map.get(&token_id).copied().unwrap_or(0) as i64;
         token_balances.push(TokenBalance {
             token_id,
             amount,
             amount_str: amount.to_string(),
             name,
             decimals,
+            pending_amount,
         });
     }
 
@@ -147,7 +163,26 @@ pub async fn get_wallet_balance(
         sigusd_formatted: format!("{:.2}", sigusd_amount as f64 / 100.0),
         sigrsv_amount,
         tokens: token_balances,
+        pending_erg_nano,
     })
+}
+
+/// Sum ERG and per-token totals over a set of EIP-12 boxes. Values that fail
+/// to parse are skipped (they would also fail to spend).
+fn sum_eip12_utxos(utxos: &[ergo_tx::Eip12InputBox]) -> (u64, Vec<(String, u64)>) {
+    let mut erg_total: u64 = 0;
+    let mut token_totals: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+
+    for utxo in utxos {
+        erg_total += utxo.value.parse::<u64>().unwrap_or(0);
+        for asset in &utxo.assets {
+            if let Ok(amount) = asset.amount.parse::<u64>() {
+                *token_totals.entry(asset.token_id.clone()).or_insert(0) += amount;
+            }
+        }
+    }
+
+    (erg_total, token_totals.into_iter().collect())
 }
 
 #[tauri::command]
@@ -296,4 +331,69 @@ pub async fn get_user_utxos(state: State<'_, AppState>) -> Result<Vec<serde_json
 #[tauri::command]
 pub async fn validate_ergo_address(address: String) -> Result<String, String> {
     ergo_tx::address_to_ergo_tree(&address).str_err()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sum_eip12_utxos;
+    use ergo_tx::{Eip12Asset, Eip12InputBox};
+    use std::collections::HashMap;
+
+    fn make_box(value: &str, assets: Vec<(&str, &str)>) -> Eip12InputBox {
+        Eip12InputBox {
+            box_id: "b".to_string(),
+            transaction_id: "t".to_string(),
+            index: 0,
+            value: value.to_string(),
+            ergo_tree: "0008cd".to_string(),
+            assets: assets
+                .into_iter()
+                .map(|(id, amt)| Eip12Asset {
+                    token_id: id.to_string(),
+                    amount: amt.to_string(),
+                })
+                .collect(),
+            creation_height: 1,
+            additional_registers: HashMap::new(),
+            extension: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn sums_erg_and_tokens_across_boxes() {
+        let utxos = vec![
+            make_box("1000000000", vec![("tok_a", "5")]),
+            make_box("500000000", vec![("tok_a", "3"), ("tok_b", "7")]),
+        ];
+        let (erg, tokens) = sum_eip12_utxos(&utxos);
+        assert_eq!(erg, 1_500_000_000);
+        let map: HashMap<String, u64> = tokens.into_iter().collect();
+        assert_eq!(map["tok_a"], 8);
+        assert_eq!(map["tok_b"], 7);
+    }
+
+    #[test]
+    fn pending_delta_math() {
+        // Mempool-only token: effective has it, confirmed doesn't -> positive pending.
+        let effective = vec![make_box("900000000", vec![("tok_new", "42")])];
+        let (erg, tokens) = sum_eip12_utxos(&effective);
+        let confirmed_erg: u64 = 1_000_000_000; // spent 0.1 ERG in mempool
+        let confirmed: HashMap<String, u64> = HashMap::new();
+
+        let pending_erg = erg as i64 - confirmed_erg as i64;
+        assert_eq!(pending_erg, -100_000_000);
+
+        let map: HashMap<String, u64> = tokens.into_iter().collect();
+        let pending_tok =
+            map["tok_new"] as i64 - confirmed.get("tok_new").copied().unwrap_or(0) as i64;
+        assert_eq!(pending_tok, 42);
+    }
+
+    #[test]
+    fn unparseable_values_are_skipped() {
+        let utxos = vec![make_box("not-a-number", vec![("tok_a", "bad")])];
+        let (erg, tokens) = sum_eip12_utxos(&utxos);
+        assert_eq!(erg, 0);
+        assert!(tokens.is_empty());
+    }
 }

@@ -24,12 +24,14 @@ interface SwapTabProps {
   walletAddress: string | null
   walletBalance: {
     erg_nano: number
-    tokens: Array<{ token_id: string; amount: number; name: string | null; decimals: number }>
+    pending_erg_nano?: number
+    tokens: Array<{ token_id: string; amount: number; name: string | null; decimals: number; pending_amount?: number }>
   } | null
   explorerUrl: string
   ergUsdPrice?: number
   canMintSigusd?: boolean
   reserveRatioPct?: number
+  onBalanceRefresh?: () => void
 }
 
 // =============================================================================
@@ -89,11 +91,22 @@ function formatForInput(amount: number, decimals: number): string {
   return (amount / Math.pow(10, decimals)).toString()
 }
 
+/** ⏳ badge shown when part of a balance is unconfirmed (mempool). */
+function PendingBadge({ pending, decimals }: { pending?: number; decimals: number }) {
+  if (!pending) return null
+  const formatted = (pending / Math.pow(10, decimals)).toLocaleString(undefined, { maximumFractionDigits: decimals })
+  return (
+    <span className="pending-indicator" title={`${formatted} unconfirmed`}>
+      {' '}⏳
+    </span>
+  )
+}
+
 // =============================================================================
 // SwapTab Component
 // =============================================================================
 
-export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl, ergUsdPrice, canMintSigusd, reserveRatioPct }: SwapTabProps) {
+export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl, ergUsdPrice, canMintSigusd, reserveRatioPct, onBalanceRefresh }: SwapTabProps) {
   const [tabMode, setTabMode] = useState<'smart' | 'pool' | 'liquidity' | 'create'>('smart')
   const [pools, setPools] = useState<AmmPool[]>([])
   const [filteredPools, setFilteredPools] = useState<AmmPool[]>([])
@@ -314,6 +327,15 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
   // Liquidity: useTransactionFlow hook
   // =========================================================================
 
+  // Refresh wallet balance right after a tx is accepted, and once more after
+  // ~2s: mempool outputs are visible almost instantly, the re-poll covers node
+  // propagation. Enables immediate 0-conf chained swaps.
+  const refreshBalanceSoon = useCallback(() => {
+    if (!onBalanceRefresh) return
+    onBalanceRefresh()
+    setTimeout(onBalanceRefresh, 2000)
+  }, [onBalanceRefresh])
+
   const lpFlow = useTransactionFlow({
     pollStatus: getTxStatus,
     // Go "open" as soon as the user clicks redeem/deposit (building), not on
@@ -324,6 +346,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
     onSuccess: (txId) => {
       void txId
       setLpTxStep('success')
+      refreshBalanceSoon()
     },
     onError: (err) => {
       setLpTxError(err)
@@ -843,11 +866,13 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                       {walletBalance && (
                         <>
                           Balance: {getInputType(selectedPool, inputSide) === 'erg'
-                            ? formatErg(walletBalance.erg_nano)
+                            ? <>{formatErg(walletBalance.erg_nano)}<PendingBadge pending={walletBalance.pending_erg_nano} decimals={9} /></>
                             : (() => {
                               const tokenId = getInputTokenId(selectedPool, inputSide)
                               const token = walletBalance.tokens.find(t => t.token_id === tokenId)
-                              return token ? formatTokenAmount(token.amount, token.decimals) : '0'
+                              return token
+                                ? <>{formatTokenAmount(token.amount, token.decimals)}<PendingBadge pending={token.pending_amount} decimals={token.decimals} /></>
+                                : '0'
                             })()
                           }
                         </>
@@ -1047,7 +1072,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
           swapMode={swapMode}
           walletAddress={walletAddress}
           explorerUrl={explorerUrl}
-          onSuccess={() => { setShowSwapModal(false); fetchPools() }}
+          onSuccess={() => { setShowSwapModal(false); fetchPools(); refreshBalanceSoon() }}
         />
       )}
       </>
@@ -1085,7 +1110,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
               <div className="swap-field-header">
                 <span className="swap-field-label">{createPoolType === 'N2T' ? 'ERG Amount' : 'Token X'}</span>
                 {createPoolType === 'N2T' && walletBalance && (
-                  <span className="swap-field-balance">Balance: {formatErg(walletBalance.erg_nano)}</span>
+                  <span className="swap-field-balance">Balance: {formatErg(walletBalance.erg_nano)}<PendingBadge pending={walletBalance.pending_erg_nano} decimals={9} /></span>
                 )}
               </div>
               {createPoolType === 'T2T' && (
@@ -1413,10 +1438,10 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                           <span className="swap-field-balance">
                             {walletBalance && (() => {
                               if (lpPool.pool_type === 'N2T') {
-                                return <>Balance: {formatErg(walletBalance.erg_nano)}</>
+                                return <>Balance: {formatErg(walletBalance.erg_nano)}<PendingBadge pending={walletBalance.pending_erg_nano} decimals={9} /></>
                               }
                               const token = walletBalance.tokens.find(t => t.token_id === lpPool.token_x?.token_id)
-                              return token ? <>Balance: {formatTokenAmount(token.amount, token.decimals)}</> : null
+                              return token ? <>Balance: {formatTokenAmount(token.amount, token.decimals)}<PendingBadge pending={token.pending_amount} decimals={token.decimals} /></> : null
                             })()}
                           </span>
                         </div>
@@ -1452,7 +1477,7 @@ export function SwapTab({ isConnected, walletAddress, walletBalance, explorerUrl
                           <span className="swap-field-balance">
                             {walletBalance && (() => {
                               const token = walletBalance.tokens.find(t => t.token_id === lpPool.token_y.token_id)
-                              return token ? <>Balance: {formatTokenAmount(token.amount, token.decimals)}</> : null
+                              return token ? <>Balance: {formatTokenAmount(token.amount, token.decimals)}<PendingBadge pending={token.pending_amount} decimals={token.decimals} /></> : null
                             })()}
                           </span>
                         </div>

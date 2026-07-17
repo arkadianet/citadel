@@ -496,6 +496,13 @@ html, body, #root {
   font-variant-numeric: tabular-nums;
 }
 
+/* Part of a balance is unconfirmed (mempool) */
+.pending-indicator {
+  font-size: 0.85em;
+  opacity: 0.8;
+  cursor: help;
+}
+
 .wallet-indicator {
   display: flex;
   align-items: center;
