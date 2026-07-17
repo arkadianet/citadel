@@ -126,6 +126,11 @@ pub async fn get_mint_tx_status(
             tx_id: None,
             error: Some("Request expired".to_string()),
         }),
+        Some(RequestStatus::Signed { .. }) => Ok(MintTxStatusResponse {
+            status: "signed".to_string(),
+            tx_id: None,
+            error: None,
+        }),
         Some(RequestStatus::Failed(msg)) => Ok(MintTxStatusResponse {
             status: "failed".to_string(),
             tx_id: None,

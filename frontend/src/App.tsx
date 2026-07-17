@@ -513,6 +513,7 @@ function App() {
           {view === 'arb-scanner' && (
             <ArbScannerTab
               walletAddress={walletAddress}
+              onBalanceRefresh={fetchWalletBalance}
             />
           )}
 

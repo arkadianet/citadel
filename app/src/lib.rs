@@ -104,6 +104,9 @@ pub fn run() {
             commands::get_liquidity_depth,
             commands::get_sigusd_arb_snapshot,
             commands::scan_circular_arbs,
+            commands::build_arb_chain_tx,
+            commands::start_arb_leg_sign,
+            commands::submit_arb_chain,
             // Explorer
             commands::explorer_node_info,
             commands::explorer_get_transaction,

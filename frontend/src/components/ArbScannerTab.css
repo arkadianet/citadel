@@ -262,3 +262,85 @@
   font-size: 0.85rem;
   color: var(--slate-500);
 }
+
+/* Execute button + chain execution modal */
+.arb-card-execute {
+  margin-left: auto;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.8rem;
+}
+
+.arb-execute-modal { max-width: 480px; }
+
+.arb-exec-legs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.75rem 0;
+}
+
+.arb-exec-leg {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.arb-exec-leg-index {
+  color: var(--emerald-400);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.arb-exec-leg-swap {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arb-exec-stepper {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.arb-exec-step {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  color: var(--slate-400);
+  font-size: 0.85rem;
+}
+
+.arb-exec-step.active {
+  border-color: var(--emerald-400);
+  color: var(--emerald-400);
+}
+
+.arb-exec-step.done {
+  background: var(--emerald-400);
+  color: #0f172a;
+  border-color: var(--emerald-400);
+}
+
+.arb-exec-hint {
+  font-size: 0.8rem;
+  color: var(--slate-400);
+  margin-top: 0.5rem;
+}
+
+.arb-exec-txid {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+}

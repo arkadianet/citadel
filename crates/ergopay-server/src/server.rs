@@ -9,7 +9,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 use crate::handlers::{
     handle_callback, handle_connect, handle_nautilus_connect_page, handle_nautilus_page,
-    handle_nautilus_tx, handle_tx,
+    handle_nautilus_tx, handle_signed_tx, handle_tx,
 };
 use crate::types::{PendingRequest, RequestStatus};
 
@@ -60,6 +60,7 @@ impl ErgoPayServer {
             .route("/nautilus/sign/:id", get(handle_nautilus_page))
             .route("/nautilus/connect/:id", get(handle_nautilus_connect_page))
             .route("/nautilus/tx/:id", get(handle_nautilus_tx))
+            .route("/nautilus/signed/:id", post(handle_signed_tx))
             .layer(
                 CorsLayer::new()
                     .allow_origin(Any)
@@ -151,6 +152,32 @@ impl ErgoPayServer {
         );
 
         (id, url)
+    }
+
+    /// Create a sign-only request: Nautilus signs and returns the tx to the
+    /// server without broadcasting. Used for 0-conf chained txs (arb legs)
+    /// whose inputs may not exist on-chain yet.
+    pub async fn create_sign_only_request(
+        &self,
+        unsigned_tx: serde_json::Value,
+        message: String,
+    ) -> String {
+        let id = generate_request_id();
+        let request = PendingRequest::new_sign_only(id.clone(), unsigned_tx, message);
+
+        let mut requests = self.state.pending_requests.write().await;
+        requests.insert(id.clone(), request);
+
+        id
+    }
+
+    /// Take the signed tx captured for a sign-only request, if available.
+    pub async fn get_signed_tx(&self, request_id: &str) -> Option<serde_json::Value> {
+        let requests = self.state.pending_requests.read().await;
+        match requests.get(request_id).map(|r| &r.status) {
+            Some(RequestStatus::Signed { signed_tx }) => Some(signed_tx.clone()),
+            _ => None,
+        }
     }
 
     /// Get the Nautilus signing page URL for a request

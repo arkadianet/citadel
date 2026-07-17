@@ -15,6 +15,11 @@ pub mod address;
 pub use address::{address_to_ergo_tree, AddressError};
 
 #[cfg(feature = "ergo-lib")]
+pub mod chain;
+#[cfg(feature = "ergo-lib")]
+pub use chain::derive_output_boxes;
+
+#[cfg(feature = "ergo-lib")]
 pub mod ergo_box_utils;
 
 pub use box_selector::{

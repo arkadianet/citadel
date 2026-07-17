@@ -10,10 +10,17 @@
 /// 2. Connect to Nautilus (user approves)
 /// 3. Fetch unsigned tx from /nautilus/tx/{id}
 /// 4. Sign the transaction (user approves)
-/// 5. Submit the transaction
-/// 6. POST txId to /callback/{id}
-/// 7. Show success/error status
-pub fn generate_signing_page(request_id: &str, message: &str, host: &str, port: u16) -> String {
+/// 5. Normal mode: submit the transaction and POST txId to /callback/{id}.
+///    Sign-only mode: POST the signed tx to /nautilus/signed/{id} WITHOUT
+///    broadcasting (the app submits later, e.g. as part of an arb chain)
+/// 6. Show success/error status
+pub fn generate_signing_page(
+    request_id: &str,
+    message: &str,
+    host: &str,
+    port: u16,
+    sign_only: bool,
+) -> String {
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -106,6 +113,7 @@ pub fn generate_signing_page(request_id: &str, message: &str, host: &str, port: 
         const REQUEST_ID = "{request_id}";
         const BASE_URL = "http://{host}:{port}";
         const MESSAGE = "{message}";
+        const SIGN_ONLY = {sign_only};
 
         const statusEl = document.getElementById('status');
         const statusText = document.getElementById('status-text');
@@ -164,16 +172,30 @@ pub fn generate_signing_page(request_id: &str, message: &str, host: &str, port: 
                 setStatus('Please approve transaction in Nautilus...', 'loading', true);
                 const signedTx = await ergo.sign_tx(unsignedTx);
 
-                setStatus('Submitting transaction...', 'loading', true);
-                const txId = await ergo.submit_tx(signedTx);
+                if (SIGN_ONLY) {{
+                    setStatus('Returning signed transaction...', 'loading', true);
+                    const resp = await fetch(BASE_URL + '/nautilus/signed/' + REQUEST_ID, {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify(signedTx)
+                    }});
+                    if (!resp.ok) {{
+                        showError('Failed to return signed tx: ' + await resp.text());
+                        return;
+                    }}
+                    showSuccess('Signed! Return to Citadel to continue.', signedTx.id || '');
+                }} else {{
+                    setStatus('Submitting transaction...', 'loading', true);
+                    const txId = await ergo.submit_tx(signedTx);
 
-                await fetch(BASE_URL + '/callback/' + REQUEST_ID, {{
-                    method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ txId: txId }})
-                }});
+                    await fetch(BASE_URL + '/callback/' + REQUEST_ID, {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{ txId: txId }})
+                    }});
 
-                showSuccess('Transaction submitted successfully!', txId);
+                    showSuccess('Transaction submitted successfully!', txId);
+                }}
             }} catch (error) {{
                 console.error('Signing error:', error);
                 const info = error.info || error.message || 'Unknown error';
@@ -194,7 +216,8 @@ pub fn generate_signing_page(request_id: &str, message: &str, host: &str, port: 
         message = escape_js_string(message),
         request_id = request_id,
         host = host,
-        port = port
+        port = port,
+        sign_only = sign_only
     )
 }
 
