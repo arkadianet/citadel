@@ -14,6 +14,7 @@ import { startSign, getTxStatus } from '../api/types'
 import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import type { TxStatusResponse } from '../api/types'
+import { Modal, Button, Badge } from './ui'
 import './SigmaFiConfirmModal.css'
 
 export type ConfirmMode = 'cancel' | 'lend' | 'repay' | 'liquidate'
@@ -154,18 +155,7 @@ export function SigmaFiConfirmModal({
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal sigmafi-confirm-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>{config.title}</h2>
-          <button className="close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="modal-content">
+    <Modal open={isOpen} onClose={onClose} title={config.title}>
           {step === 'confirm' && (
             <div className="sf-confirm-step">
               {/* Order details for cancel/lend */}
@@ -227,8 +217,8 @@ export function SigmaFiConfirmModal({
                   <div className="sf-details-header">
                     <span className="sigmafi-token-badge">{bond.loanTokenName}</span>
                     {bond.blocksRemaining <= 0
-                      ? <span className="sigmafi-status-badge danger">Past Due</span>
-                      : <span className="sigmafi-status-badge active">Active</span>
+                      ? <Badge variant="danger">Past Due</Badge>
+                      : <Badge variant="success">Active</Badge>
                     }
                   </div>
                   <div className="sf-detail-row">
@@ -276,17 +266,17 @@ export function SigmaFiConfirmModal({
 
               {error && <div className="message error">{error}</div>}
 
-              <div className="button-group">
-                <button className="btn btn-secondary" onClick={onClose}>
+              <div className="modal-actions">
+                <Button variant="secondary" onClick={onClose}>
                   Cancel
-                </button>
-                <button
-                  className={`btn btn-${config.btnClass}`}
+                </Button>
+                <Button
+                  variant={config.btnClass}
                   onClick={handleConfirm}
                   disabled={loading}
                 >
                   {loading ? 'Building...' : config.verb}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -329,7 +319,7 @@ export function SigmaFiConfirmModal({
                   </div>
                   <p>Approve in Nautilus</p>
                   <div className="waiting-spinner" />
-                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>Back</button>
+                  <Button variant="secondary" onClick={flow.handleBackToChoice}>Back</Button>
                 </div>
               )}
 
@@ -340,7 +330,7 @@ export function SigmaFiConfirmModal({
                     <QRCodeSVG value={flow.qrUrl} size={200} level="M" includeMargin bgColor="white" fgColor="black" />
                   </div>
                   <div className="waiting-spinner" />
-                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>Back</button>
+                  <Button variant="secondary" onClick={flow.handleBackToChoice}>Back</Button>
                 </div>
               )}
             </div>
@@ -357,9 +347,9 @@ export function SigmaFiConfirmModal({
               <h3>Transaction Submitted!</h3>
               <p>Your {mode} transaction has been submitted to the network.</p>
               {flow.txId && <TxSuccess txId={flow.txId} explorerUrl={explorerUrl} />}
-              <button className="btn btn-primary" onClick={() => { onSuccess(); onClose() }}>
+              <Button variant="primary" onClick={() => { onSuccess(); onClose() }}>
                 Done
-              </button>
+              </Button>
             </div>
           )}
 
@@ -374,14 +364,12 @@ export function SigmaFiConfirmModal({
               </div>
               <h3>Transaction Failed</h3>
               <p className="error-message">{error}</p>
-              <div className="button-group">
-                <button className="btn btn-secondary" onClick={onClose}>Close</button>
-                <button className="btn btn-primary" onClick={() => setStep('confirm')}>Try Again</button>
+              <div className="modal-actions">
+                <Button variant="secondary" onClick={onClose}>Close</Button>
+                <Button variant="primary" onClick={() => setStep('confirm')}>Try Again</Button>
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

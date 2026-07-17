@@ -2,14 +2,6 @@
    SigmaFi Confirm Modal
    ============================================================================ */
 
-.sigmafi-confirm-modal {
-  max-width: 480px;
-}
-
-/* ============================================================================
-   Confirm Step
-   ============================================================================ */
-
 .sf-confirm-step {
   display: flex;
   flex-direction: column;
@@ -17,9 +9,9 @@
 }
 
 .sf-details-card {
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid var(--slate-700);
-  border-radius: var(--radius-lg);
+  background: var(--ds-surface-base);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
   padding: var(--space-md);
   display: flex;
   flex-direction: column;
@@ -31,7 +23,7 @@
   align-items: center;
   gap: var(--space-sm);
   padding-bottom: var(--space-sm);
-  border-bottom: 1px solid var(--slate-700);
+  border-bottom: 1px solid var(--ds-border);
   margin-bottom: var(--space-xs);
 }
 
@@ -49,8 +41,8 @@
 
 .sf-detail-row span:last-child {
   font-weight: 500;
-  font-family: 'JetBrains Mono', monospace;
-  color: rgb(var(--text));
+  font-family: var(--ds-font-mono);
+  color: var(--text-strong);
 }
 
 .sf-detail-row .highlight {
@@ -58,7 +50,7 @@
 }
 
 .sf-detail-row .danger {
-  color: var(--red-400);
+  color: var(--ds-danger);
 }
 
 .sf-detail-row .mono {
@@ -77,7 +69,7 @@
 .sf-fee-breakdown {
   margin-top: var(--space-xs);
   padding-top: var(--space-xs);
-  border-top: 1px solid var(--slate-700);
+  border-top: 1px solid var(--ds-border);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -86,26 +78,25 @@
 .sf-notice {
   margin-top: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-md);
+  border-radius: var(--ds-radius-md);
   font-size: var(--text-xs);
   line-height: 1.5;
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: var(--ds-info-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-info) 20%, transparent);
   color: var(--slate-400);
 }
 
 .sf-notice.success {
-  background: rgba(16, 185, 129, 0.1);
-  border-color: rgba(16, 185, 129, 0.2);
+  background: var(--ds-success-bg);
+  border-color: color-mix(in srgb, var(--ds-success) 20%, transparent);
   color: var(--emerald-400);
 }
 
 .sf-notice.warning {
-  background: rgba(245, 158, 11, 0.1);
-  border-color: rgba(245, 158, 11, 0.2);
+  background: var(--ds-warning-bg);
+  border-color: color-mix(in srgb, var(--ds-warning) 20%, transparent);
   color: var(--amber-400);
 }
-
 
 /* ============================================================================
    Signing Step
@@ -117,89 +108,4 @@
   align-items: center;
   gap: var(--space-lg);
   padding: var(--space-md) 0;
-}
-
-.sigmafi-confirm-modal .sign-method-choice {
-  width: 100%;
-  text-align: center;
-}
-
-.sigmafi-confirm-modal .sign-method-choice p {
-  color: var(--slate-400);
-  margin-bottom: var(--space-md);
-}
-
-.sigmafi-confirm-modal .sign-methods {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-md);
-}
-
-.sigmafi-confirm-modal .sign-method-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-lg) var(--space-md);
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid var(--slate-700);
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.sigmafi-confirm-modal .sign-method-btn:hover {
-  border-color: var(--emerald-500);
-  background: rgba(16, 185, 129, 0.1);
-}
-
-.sigmafi-confirm-modal .sign-method-btn svg {
-  color: var(--slate-400);
-}
-
-.sigmafi-confirm-modal .sign-method-btn span {
-  font-weight: 500;
-  color: rgb(var(--text));
-}
-
-.sigmafi-confirm-modal .sign-method-btn small {
-  font-size: var(--text-xs);
-  color: var(--slate-500);
-}
-
-.sigmafi-confirm-modal .nautilus-waiting,
-.sigmafi-confirm-modal .qr-signing {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-md);
-}
-
-.sigmafi-confirm-modal .waiting-icon {
-  animation: pulse 2s infinite;
-}
-
-.sigmafi-confirm-modal .waiting-spinner {
-  width: 28px;
-  height: 28px;
-  border: 3px solid var(--slate-700);
-  border-top-color: var(--emerald-500);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-.sigmafi-confirm-modal .qr-container {
-  padding: var(--space-md);
-  background: white;
-  border-radius: var(--radius-lg);
-}
-
-
-
-@media (max-width: 480px) {
-  .sigmafi-confirm-modal .sign-methods {
-    grid-template-columns: 1fr;
-    gap: var(--space-sm);
-  }
 }
