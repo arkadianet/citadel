@@ -45,6 +45,7 @@
 
 .recovery-key-id {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }
@@ -72,6 +73,7 @@
 
 .recovery-stat-value.mono {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .recovery-redeem-btn {
@@ -99,6 +101,7 @@
 .recovery-lookup .recovery-lookup-input {
   flex: 1;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   font-size: var(--text-xs);
 }
 

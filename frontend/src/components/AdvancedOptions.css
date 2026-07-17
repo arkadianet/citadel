@@ -41,6 +41,7 @@
 
 .advanced-input {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .advanced-input.valid {

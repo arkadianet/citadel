@@ -432,6 +432,7 @@
 .box-card-address {
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   margin-bottom: 4px;
   cursor: pointer;
 }
@@ -523,6 +524,7 @@
 
 .text-mono {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .text-truncate {

@@ -173,7 +173,7 @@
 .timelock-row-value {
   font: var(--ds-text-metric-sm);
   color: var(--text-strong);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .timelock-row-value.highlight {

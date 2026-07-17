@@ -38,6 +38,7 @@
 .arb-scanner-total {
   color: var(--slate-200);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .arb-scanner-time {
@@ -116,6 +117,7 @@
 
 .arb-card-value {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   font-size: var(--text-sm);
   color: var(--slate-200);
 }
@@ -161,6 +163,7 @@
 .arb-hop-pool-id {
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-500);
 }
 
@@ -168,6 +171,7 @@
   margin-left: auto;
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .arb-hop-impact.impact-low { color: var(--ds-success); }
@@ -183,6 +187,7 @@
 
 .arb-hop-amount {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   font-size: var(--text-sm);
   color: var(--slate-200);
 }
@@ -196,6 +201,7 @@
   margin-left: auto;
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-500);
 }
 
@@ -220,6 +226,7 @@
 .arb-card-impact {
   font-size: var(--text-sm);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .arb-card-impact.impact-low { color: var(--ds-success); }
@@ -276,6 +283,7 @@
 
 .arb-exec-leg-swap {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   font-size: var(--text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -320,5 +328,6 @@
 
 .arb-exec-txid {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   font-size: var(--text-sm);
 }

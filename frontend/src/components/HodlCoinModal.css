@@ -41,6 +41,7 @@
   color: var(--text-strong);
   font-size: var(--text-base);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   padding: var(--space-sm);
   outline: none;
   min-width: 0;
@@ -83,6 +84,7 @@
   color: var(--text-strong);
   font-weight: 500;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   text-align: right;
 }
 

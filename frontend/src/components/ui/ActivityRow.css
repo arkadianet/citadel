@@ -23,5 +23,6 @@
   flex-shrink: 0;
   font: var(--ds-text-micro);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-400);
 }

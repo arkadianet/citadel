@@ -55,6 +55,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-300);
 }
 
@@ -120,6 +121,7 @@
   color: var(--text-strong);
   font-size: var(--text-md);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   font-weight: 600;
   min-width: 0;
 }
@@ -225,6 +227,7 @@
   font-size: var(--text-lg);
   font-weight: 700;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--emerald-400);
 }
 
@@ -239,6 +242,7 @@
 .router-summary-oracle {
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-500);
 }
 
@@ -259,6 +263,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-300);
 }
 
@@ -318,6 +323,7 @@
 .router-split-total {
   font-size: var(--text-sm);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-300);
 }
 
@@ -325,6 +331,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-300);
 }
 
@@ -376,6 +383,7 @@
 
 .router-split-alloc-amount {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-300);
 }
 
@@ -385,6 +393,7 @@
 
 .router-split-alloc-output {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-300);
   margin-left: auto;
 }
@@ -468,6 +477,7 @@
 .router-route-input {
   font-size: var(--text-sm);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-300);
 }
 
@@ -480,6 +490,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--text-strong);
 }
 
@@ -538,6 +549,7 @@
 
 .router-hop-impact {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-400);
 }
 
@@ -547,6 +559,7 @@
   font-size: var(--text-xs);
   color: var(--slate-500);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   margin: 2px 0;
 }
 
@@ -574,6 +587,7 @@
   display: block;
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-400);
 }
 
@@ -590,6 +604,7 @@
 .router-route-stats strong {
   color: var(--slate-300);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 /* Cross-Protocol Section */
@@ -639,6 +654,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-300);
 }
 
@@ -650,6 +666,7 @@
 .router-cross-impact {
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-500);
 }
 
@@ -684,6 +701,7 @@
   color: var(--slate-500);
   margin-bottom: 3px;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .router-depth-grid {
@@ -708,6 +726,7 @@
 .router-depth-value {
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-300);
   display: block;
 }
@@ -719,6 +738,7 @@
   padding: 1px 6px;
   border-radius: var(--ds-radius-sm);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .router-badge-impact.impact-low {
@@ -745,6 +765,7 @@
 .router-hop-pool-id {
   font-size: 9px;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-500);
   padding: 0 3px;
   border-radius: 2px;
@@ -755,6 +776,7 @@
 .router-hop-pool-tag {
   font-size: 9px;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-600);
   padding: 0 3px;
   border-radius: 2px;
@@ -886,6 +908,7 @@
 .arb-snapshot-oracle {
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-500);
 }
 
@@ -914,6 +937,7 @@
   font-size: var(--text-md);
   font-weight: 700;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--emerald-400);
 }
 
@@ -974,6 +998,7 @@
   font-size: var(--text-sm);
   font-weight: 700;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--emerald-400);
   padding: 1px 6px;
   border-radius: var(--ds-radius-sm);
@@ -1004,6 +1029,7 @@
 .arb-window-detail-value {
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-300);
 }
 

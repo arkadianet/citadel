@@ -38,6 +38,7 @@
 .pool-info-value {
   font-weight: 500;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--text-strong);
 }
 
@@ -98,6 +99,7 @@
   color: var(--text-strong);
   font-size: var(--text-base);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   transition: all var(--ds-transition-fast);
 }
 
@@ -184,6 +186,7 @@
 .lend-modal .slippage-value {
   font-size: var(--text-sm);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--text-strong);
   min-width: 3em;
   text-align: right;
@@ -216,6 +219,7 @@
 .lend-modal .output-row .output-value {
   font-weight: 500;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--text-strong);
 }
 
@@ -270,6 +274,7 @@
   font-size: var(--text-2xl);
   font-weight: 700;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   margin-top: var(--space-xs);
   color: var(--blue-400);
 }
@@ -292,6 +297,7 @@
 
 .lend-modal .detail-row span:last-child {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--text-strong);
 }
 
@@ -481,6 +487,7 @@
 
 .lend-modal .calculated-collateral .collateral-value {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-strong);

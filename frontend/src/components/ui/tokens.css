@@ -28,6 +28,7 @@
   --ds-text-micro: 500 11px / 1.3 var(--ds-font-sans);
   --ds-text-metric: 700 var(--text-xl) / 1.1 var(--ds-font-mono);
   --ds-text-metric-sm: 600 var(--text-sm) / 1.2 var(--ds-font-mono);
+  --ds-numeric: tabular-nums;
 
   /* ── Semantic colors (status only — never protocol identity) ── */
   --ds-success: #34d399;

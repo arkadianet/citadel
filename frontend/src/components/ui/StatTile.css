@@ -18,13 +18,14 @@
 
 .ds-stat-value {
   font: var(--ds-text-metric);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
   color: rgb(var(--text));
 }
 
 .ds-stat-change {
   font: var(--ds-text-micro);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   margin-top: var(--ds-space-1);
 }
 

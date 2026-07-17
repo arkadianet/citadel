@@ -227,7 +227,7 @@
 .gauge-value {
   font-size: var(--text-lg);
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .gauge-value.healthy { color: var(--emerald-400); }
@@ -326,7 +326,7 @@
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-strong);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .stat-card.highlight .stat-value {
@@ -466,7 +466,7 @@
   font-weight: 600;
   color: var(--text-strong);
   font-family: var(--ds-font-mono);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 /* Wallet Balance Box */
@@ -502,6 +502,7 @@
 
 .wallet-balance-amount {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   font-weight: 600;
   font-size: var(--text-sm);
 }
@@ -682,7 +683,7 @@
   font-size: var(--text-xl);
   font-weight: 700;
   color: var(--text-strong);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 /* Holdings Grid */
@@ -748,7 +749,7 @@
   font-size: var(--text-base);
   font-family: var(--ds-font-mono);
   color: var(--text-strong);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .holding-usd {
@@ -873,7 +874,7 @@
   font-family: var(--ds-font-mono);
   font-size: var(--text-xs);
   font-weight: 500;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .sigmausd-activity-row .activity-token-amt.positive {
@@ -888,7 +889,7 @@
   font-family: var(--ds-font-mono);
   font-size: var(--text-xs);
   color: var(--slate-500);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .sigmausd-activity-row .activity-time {

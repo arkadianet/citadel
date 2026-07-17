@@ -167,6 +167,7 @@
 
 .utxo-item-id {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   font-size: clamp(0.6rem, 0.65vw, 0.7rem);
   color: var(--slate-300);
   white-space: nowrap;
@@ -194,7 +195,7 @@
   color: var(--slate-400);
   white-space: nowrap;
   flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .utxo-list-empty {
@@ -287,6 +288,7 @@
 
 .utxo-confirm-row span:last-child {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--text-strong);
 }
 
@@ -370,7 +372,7 @@
 }
 
 .utxo-split-form {
-  background: var(--ds-surface-elevated);
+  background: var(--ds-surface-base);
   backdrop-filter: var(--ds-blur);
   -webkit-backdrop-filter: var(--ds-blur);
   border: 1px solid var(--ds-border);
@@ -385,7 +387,7 @@
 /* Numeric inputs keep tabular mono digits (applied via <Input className>) */
 .utxo-split-input {
   font-family: var(--ds-font-mono);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .utxo-split-select option {

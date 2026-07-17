@@ -114,6 +114,7 @@
   font-size: 10px;
   color: var(--slate-500);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .hodl-bank-fee {
@@ -155,6 +156,7 @@
   font-weight: 600;
   color: var(--text-strong);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 /* ============================================================================
@@ -182,6 +184,7 @@
   font-weight: 600;
   color: var(--protocol-accent-light);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 /* ============================================================================

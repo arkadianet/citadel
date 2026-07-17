@@ -204,7 +204,7 @@
   font-weight: 500;
   color: var(--text-strong);
   font-family: var(--ds-font-mono);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .sigmafi-row-value.highlight {

@@ -192,6 +192,7 @@
 
 .burn-token-id {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   font-size: clamp(0.55rem, 0.6vw, 0.65rem);
   color: var(--slate-500);
   white-space: nowrap;
@@ -206,7 +207,7 @@
   white-space: nowrap;
   flex-shrink: 0;
   text-align: right;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .burn-token-empty {
@@ -233,7 +234,7 @@
    ============================================================================ */
 
 .burn-form-panel {
-  background: var(--ds-surface-elevated);
+  background: var(--ds-surface-base);
   backdrop-filter: var(--ds-blur);
   -webkit-backdrop-filter: var(--ds-blur);
   border: 1px solid var(--ds-border);
@@ -350,7 +351,7 @@
 .burn-basket-amount-wrapper .ds-input {
   padding-right: 48px;
   font-family: var(--ds-font-mono);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .burn-basket-amount-wrapper .ds-input--invalid {
@@ -368,6 +369,7 @@
   font-size: var(--text-xs);
   color: var(--slate-500);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -392,7 +394,7 @@
 
 .burn-basket-fee {
   font-family: var(--ds-font-mono);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 /* Max button (overlaid on amount inputs) */
@@ -473,6 +475,7 @@
 
 .burn-confirm-row span:last-child {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--text-strong);
 }
 
@@ -548,6 +551,7 @@
 
 .burn-success-item span:last-child {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--ds-danger);
   font-weight: 600;
 }

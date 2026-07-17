@@ -35,6 +35,7 @@
 .co-summary-row span:last-child {
   font-weight: 500;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--text-strong);
 }
 

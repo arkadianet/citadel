@@ -68,6 +68,7 @@
   font-size: var(--text-sm);
   color: var(--slate-500);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .swap-field-input {
@@ -83,6 +84,7 @@
   color: var(--text-strong);
   font-size: var(--text-2xl);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   outline: none;
   min-width: 0;
 }
@@ -190,6 +192,7 @@
 
 .info-row span:last-child {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .info-row .positive {
@@ -233,6 +236,7 @@
 
 .preview-value {
   font: var(--ds-text-metric);
+  font-variant-numeric: var(--ds-numeric);
   margin-top: var(--ds-space-1);
   color: var(--emerald-400);
 }
@@ -255,6 +259,7 @@
 
 .detail-row span:last-child {
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .detail-row.total {

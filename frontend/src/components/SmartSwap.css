@@ -124,6 +124,7 @@
   color: var(--slate-400);
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .token-selector-empty {
@@ -187,6 +188,7 @@
   color: var(--emerald-400);
   cursor: pointer;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .smart-swap-balance:hover {
@@ -208,6 +210,7 @@
   color: var(--text-strong);
   font-size: var(--text-sm);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   font-weight: 600;
   padding: var(--ds-space-2) 10px;
   outline: none;
@@ -290,6 +293,7 @@
   color: var(--text-strong);
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   outline: none;
   text-align: right;
   transition: border-color var(--ds-transition-fast);
@@ -457,6 +461,7 @@
   font-size: var(--text-lg);
   font-weight: 700;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--text-strong);
 }
 
@@ -467,6 +472,7 @@
   font-size: var(--text-xs);
   color: var(--slate-400);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   margin-top: var(--ds-space-1);
 }
 
@@ -516,6 +522,7 @@
 .smart-hop-pool-tag {
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--slate-500);
   padding: 0 var(--ds-space-1);
   border-radius: 2px;
@@ -526,6 +533,7 @@
 .smart-hop-impact {
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .smart-hop-detail-amounts {
@@ -534,6 +542,7 @@
   margin-top: 3px;
   color: var(--slate-300);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .smart-hop-detail-meta {
@@ -543,6 +552,7 @@
   color: var(--slate-500);
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 /* ============================================================================
@@ -608,6 +618,7 @@
 .smart-route-compact-output {
   font-weight: 700;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   color: var(--text-strong);
   flex-shrink: 0;
 }
@@ -615,6 +626,7 @@
 .smart-route-compact-impact {
   font-size: var(--text-xs);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   flex-shrink: 0;
 }
 
@@ -712,6 +724,7 @@
   font-size: var(--text-xs);
   color: var(--slate-300);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .smart-split-alloc-pct {

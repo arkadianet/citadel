@@ -245,6 +245,7 @@
   font-weight: 600;
   color: var(--slate-300);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .dexy-holdings-grid {
@@ -333,13 +334,14 @@
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-strong);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .dexy-holding-usd {
   font-size: var(--text-xs);
   color: var(--slate-400);
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 /* ============================================================================
@@ -500,7 +502,7 @@
   font-family: var(--ds-font-mono);
   font-size: var(--text-xs);
   font-weight: 500;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .dexy-activity-row .activity-token-amt.positive {
@@ -515,7 +517,7 @@
   font-family: var(--ds-font-mono);
   font-size: var(--text-xs);
   color: var(--slate-500);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .dexy-activity-row .activity-time,
@@ -654,7 +656,7 @@
   font-weight: 600;
   color: var(--text-strong);
   font-family: var(--ds-font-mono);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .dexy-lp-empty {
@@ -668,7 +670,7 @@
    ============================================================================ */
 
 .dexy-lp-section {
-  background: var(--ds-surface-elevated);
+  background: var(--ds-surface-base);
   backdrop-filter: var(--ds-blur);
   -webkit-backdrop-filter: var(--ds-blur);
   border: 1px solid var(--ds-border);
@@ -710,6 +712,7 @@
   font-size: var(--text-base);
   outline: none;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .dexy-lp-input-group input:focus {

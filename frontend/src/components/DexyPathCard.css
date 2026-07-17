@@ -89,7 +89,7 @@
   font-size: var(--text-xl);
   font-weight: 600;
   font-family: var(--ds-font-mono);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
   color: var(--text-strong);
 }
 
@@ -113,7 +113,7 @@
 
 .effective-value {
   font-family: var(--ds-font-mono);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .path-limit {
@@ -129,7 +129,7 @@
 .limit-value {
   font-weight: 500;
   font-family: var(--ds-font-mono);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .path-fee {
