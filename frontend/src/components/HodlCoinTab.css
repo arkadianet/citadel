@@ -3,6 +3,14 @@
    ============================================================================ */
 
 .hodl-tab {
+  /* HodlCoin violet identity */
+  --protocol-accent: #8b5cf6; /* protocol accent */
+  --protocol-accent-deep: #6d28d9; /* protocol accent */
+  --protocol-accent-light: #a78bfa; /* protocol accent */
+  --protocol-accent-strong: #7c3aed; /* protocol accent */
+  --protocol-accent-bg: color-mix(in srgb, var(--protocol-accent) 8%, transparent);
+  --protocol-accent-border: color-mix(in srgb, var(--protocol-accent) 15%, transparent);
+
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -29,25 +37,12 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  background: linear-gradient(135deg, var(--protocol-accent), var(--protocol-accent-deep));
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: white;
-}
-
-/* ============================================================================
-   Loading
-   ============================================================================ */
-
-.hodl-loading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-lg);
-  justify-content: center;
-  color: var(--slate-400);
+  color: var(--text-strong);
 }
 
 /* ============================================================================
@@ -67,7 +62,7 @@
 }
 
 .hodl-bank-card {
-  border-color: rgba(139, 92, 246, 0.2);
+  border-color: color-mix(in srgb, var(--protocol-accent) 20%, transparent);
   overflow: hidden;
 }
 
@@ -76,8 +71,8 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-sm) var(--space-md);
-  background: rgba(139, 92, 246, 0.08);
-  border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+  background: var(--protocol-accent-bg);
+  border-bottom: 1px solid var(--protocol-accent-border);
 }
 
 .hodl-bank-name {
@@ -90,8 +85,8 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
-  color: white;
+  background: linear-gradient(135deg, var(--protocol-accent), var(--protocol-accent-deep));
+  color: var(--text-strong);
   font-weight: 700;
   font-size: var(--text-sm);
   display: flex;
@@ -111,22 +106,22 @@
 .hodl-bank-name h3 {
   font-size: var(--text-sm);
   font-weight: 600;
-  color: rgb(var(--text));
+  color: var(--text-strong);
   margin: 0;
 }
 
 .hodl-bank-id {
   font-size: 10px;
   color: var(--slate-500);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--ds-font-mono);
 }
 
 .hodl-bank-fee {
   font-size: var(--text-xs);
   padding: 2px 8px;
   border-radius: var(--radius-sm);
-  background: rgba(139, 92, 246, 0.1);
-  color: #a78bfa;
+  background: color-mix(in srgb, var(--protocol-accent) 10%, transparent);
+  color: var(--protocol-accent-light);
   font-weight: 500;
 }
 
@@ -158,8 +153,8 @@
 .hodl-stat-value {
   font-size: var(--text-sm);
   font-weight: 600;
-  color: rgb(var(--text));
-  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-strong);
+  font-family: var(--ds-font-mono);
 }
 
 /* ============================================================================
@@ -172,8 +167,8 @@
   justify-content: space-between;
   margin: 0 var(--space-md);
   padding: var(--space-xs) var(--space-sm);
-  background: rgba(139, 92, 246, 0.08);
-  border: 1px solid rgba(139, 92, 246, 0.15);
+  background: var(--protocol-accent-bg);
+  border: 1px solid var(--protocol-accent-border);
   border-radius: var(--radius-md);
 }
 
@@ -185,8 +180,8 @@
 .hodl-balance-value {
   font-size: var(--text-sm);
   font-weight: 600;
-  color: #a78bfa;
-  font-family: 'JetBrains Mono', monospace;
+  color: var(--protocol-accent-light);
+  font-family: var(--ds-font-mono);
 }
 
 /* ============================================================================
@@ -198,11 +193,11 @@
 }
 
 .action-btn.hodl-primary {
-  background: #7c3aed;
-  color: white;
+  background: var(--protocol-accent-strong);
+  color: var(--text-strong);
   width: 100%;
 }
 
 .action-btn.hodl-primary:hover:not(:disabled) {
-  background: #6d28d9;
+  background: var(--protocol-accent-deep);
 }
