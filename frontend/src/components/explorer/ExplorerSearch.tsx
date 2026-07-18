@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { search } from '../../api/explorer'
+import { Input, Spinner } from '../ui'
 import type { ExplorerRoute } from '../ExplorerTab'
 
 interface ExplorerSearchProps {
@@ -44,8 +45,9 @@ export function ExplorerSearch({ onNavigate }: ExplorerSearchProps) {
 
   return (
     <div className="explorer-search">
-      <input
+      <Input
         type="text"
+        size="sm"
         className="explorer-search-input"
         placeholder="Search address, tx, token, or block..."
         value={query}
@@ -59,7 +61,7 @@ export function ExplorerSearch({ onNavigate }: ExplorerSearchProps) {
         disabled={searching || !query.trim()}
       >
         {searching ? (
-          <span className="spinner-tiny" />
+          <Spinner size={12} />
         ) : (
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="8" />

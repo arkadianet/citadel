@@ -3,6 +3,7 @@
 //! This crate implements Spectrum DEX integration for swapping tokens
 //! through existing AMM liquidity pools.
 
+pub mod arb_chain;
 pub mod calculator;
 pub mod constants;
 pub mod cross_protocol;
@@ -18,6 +19,9 @@ pub mod state;
 pub mod tx_builder;
 
 // Re-exports
+pub use arb_chain::{
+    build_arb_chain, build_swap_chain, ArbChainBuild, ArbChainLeg, SwapChainBuild,
+};
 pub use calculator::{calculate_output, calculate_price_impact, quote_swap};
 pub use constants::{erg, fees, lp, pool_indices, pool_templates, swap_template_bytes};
 pub use cross_protocol::{
@@ -44,6 +48,7 @@ pub use state::{
 };
 pub use router::{
     build_pool_graph, build_pool_graph_with_limit, calculate_all_depth_tiers,
+    ensure_direct_pair_edges,
     calculate_depth_tiers, find_best_routes, find_best_routes_by_output, find_paths,
     make_route_quote, optimize_split, optimize_split_detailed, quote_route, quote_route_reverse,
     DepthTiers, PoolEdge, PoolGraph, Route, RouteHop, RouteQuote, SplitAllocation,

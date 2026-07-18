@@ -1,0 +1,25 @@
+.ds-spinner {
+  display: inline-block;
+  border: 2px solid var(--ds-neutral-bg);
+  border-top-color: var(--slate-400);
+  border-radius: 50%;
+  animation: ds-spin-loading 0.6s linear infinite;
+}
+@keyframes ds-spin-loading { to { transform: rotate(360deg); } }
+
+.ds-skeleton {
+  display: inline-block;
+  border-radius: var(--ds-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--ds-neutral-bg) 25%,
+    rgba(148, 163, 184, 0.18) 50%,
+    var(--ds-neutral-bg) 75%
+  );
+  background-size: 200% 100%;
+  animation: ds-shimmer 1.4s ease infinite;
+}
+@keyframes ds-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}

@@ -8,7 +8,7 @@ import {
 import { formatAmount, formatPercent, blocksToTime, truncateAddress } from '../utils/format'
 import { SigmaFiConfirmModal, type ConfirmMode } from './SigmaFiConfirmModal'
 import { CreateOrderModal } from './CreateOrderModal'
-import { PageHeader, Tabs, Badge, EmptyState } from './ui'
+import { PageHeader, Tabs, Badge, EmptyState, Button, Skeleton } from './ui'
 import './SigmaFiTab.css'
 
 interface WalletBalance {
@@ -152,12 +152,13 @@ export function SigmaFiTab({
           { label: 'Block Height', value: market.blockHeight.toLocaleString() },
         ] : undefined}
         actions={walletAddress ? (
-          <button
-            className="sigmafi-create-btn"
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => setCreateModalOpen(true)}
           >
             + Create Loan Request
-          </button>
+          </Button>
         ) : undefined}
       />
 
@@ -191,9 +192,9 @@ export function SigmaFiTab({
               Hide undercollateralized
             </label>
           )}
-          <button className="sigmafi-refresh-btn" onClick={fetchMarket} disabled={loading}>
+          <Button variant="ghost" size="sm" onClick={fetchMarket} disabled={loading}>
             {loading ? 'Loading...' : 'Refresh'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -215,9 +216,10 @@ export function SigmaFiTab({
             ))}
           </div>
           {loading && !market && (
-            <div className="sigmafi-loading">
-              <span className="spinner-small" />
-              Loading bond market...
+            <div className="sigmafi-grid view-grid">
+              <Skeleton height="240px" />
+              <Skeleton height="240px" />
+              <Skeleton height="240px" />
             </div>
           )}
           <div className="sigmafi-grid view-grid">
@@ -241,9 +243,10 @@ export function SigmaFiTab({
       {subTab === 'bonds' && (
         <>
           {loading && !market && (
-            <div className="sigmafi-loading">
-              <span className="spinner-small" />
-              Loading active bonds...
+            <div className="sigmafi-grid view-grid">
+              <Skeleton height="240px" />
+              <Skeleton height="240px" />
+              <Skeleton height="240px" />
             </div>
           )}
           <div className="sigmafi-grid view-grid">
@@ -345,19 +348,19 @@ function OrderCard({ order, walletAddress, onCancel, onLend }: OrderCardProps) {
       {hasWallet && (
         <div className="sigmafi-card-actions">
           {order.isOwn ? (
-            <button
-              className="sigmafi-action-btn danger"
+            <Button
+              variant="danger"
               onClick={() => onCancel(order)}
             >
               Cancel
-            </button>
+            </Button>
           ) : (
-            <button
-              className="sigmafi-action-btn primary"
+            <Button
+              variant="primary"
               onClick={() => onLend(order)}
             >
               Lend
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -418,20 +421,20 @@ function BondCard({ bond, onRepay, onLiquidate }: BondCardProps) {
       {(bond.isRepayable || bond.isLiquidable) && (
         <div className="sigmafi-card-actions">
           {bond.isRepayable && (
-            <button
-              className="sigmafi-action-btn primary"
+            <Button
+              variant="primary"
               onClick={() => onRepay(bond)}
             >
               Repay
-            </button>
+            </Button>
           )}
           {bond.isLiquidable && (
-            <button
-              className="sigmafi-action-btn danger"
+            <Button
+              variant="danger"
               onClick={() => onLiquidate(bond)}
             >
               Liquidate
-            </button>
+            </Button>
           )}
         </div>
       )}

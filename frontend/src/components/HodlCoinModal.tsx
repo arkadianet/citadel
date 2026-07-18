@@ -14,6 +14,7 @@ import { formatErg } from '../utils/format'
 import { startSign, getTxStatus } from '../api/types'
 import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
+import { Modal, Button, Tabs, FormField, Spinner } from './ui'
 import './HodlCoinModal.css'
 
 interface WalletBalance {
@@ -170,41 +171,23 @@ export function HodlCoinModal({
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="hodl-modal" onClick={e => e.stopPropagation()}>
-        <div className="hodl-modal-header">
-          <h2>{bankName}</h2>
-          <button className="close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
+    <Modal open={true} onClose={onClose} title={bankName} size="sm">
+      <div className="hodl-modal-flow">
         {/* Tab switcher - only on input step */}
         {step === 'input' && (
-          <div className="hodl-tabs">
-            <button
-              className={`hodl-tab-btn ${tab === 'mint' ? 'active' : ''}`}
-              onClick={() => { setTab('mint'); setError(null) }}
-            >
-              Mint
-            </button>
-            <button
-              className={`hodl-tab-btn ${tab === 'burn' ? 'active' : ''}`}
-              onClick={() => { setTab('burn'); setError(null) }}
-            >
-              Burn (Redeem)
-            </button>
-          </div>
+          <Tabs
+            tabs={[
+              { id: 'mint', label: 'Mint' },
+              { id: 'burn', label: 'Burn (Redeem)' },
+            ]}
+            activeId={tab}
+            onChange={id => { setTab(id as Tab); setError(null) }}
+          />
         )}
-
-        <div className="hodl-modal-content">
           {/* Input Step */}
           {step === 'input' && tab === 'mint' && (
             <>
-              <div className="hodl-input-group">
-                <label>Deposit ERG</label>
+              <FormField label="Deposit ERG" hint={`Balance: ${formatErg(ergBalance)} ERG`}>
                 <div className="hodl-input-wrapper">
                   <input
                     type="text"
@@ -223,10 +206,7 @@ export function HodlCoinModal({
                     Max
                   </button>
                 </div>
-                <div className="hodl-input-hint">
-                  Balance: {formatErg(ergBalance)} ERG
-                </div>
-              </div>
+              </FormField>
               <div className="hodl-info-row">
                 <span>Price</span>
                 <span>{formatErg(bank.priceNanoPerHodl * 1e9)} ERG per token</span>
@@ -243,8 +223,10 @@ export function HodlCoinModal({
 
           {step === 'input' && tab === 'burn' && (
             <>
-              <div className="hodl-input-group">
-                <label>Burn {bankName}</label>
+              <FormField
+                label={`Burn ${bankName}`}
+                hint={`Balance: ${hodlBalanceDisplay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} ${bankName}`}
+              >
                 <div className="hodl-input-wrapper">
                   <input
                     type="text"
@@ -260,10 +242,7 @@ export function HodlCoinModal({
                     Max
                   </button>
                 </div>
-                <div className="hodl-input-hint">
-                  Balance: {hodlBalanceDisplay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} {bankName}
-                </div>
-              </div>
+              </FormField>
               <div className="hodl-info-row">
                 <span>Price</span>
                 <span>{formatErg(bank.priceNanoPerHodl * 1e9)} ERG per token</span>
@@ -285,13 +264,14 @@ export function HodlCoinModal({
           {step === 'input' && error && <div className="message error">{error}</div>}
 
           {step === 'input' && (
-            <button
-              className="btn btn-primary hodl-submit-btn"
+            <Button
+              variant="primary"
+              className="hodl-submit-btn"
               onClick={handlePreview}
               disabled={loading || (tab === 'mint' ? mintNanoErg <= 0 : burnAmount <= 0)}
             >
               {loading ? 'Loading...' : 'Preview'}
-            </button>
+            </Button>
           )}
 
           {/* Preview Step */}
@@ -320,11 +300,11 @@ export function HodlCoinModal({
                   <span>{formatErg(mintPreview.totalErgCost)} ERG</span>
                 </div>
               </div>
-              <div className="button-group">
-                <button className="btn btn-secondary" onClick={() => setStep('input')}>Back</button>
-                <button className="btn btn-primary" onClick={handleBuild} disabled={loading}>
+              <div className="modal-actions">
+                <Button variant="secondary" onClick={() => setStep('input')}>Back</Button>
+                <Button variant="primary" onClick={handleBuild} disabled={loading}>
                   {loading ? 'Building...' : 'Confirm Mint'}
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -358,11 +338,11 @@ export function HodlCoinModal({
                   <span>{formatErg(burnPreview.minerFee)} ERG</span>
                 </div>
               </div>
-              <div className="button-group">
-                <button className="btn btn-secondary" onClick={() => setStep('input')}>Back</button>
-                <button className="btn btn-primary" onClick={handleBuild} disabled={loading}>
+              <div className="modal-actions">
+                <Button variant="secondary" onClick={() => setStep('input')}>Back</Button>
+                <Button variant="primary" onClick={handleBuild} disabled={loading}>
                   {loading ? 'Building...' : 'Confirm Burn'}
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -370,7 +350,7 @@ export function HodlCoinModal({
           {/* Building Step */}
           {step === 'building' && (
             <div className="hodl-centered">
-              <div className="spinner-small" />
+              <Spinner size={20} />
               <span>Building transaction...</span>
             </div>
           )}
@@ -421,9 +401,9 @@ export function HodlCoinModal({
                 </div>
                 <p className="signing-hint">Waiting for Nautilus approval...</p>
               </div>
-              <div className="button-group">
-                <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>Back</button>
-                <button className="btn btn-primary" onClick={flow.handleNautilusSign}>Open Nautilus Again</button>
+              <div className="modal-actions">
+                <Button variant="secondary" onClick={flow.handleBackToChoice}>Back</Button>
+                <Button variant="primary" onClick={flow.handleNautilusSign}>Open Nautilus Again</Button>
               </div>
             </div>
           )}
@@ -436,7 +416,7 @@ export function HodlCoinModal({
                 <QRCodeSVG value={flow.qrUrl} size={200} />
               </div>
               <p className="signing-hint">Waiting for signature...</p>
-              <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>Back</button>
+              <Button variant="secondary" onClick={flow.handleBackToChoice}>Back</Button>
             </div>
           )}
 
@@ -450,7 +430,7 @@ export function HodlCoinModal({
               </div>
               <h3>{tab === 'mint' ? 'Mint' : 'Burn'} Successful!</h3>
               <TxSuccess txId={flow.txId} explorerUrl={explorerUrl} />
-              <button className="btn btn-primary" onClick={onClose}>Done</button>
+              <Button variant="primary" onClick={onClose}>Done</Button>
             </div>
           )}
 
@@ -464,16 +444,15 @@ export function HodlCoinModal({
               </div>
               <h3>Transaction Failed</h3>
               <p className="error-message">{error}</p>
-              <div className="button-group">
-                <button className="btn btn-secondary" onClick={handleReset}>Start Over</button>
-                <button className="btn btn-primary" onClick={() => { setStep('preview'); setError(null) }}>
+              <div className="modal-actions">
+                <Button variant="secondary" onClick={handleReset}>Start Over</Button>
+                <Button variant="primary" onClick={() => { setStep('preview'); setError(null) }}>
                   Try Again
-                </button>
+                </Button>
               </div>
             </div>
           )}
-        </div>
       </div>
-    </div>
+    </Modal>
   )
 }

@@ -22,6 +22,7 @@ import { TX_FEE_NANO } from '../constants'
 import { formatErg } from '../utils/format'
 import type { WalletBalance } from './MarketCard'
 import { TxSuccess } from './TxSuccess'
+import { Modal, Button, Spinner } from './ui'
 import './LendModal.css' // Reuse LendModal styles
 
 interface WithdrawModalProps {
@@ -295,18 +296,9 @@ export function WithdrawModal({
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal lend-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Withdraw {pool.symbol}</h2>
-          <button className="close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="modal-content">
+    <Modal open={isOpen} onClose={onClose} title={`Withdraw ${pool.symbol}`}>
+      {/* Keep .lend-modal wrapper so scoped LendModal.css rules still apply */}
+      <div className="lend-modal">
           {step === 'input' && (
             <div className="lend-input-step">
               {/* Pool Info */}
@@ -414,16 +406,16 @@ export function WithdrawModal({
               {error && <div className="message error">{error}</div>}
 
               <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={onClose}>
+                <Button variant="secondary" onClick={onClose}>
                   Cancel
-                </button>
-                <button
-                  className="btn btn-primary"
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={handleBuild}
                   disabled={loading || !calculated.isValid || !lendPosition}
                 >
                   {loading ? 'Building...' : 'Build Transaction'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -470,16 +462,16 @@ export function WithdrawModal({
               {error && <div className="message error">{error}</div>}
 
               <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={() => setStep('input')}>
+                <Button variant="secondary" onClick={() => setStep('input')}>
                   Back
-                </button>
-                <button
-                  className="btn btn-primary"
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={handleSign}
                   disabled={loading}
                 >
                   {loading ? 'Preparing...' : 'Sign Transaction'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -521,10 +513,10 @@ export function WithdrawModal({
                     </svg>
                   </div>
                   <p>Approve in Nautilus</p>
-                  <div className="waiting-spinner" />
-                  <button className="btn btn-secondary" onClick={() => setSignMethod('choose')}>
+                  <Spinner size={28} />
+                  <Button variant="secondary" onClick={() => setSignMethod('choose')}>
                     Back
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -541,10 +533,10 @@ export function WithdrawModal({
                       fgColor="black"
                     />
                   </div>
-                  <div className="waiting-spinner" />
-                  <button className="btn btn-secondary" onClick={() => setSignMethod('choose')}>
+                  <Spinner size={28} />
+                  <Button variant="secondary" onClick={() => setSignMethod('choose')}>
                     Back
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -564,9 +556,9 @@ export function WithdrawModal({
                 The Duckpools bot will process your withdrawal and return {pool.symbol} to your wallet.
               </p>
               {txId && <TxSuccess txId={txId} explorerUrl={explorerUrl} />}
-              <button className="btn btn-primary" onClick={onSuccess}>
+              <Button variant="primary" onClick={onSuccess}>
                 Done
-              </button>
+              </Button>
             </div>
           )}
 
@@ -582,18 +574,17 @@ export function WithdrawModal({
               <h3>Transaction Failed</h3>
               <p className="error-message">{error}</p>
               <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={onClose}>
+                <Button variant="secondary" onClick={onClose}>
                   Close
-                </button>
-                <button className="btn btn-primary" onClick={() => setStep('input')}>
+                </Button>
+                <Button variant="primary" onClick={() => setStep('input')}>
                   Try Again
-                </button>
+                </Button>
               </div>
             </div>
           )}
-        </div>
       </div>
-    </div>
+    </Modal>
   )
 }
 

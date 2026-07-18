@@ -14,7 +14,7 @@ import {
 } from '../api/stakeRecovery'
 import { startSign, getTxStatus } from '../api/types'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
-import { PageHeader, Card, CardHeader, CardBody, CardFooter, EmptyState } from './ui'
+import { PageHeader, Card, CardHeader, CardBody, CardFooter, EmptyState, Button, Modal, Input } from './ui'
 import { TxSuccess } from './TxSuccess'
 import './StakeRecoveryTab.css'
 
@@ -315,7 +315,7 @@ export function StakeRecoveryTab({
         <CardBody>
           {resumeStep2.status === 'idle' && (
             <div className="recovery-lookup">
-              <input
+              <Input
                 type="text"
                 className="recovery-lookup-input"
                 placeholder="Step-1 proxy-creation transaction ID (64 hex chars)..."
@@ -324,13 +324,12 @@ export function StakeRecoveryTab({
                 onKeyDown={e => { if (e.key === 'Enter') runStep2Check(resumeTxIdInput.trim(), setResumeStep2) }}
                 spellCheck={false}
               />
-              <button
-                className="btn btn-secondary"
+              <Button
                 onClick={() => runStep2Check(resumeTxIdInput.trim(), setResumeStep2)}
                 disabled={!resumeTxIdInput.trim()}
               >
                 Check
-              </button>
+              </Button>
             </div>
           )}
 
@@ -363,20 +362,19 @@ export function StakeRecoveryTab({
                 </span>
               </div>
               <div className="recovery-step2-actions">
-                <button
-                  className="btn btn-primary"
+                <Button
+                  variant="primary"
                   disabled={!resumeStep2.proxyCheck.executor.valid || resumeStep2.status === 'submitting'}
                   onClick={() => runStep2Submit('executor', resumeStep2, setResumeStep2)}
                 >
                   {resumeStep2.status === 'submitting' ? 'Submitting...' : 'Execute payout'}
-                </button>
-                <button
-                  className="btn btn-secondary"
+                </Button>
+                <Button
                   disabled={!resumeStep2.proxyCheck.refund.valid || resumeStep2.status === 'submitting'}
                   onClick={() => runStep2Submit('refund', resumeStep2, setResumeStep2)}
                 >
                   Refund key instead
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -390,8 +388,8 @@ export function StakeRecoveryTab({
               </div>
               <h3>Submitted</h3>
               {resumeStep2.txId && <TxSuccess txId={resumeStep2.txId} explorerUrl={explorerUrl} />}
-              <button
-                className="btn btn-primary"
+              <Button
+                variant="primary"
                 onClick={() => {
                   setResumeStep2(idleStep2)
                   setResumeTxIdInput('')
@@ -399,29 +397,29 @@ export function StakeRecoveryTab({
                 }}
               >
                 Done
-              </button>
+              </Button>
             </div>
           )}
 
           {resumeStep2.status === 'error' && (
             <>
               <p className="error-message">{resumeStep2.error}</p>
-              <button className="btn btn-secondary" onClick={() => runStep2Check(resumeTxIdInput.trim(), setResumeStep2)}>
+              <Button onClick={() => runStep2Check(resumeTxIdInput.trim(), setResumeStep2)}>
                 Retry
-              </button>
-              <button
-                className="btn btn-ghost"
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={() => setResumeStep2(idleStep2)}
               >
                 Start over
-              </button>
+              </Button>
             </>
           )}
         </CardBody>
       </Card>
 
       <div className="recovery-lookup">
-        <input
+        <Input
           type="text"
           className="recovery-lookup-input"
           placeholder="Paste stake key token ID (64 hex chars) to check its StakeBox..."
@@ -430,13 +428,13 @@ export function StakeRecoveryTab({
           onKeyDown={e => { if (e.key === 'Enter') handleLookup() }}
           spellCheck={false}
         />
-        <button
-          className="btn btn-secondary"
+        <Button
           onClick={handleLookup}
-          disabled={lookingUp || !lookupInput.trim()}
+          loading={lookingUp}
+          disabled={!lookupInput.trim()}
         >
-          {lookingUp ? (<><span className="spinner-small" /> Looking up...</>) : 'Lookup'}
-        </button>
+          {lookingUp ? 'Looking up...' : 'Lookup'}
+        </Button>
       </div>
 
       {lookupError && <div className="message error">{lookupError}</div>}
@@ -526,13 +524,14 @@ export function StakeRecoveryTab({
                 </div>
               </CardBody>
               <CardFooter>
-                <button
-                  className="btn btn-primary recovery-redeem-btn"
+                <Button
+                  variant="primary"
+                  className="recovery-redeem-btn"
                   onClick={() => handleRedeem(stake)}
                   disabled={redeemStep !== 'idle'}
                 >
                   Redeem
-                </button>
+                </Button>
               </CardFooter>
             </Card>
           ))}
@@ -540,17 +539,11 @@ export function StakeRecoveryTab({
       )}
 
       {activeKey && redeemStep !== 'idle' && (
-        <div className="modal-overlay" onClick={closeRedeem}>
-          <div className="recovery-modal" onClick={e => e.stopPropagation()}>
-            <div className="recovery-modal-header">
-              <h2>Recover {activeKey.rewardAmountDisplay} {activeKey.rewardTokenName}</h2>
-              <button className="close-btn" onClick={closeRedeem}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
+        <Modal
+          open={true}
+          onClose={closeRedeem}
+          title={`Recover ${activeKey.rewardAmountDisplay} ${activeKey.rewardTokenName}`}
+        >
             <div className="recovery-modal-content">
               {activeKey.protocol === 'Paideia' && redeemStep !== 'success' && (
                 <p className="recovery-note">
@@ -606,7 +599,7 @@ export function StakeRecoveryTab({
               {redeemStep === 'signing' && flow.signMethod === 'nautilus' && (
                 <div className="recovery-centered">
                   <p>Approve in Nautilus...</p>
-                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>Back</button>
+                  <Button onClick={flow.handleBackToChoice}>Back</Button>
                 </div>
               )}
 
@@ -616,7 +609,7 @@ export function StakeRecoveryTab({
                   <div className="qr-container">
                     <QRCodeSVG value={flow.qrUrl} size={200} />
                   </div>
-                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>Back</button>
+                  <Button onClick={flow.handleBackToChoice}>Back</Button>
                 </div>
               )}
 
@@ -629,9 +622,9 @@ export function StakeRecoveryTab({
                   </div>
                   <h3>Recovery submitted</h3>
                   <TxSuccess txId={flow.txId} explorerUrl={explorerUrl} />
-                  <button className="btn btn-primary" onClick={() => { closeRedeem(); handleScan() }}>
+                  <Button variant="primary" onClick={() => { closeRedeem(); handleScan() }}>
                     Done
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -646,9 +639,9 @@ export function StakeRecoveryTab({
                       </div>
                       <h3>Payout submitted</h3>
                       {activeStep2.txId && <TxSuccess txId={activeStep2.txId} explorerUrl={explorerUrl} />}
-                      <button className="btn btn-primary" onClick={() => { closeRedeem(); handleScan() }}>
+                      <Button variant="primary" onClick={() => { closeRedeem(); handleScan() }}>
                         Done
-                      </button>
+                      </Button>
                     </>
                   ) : (
                     <>
@@ -664,9 +657,9 @@ export function StakeRecoveryTab({
                       <TxSuccess txId={flow.txId} explorerUrl={explorerUrl} />
 
                       {activeStep2.status === 'idle' && (
-                        <button className="btn btn-primary" onClick={() => runStep2Check(flow.txId!, setActiveStep2)}>
+                        <Button variant="primary" onClick={() => runStep2Check(flow.txId!, setActiveStep2)}>
                           Verify payout &amp; refund (dry-run)
-                        </button>
+                        </Button>
                       )}
                       {(activeStep2.status === 'resolving' || activeStep2.status === 'checking') && (
                         <div className="recovery-centered">
@@ -697,20 +690,19 @@ export function StakeRecoveryTab({
                             </span>
                           </div>
                           <div className="recovery-step2-actions">
-                            <button
-                              className="btn btn-primary"
+                            <Button
+                              variant="primary"
                               disabled={!activeStep2.proxyCheck.executor.valid || activeStep2.status === 'submitting'}
                               onClick={() => runStep2Submit('executor', activeStep2, setActiveStep2)}
                             >
                               {activeStep2.status === 'submitting' ? 'Submitting...' : `Execute payout (${activeKey.rewardAmountDisplay} ${activeKey.rewardTokenName})`}
-                            </button>
-                            <button
-                              className="btn btn-secondary"
+                            </Button>
+                            <Button
                               disabled={!activeStep2.proxyCheck.refund.valid || activeStep2.status === 'submitting'}
                               onClick={() => runStep2Submit('refund', activeStep2, setActiveStep2)}
                             >
                               Refund key instead
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       )}
@@ -718,14 +710,14 @@ export function StakeRecoveryTab({
                       {activeStep2.status === 'error' && (
                         <>
                           <p className="error-message">{activeStep2.error}</p>
-                          <button className="btn btn-secondary" onClick={() => runStep2Check(flow.txId!, setActiveStep2)}>
+                          <Button onClick={() => runStep2Check(flow.txId!, setActiveStep2)}>
                             Retry
-                          </button>
+                          </Button>
                         </>
                       )}
-                      <button className="btn btn-ghost" onClick={() => { closeRedeem(); handleScan() }}>
+                      <Button variant="ghost" onClick={() => { closeRedeem(); handleScan() }}>
                         Close (finish payout later)
-                      </button>
+                      </Button>
                     </>
                   )}
                 </div>
@@ -740,12 +732,11 @@ export function StakeRecoveryTab({
                   </div>
                   <h3>Recovery failed</h3>
                   <p className="error-message">{redeemError}</p>
-                  <button className="btn btn-secondary" onClick={closeRedeem}>Close</button>
+                  <Button onClick={closeRedeem}>Close</Button>
                 </div>
               )}
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

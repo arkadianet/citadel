@@ -3,6 +3,7 @@ import { getMempool, formatSize, calcFee, type Transaction } from '../../api/exp
 import { formatErg } from '../../utils/format'
 import { ExplorerSkeleton } from './ExplorerSkeleton'
 import { TxTypeBadge } from './TxTypeBadge'
+import { Badge } from '../ui'
 import type { ExplorerRoute } from '../ExplorerTab'
 
 interface Props {
@@ -70,7 +71,7 @@ export function ExplorerMempool({ onNavigate }: Props) {
     <div className="explorer-mempool">
       <div className="explorer-section-header">
         <h2 className="explorer-section-title">Mempool</h2>
-        <span className="explorer-badge">{txs.length} unconfirmed</span>
+        <Badge variant="success">{txs.length} unconfirmed</Badge>
       </div>
 
       {error && <div className="explorer-error">{error}</div>}

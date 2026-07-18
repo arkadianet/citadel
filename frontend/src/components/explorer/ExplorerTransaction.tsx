@@ -4,6 +4,7 @@ import { formatErg } from '../../utils/format'
 import { ExplorerSkeleton } from './ExplorerSkeleton'
 import { TxTypeBadge } from './TxTypeBadge'
 import { TokenPopover } from './TokenPopover'
+import { Badge } from '../ui'
 import type { ExplorerRoute } from '../ExplorerTab'
 import { openExternal } from '../../api/external'
 
@@ -128,15 +129,15 @@ export function ExplorerTransaction({ txId, onNavigate, explorerUrl }: Props) {
           <span className="info-label">Status</span>
           <span className="info-value">
             {isConfirmed ? (
-              <span className={`conf-badge ${
-                (tx.numConfirmations ?? 0) >= 10 ? 'conf-badge-green' :
-                (tx.numConfirmations ?? 0) >= 1 ? 'conf-badge-amber' :
-                'conf-badge-red'
-              }`}>
+              <Badge variant={
+                (tx.numConfirmations ?? 0) >= 10 ? 'success' :
+                (tx.numConfirmations ?? 0) >= 1 ? 'warning' :
+                'danger'
+              }>
                 {tx.numConfirmations} confirmation{tx.numConfirmations !== 1 ? 's' : ''}
-              </span>
+              </Badge>
             ) : (
-              <span className="conf-badge conf-badge-red">Unconfirmed</span>
+              <Badge variant="danger">Unconfirmed</Badge>
             )}
           </span>
         </div>

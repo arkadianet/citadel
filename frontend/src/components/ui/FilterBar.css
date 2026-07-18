@@ -19,7 +19,7 @@
   color: var(--slate-400);
   font: var(--ds-text-micro);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--ds-transition-fast);
 }
 
 .ds-filter-btn:hover {

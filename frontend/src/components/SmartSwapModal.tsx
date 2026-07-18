@@ -12,6 +12,7 @@ import { formatTokenAmount } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import { useModalStep } from '../hooks/useModalStep'
+import { Button, Modal, Spinner } from './ui'
 
 // =============================================================================
 // Props
@@ -112,24 +113,18 @@ export function SmartSwapModal({
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal smart-swap-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Direct Swap {inputLabel} &rarr; {outputLabel}</h2>
-          <button className="close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
-
-        <div className="modal-content">
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title={<>Direct Swap {inputLabel} &rarr; {outputLabel}</>}
+    >
+      <>
           {/* Preview Step */}
           {step === 'preview' && (
             <div className="swap-preview-step">
               {loading && !preview && (
                 <div className="swap-preview-loading">
-                  <div className="spinner-small" />
+                  <Spinner size={16} />
                   <span>Fetching swap preview...</span>
                 </div>
               )}
@@ -137,7 +132,7 @@ export function SmartSwapModal({
               {error && !preview && (
                 <div className="swap-preview-error">
                   <div className="message error">{error}</div>
-                  <button className="btn btn-secondary" onClick={fetchPreview}>Retry</button>
+                  <Button onClick={fetchPreview}>Retry</Button>
                 </div>
               )}
 
@@ -203,14 +198,14 @@ export function SmartSwapModal({
                   {error && <div className="message error">{error}</div>}
 
                   <div className="button-group">
-                    <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-                    <button
-                      className="btn btn-primary"
+                    <Button onClick={onClose}>Cancel</Button>
+                    <Button
+                      variant="primary"
                       onClick={handleConfirmSwap}
                       disabled={loading}
                     >
                       {loading ? 'Building...' : 'Confirm Swap'}
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}
@@ -267,8 +262,8 @@ export function SmartSwapModal({
                 <p className="signing-hint">Waiting for Nautilus approval...</p>
               </div>
               <div className="button-group">
-                <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>Back</button>
-                <button className="btn btn-primary" onClick={flow.handleNautilusSign}>Open Nautilus Again</button>
+                <Button onClick={flow.handleBackToChoice}>Back</Button>
+                <Button variant="primary" onClick={flow.handleNautilusSign}>Open Nautilus Again</Button>
               </div>
             </div>
           )}
@@ -281,7 +276,7 @@ export function SmartSwapModal({
                 <QRCodeSVG value={flow.qrUrl} size={200} />
               </div>
               <p className="signing-hint">Waiting for signature...</p>
-              <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>Back</button>
+              <Button onClick={flow.handleBackToChoice}>Back</Button>
             </div>
           )}
 
@@ -297,7 +292,7 @@ export function SmartSwapModal({
               <h3>Swap Submitted!</h3>
               <p>Your swap transaction has been submitted to the network.</p>
               {flow.txId && <TxSuccess txId={flow.txId} explorerUrl={explorerUrl} />}
-              <button className="btn btn-primary" onClick={() => { onSuccess() }}>Done</button>
+              <Button variant="primary" onClick={() => { onSuccess() }}>Done</Button>
             </div>
           )}
 
@@ -316,15 +311,14 @@ export function SmartSwapModal({
                 The pool state may have changed. Try again with a fresh quote.
               </p>
               <div className="button-group">
-                <button className="btn btn-secondary" onClick={onClose}>Close</button>
-                <button className="btn btn-primary" onClick={() => { setStep('preview'); setError(null); fetchPreview() }}>
+                <Button onClick={onClose}>Close</Button>
+                <Button variant="primary" onClick={() => { setStep('preview'); setError(null); fetchPreview() }}>
                   Try Again
-                </button>
+                </Button>
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+      </>
+    </Modal>
   )
 }

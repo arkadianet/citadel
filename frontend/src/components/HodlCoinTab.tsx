@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getHodlCoinBanks, type HodlBankState } from '../api/hodlcoin'
 import { formatErg } from '../utils/format'
 import { HodlCoinModal } from './HodlCoinModal'
-import { PageHeader, Card, CardHeader, CardBody, CardFooter, EmptyState } from './ui'
+import { PageHeader, Card, CardHeader, CardBody, CardFooter, EmptyState, Skeleton } from './ui'
 import './HodlCoinTab.css'
 
 const HODL_ICON_MAP: Record<string, string> = {
@@ -129,9 +129,10 @@ export function HodlCoinTab({
       />
 
       {loading && banks.length === 0 && (
-        <div className="hodl-loading">
-          <div className="spinner-small" />
-          <span>Discovering banks...</span>
+        <div className="hodl-banks-grid view-grid">
+          {[0, 1, 2].map(i => (
+            <Skeleton key={i} height="240px" />
+          ))}
         </div>
       )}
 

@@ -15,7 +15,7 @@ import { startSign, getTxStatus } from '../api/types'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import { formatTokenAmount } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
-import { PageHeader } from './ui'
+import { Button, Modal, PageHeader } from './ui'
 import './RouterTab.css'
 
 const SIGUSD_TOKEN_ID = '03faf2cb329f2e90d6d23b58d91bbb6c046aa143261cc21f52fbe2824bfcbf04'
@@ -459,60 +459,59 @@ export function RouterTab({
 
       {/* Execution Modal */}
       {execRoute && (
-        <div className="modal-overlay" onClick={closeExecModal}>
-          <div className="modal router-execute-modal" onClick={e => e.stopPropagation()}>
-            {execStep === 'building' && (
-              <div className="router-exec-status">Building transaction...</div>
-            )}
+        <Modal open={true} onClose={closeExecModal} title="Execute Swap" size="sm">
+          {execStep === 'building' && (
+            <div className="router-exec-status">Building transaction...</div>
+          )}
 
-            {execStep === 'signing' && (
-              <div className="router-exec-signing">
-                <h3>Sign Transaction</h3>
-                <p className="router-exec-desc">
-                  {execRoute.route.hops[0].token_in_name || 'ERG'} &rarr;{' '}
-                  {execRoute.route.hops[0].token_out_name || 'SigUSD'} via pool{' '}
-                  {execRoute.route.hops[0].pool_id.slice(0, 8)}
-                </p>
+          {execStep === 'signing' && (
+            <div className="router-exec-signing">
+              <h3>Sign Transaction</h3>
+              <p className="router-exec-desc">
+                {execRoute.route.hops[0].token_in_name || 'ERG'} &rarr;{' '}
+                {execRoute.route.hops[0].token_out_name || 'SigUSD'} via pool{' '}
+                {execRoute.route.hops[0].pool_id.slice(0, 8)}
+              </p>
 
-                {flow.nautilusUrl && (
-                  <button
-                    className="router-nautilus-btn"
-                    onClick={() => window.open(flow.nautilusUrl!, '_blank')}
-                  >
-                    Sign with Nautilus
-                  </button>
-                )}
+              {flow.nautilusUrl && (
+                <Button
+                  variant="primary"
+                  style={{ marginBottom: 'var(--space-md)' }}
+                  onClick={() => window.open(flow.nautilusUrl!, '_blank')}
+                >
+                  Sign with Nautilus
+                </Button>
+              )}
 
-                {flow.qrUrl && (
-                  <div className="router-qr-section">
-                    <p className="router-qr-label">Or scan with ErgoPay wallet:</p>
-                    <QRCodeSVG value={flow.qrUrl} size={180} bgColor="transparent" fgColor="#e2e8f0" />
-                  </div>
-                )}
+              {flow.qrUrl && (
+                <div className="router-qr-section">
+                  <p className="router-qr-label">Or scan with ErgoPay wallet:</p>
+                  <QRCodeSVG value={flow.qrUrl} size={180} bgColor="transparent" fgColor="#e2e8f0" />
+                </div>
+              )}
 
-                <div className="router-exec-waiting">Waiting for signature...</div>
-              </div>
-            )}
+              <div className="router-exec-waiting">Waiting for signature...</div>
+            </div>
+          )}
 
-            {execStep === 'success' && (
-              <div className="router-exec-success">
-                <TxSuccess
-                  txId={execTxId || ''}
-                  explorerUrl={explorerUrl || 'https://sigmaspace.io'}
-                />
-                <button className="router-exec-close-btn" onClick={closeExecModal}>Close</button>
-              </div>
-            )}
+          {execStep === 'success' && (
+            <div className="router-exec-success">
+              <TxSuccess
+                txId={execTxId || ''}
+                explorerUrl={explorerUrl || 'https://sigmaspace.io'}
+              />
+              <Button onClick={closeExecModal}>Close</Button>
+            </div>
+          )}
 
-            {execStep === 'error' && (
-              <div className="router-exec-error">
-                <h3>Error</h3>
-                <p>{execError}</p>
-                <button className="router-exec-close-btn" onClick={closeExecModal}>Close</button>
-              </div>
-            )}
-          </div>
-        </div>
+          {execStep === 'error' && (
+            <div className="router-exec-error">
+              <h3>Error</h3>
+              <p>{execError}</p>
+              <Button onClick={closeExecModal}>Close</Button>
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   )
@@ -620,7 +619,7 @@ function SplitSuggestion({ split, oracleRate, canExecute, onExecute }: {
       </div>
 
       {canExecute && (
-        <button className="router-execute-btn" onClick={onExecute}>Execute Split</button>
+        <Button variant="primary" className="router-execute-btn" onClick={onExecute}>Execute Split</Button>
       )}
     </div>
   )
@@ -718,7 +717,7 @@ function RouteCard({ rq, isBest, bestOutput, bestInput, mode, oracleRate, canExe
 
       {/* Execute / Multi-hop notice */}
       {canExecute && (
-        <button className="router-execute-btn" onClick={onExecute}>Execute Swap</button>
+        <Button variant="primary" className="router-execute-btn" onClick={onExecute}>Execute Swap</Button>
       )}
       {route.hops.length > 1 && (
         <span className="router-multihop-notice">Multi-hop (view only)</span>

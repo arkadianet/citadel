@@ -12,6 +12,7 @@ import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import type { TxStatusResponse } from '../api/types'
 import { TX_FEE_NANO, MIN_BOX_VALUE_NANO } from '../constants'
+import { Modal, Button, FormField, Input, Select } from './ui'
 import './CreateOrderModal.css'
 
 interface WalletBalance {
@@ -185,109 +186,96 @@ export function CreateOrderModal({
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal create-order-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Create Loan Request</h2>
-          <button className="close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="modal-content">
+    <Modal open={isOpen} onClose={onClose} title="Create Loan Request">
           {step === 'input' && (
             <div className="co-input-step">
               {/* Token selector */}
-              <div className="form-group">
-                <label className="form-label">Loan Token</label>
-                <select
-                  className="co-select"
+              <FormField label="Loan Token">
+                <Select
                   value={selectedTokenId}
                   onChange={e => setSelectedTokenId(e.target.value)}
                 >
                   {tokens.map(t => (
                     <option key={t.token_id} value={t.token_id}>{t.name}</option>
                   ))}
-                </select>
-              </div>
+                </Select>
+              </FormField>
 
               {/* Principal */}
-              <div className="form-group">
-                <label className="form-label">Principal ({selectedToken?.name ?? ''})</label>
-                <input
+              <FormField label={`Principal (${selectedToken?.name ?? ''})`}>
+                <Input
                   type="number"
-                  className="input"
                   value={principalInput}
                   onChange={e => setPrincipalInput(e.target.value)}
                   placeholder="0"
                   min="0"
                   step={selectedToken ? Math.pow(10, -selectedToken.decimals) : 1}
                 />
-              </div>
+              </FormField>
 
               {/* Interest */}
-              <div className="form-group">
-                <label className="form-label">Interest (%)</label>
-                <input
+              <FormField
+                label="Interest (%)"
+                hint={calculated.interest > 0 && calculated.principal > 0 ? (
+                  <>
+                    Repayment: {calculated.repaymentFloat.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: selectedToken?.decimals ?? 2,
+                    })} {selectedToken?.name}
+                  </>
+                ) : undefined}
+              >
+                <Input
                   type="number"
-                  className="input"
                   value={interestInput}
                   onChange={e => setInterestInput(e.target.value)}
                   placeholder="5"
                   min="0.1"
                   step="0.1"
                 />
-                {calculated.interest > 0 && calculated.principal > 0 && (
-                  <p className="co-hint">
-                    Repayment: {calculated.repaymentFloat.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: selectedToken?.decimals ?? 2,
-                    })} {selectedToken?.name}
-                  </p>
-                )}
-              </div>
+              </FormField>
 
               {/* Term */}
-              <div className="form-group">
-                <label className="form-label">Term (days)</label>
-                <input
+              <FormField
+                label="Term (days)"
+                hint={calculated.days > 0 && calculated.interest > 0 ? (
+                  <>
+                    APR: {calculated.apr.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+                    &middot; {calculated.maturityBlocks.toLocaleString()} blocks
+                  </>
+                ) : undefined}
+              >
+                <Input
                   type="number"
-                  className="input"
                   value={termDays}
                   onChange={e => setTermDays(e.target.value)}
                   placeholder="30"
                   min="1"
                   step="1"
                 />
-                {calculated.days > 0 && calculated.interest > 0 && (
-                  <p className="co-hint">
-                    APR: {calculated.apr.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
-                    &middot; {calculated.maturityBlocks.toLocaleString()} blocks
-                  </p>
-                )}
-              </div>
+              </FormField>
 
               {/* Collateral */}
-              <div className="form-group">
-                <label className="form-label">Collateral (ERG)</label>
-                <input
+              <FormField
+                label="Collateral (ERG)"
+                hint={
+                  <>
+                    Available: {formatErg(walletBalance?.erg_nano ?? 0)} ERG
+                    {calculated.collateralNano > 0 && (
+                      <> &middot; Total needed: {formatErg(calculated.ergNeeded)} ERG</>
+                    )}
+                  </>
+                }
+              >
+                <Input
                   type="number"
-                  className="input"
                   value={collateralInput}
                   onChange={e => setCollateralInput(e.target.value)}
                   placeholder="0"
                   min="0.001"
                   step="0.001"
                 />
-                <p className="co-hint">
-                  Available: {formatErg(walletBalance?.erg_nano ?? 0)} ERG
-                  {calculated.collateralNano > 0 && (
-                    <> &middot; Total needed: {formatErg(calculated.ergNeeded)} ERG</>
-                  )}
-                </p>
-              </div>
+              </FormField>
 
               {/* Summary preview */}
               {calculated.isValid && (
@@ -316,15 +304,15 @@ export function CreateOrderModal({
 
               {error && <div className="message error">{error}</div>}
 
-              <div className="button-group">
-                <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-                <button
-                  className="btn btn-primary"
+              <div className="modal-actions">
+                <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                <Button
+                  variant="primary"
                   onClick={handleBuild}
                   disabled={loading || !calculated.isValid}
                 >
                   {loading ? 'Building...' : 'Create Order'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -367,7 +355,7 @@ export function CreateOrderModal({
                   </div>
                   <p>Approve in Nautilus</p>
                   <div className="waiting-spinner" />
-                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>Back</button>
+                  <Button variant="secondary" onClick={flow.handleBackToChoice}>Back</Button>
                 </div>
               )}
 
@@ -378,7 +366,7 @@ export function CreateOrderModal({
                     <QRCodeSVG value={flow.qrUrl} size={200} level="M" includeMargin bgColor="white" fgColor="black" />
                   </div>
                   <div className="waiting-spinner" />
-                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>Back</button>
+                  <Button variant="secondary" onClick={flow.handleBackToChoice}>Back</Button>
                 </div>
               )}
             </div>
@@ -395,7 +383,7 @@ export function CreateOrderModal({
               <h3>Order Created!</h3>
               <p>Your loan request has been submitted. Lenders can now fill it.</p>
               {flow.txId && <TxSuccess txId={flow.txId} explorerUrl={explorerUrl} />}
-              <button className="btn btn-primary" onClick={() => { onSuccess(); onClose() }}>Done</button>
+              <Button variant="primary" onClick={() => { onSuccess(); onClose() }}>Done</Button>
             </div>
           )}
 
@@ -410,14 +398,12 @@ export function CreateOrderModal({
               </div>
               <h3>Transaction Failed</h3>
               <p className="error-message">{error}</p>
-              <div className="button-group">
-                <button className="btn btn-secondary" onClick={onClose}>Close</button>
-                <button className="btn btn-primary" onClick={() => setStep('input')}>Try Again</button>
+              <div className="modal-actions">
+                <Button variant="secondary" onClick={onClose}>Close</Button>
+                <Button variant="primary" onClick={() => setStep('input')}>Try Again</Button>
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

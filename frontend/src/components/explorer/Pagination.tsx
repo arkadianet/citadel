@@ -4,6 +4,8 @@
  * Shows: [Prev] [1] ... [4] [5] [*6*] [7] [8] ... [42] [Next]
  */
 
+import { Button } from '../ui'
+
 interface Props {
   currentPage: number
   totalPages: number
@@ -48,13 +50,14 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Props) {
 
   return (
     <div className="explorer-pagination">
-      <button
-        className="btn btn-secondary btn-sm"
+      <Button
+        size="sm"
+        variant="ghost"
         disabled={currentPage === 0}
         onClick={() => onPageChange(currentPage - 1)}
       >
         Prev
-      </button>
+      </Button>
 
       <div className="pagination-pages">
         {pages.map((p, i) =>
@@ -72,13 +75,14 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Props) {
         )}
       </div>
 
-      <button
-        className="btn btn-secondary btn-sm"
+      <Button
+        size="sm"
+        variant="ghost"
         disabled={currentPage >= totalPages - 1}
         onClick={() => onPageChange(currentPage + 1)}
       >
         Next
-      </button>
+      </Button>
     </div>
   )
 }

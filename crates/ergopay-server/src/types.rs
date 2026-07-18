@@ -26,6 +26,9 @@ pub enum RequestType {
         unsigned_tx: serde_json::Value,
         /// Message to display
         message: String,
+        /// Sign-only: the wallet returns the signed tx to the server instead
+        /// of broadcasting it (used for 0-conf chained txs). Nautilus-only.
+        sign_only: bool,
     },
 }
 
@@ -38,6 +41,9 @@ pub enum RequestStatus {
     AddressReceived(String),
     /// Transaction submitted by wallet
     TxSubmitted { tx_id: String },
+    /// Transaction signed and returned by wallet (sign-only requests);
+    /// the app is responsible for broadcasting.
+    Signed { signed_tx: serde_json::Value },
     /// Request expired
     Expired,
     /// Request failed
@@ -81,6 +87,23 @@ impl PendingRequest {
                 reduced_tx,
                 unsigned_tx,
                 message,
+                sign_only: false,
+            },
+            created_at: Instant::now(),
+            status: RequestStatus::Pending,
+        }
+    }
+
+    /// Create a sign-only request: the wallet signs and returns the tx to the
+    /// server without broadcasting (Nautilus-only; no reduced bytes needed).
+    pub fn new_sign_only(id: String, unsigned_tx: serde_json::Value, message: String) -> Self {
+        Self {
+            id,
+            request_type: RequestType::SignTransaction {
+                reduced_tx: Vec::new(),
+                unsigned_tx,
+                message,
+                sign_only: true,
             },
             created_at: Instant::now(),
             status: RequestStatus::Pending,
@@ -90,5 +113,55 @@ impl PendingRequest {
     /// Check if request has expired (5 minutes)
     pub fn is_expired(&self) -> bool {
         self.created_at.elapsed().as_secs() > 300
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sign_only_request_captures_signed_tx() {
+        let mut req = PendingRequest::new_sign_only(
+            "req1".to_string(),
+            serde_json::json!({"inputs": []}),
+            "Arb leg 1/3".to_string(),
+        );
+
+        assert!(matches!(
+            req.request_type,
+            RequestType::SignTransaction {
+                sign_only: true,
+                ..
+            }
+        ));
+        assert!(matches!(req.status, RequestStatus::Pending));
+
+        let signed = serde_json::json!({"id": "abc", "inputs": [{"spendingProof": {}}]});
+        req.status = RequestStatus::Signed {
+            signed_tx: signed.clone(),
+        };
+
+        match &req.status {
+            RequestStatus::Signed { signed_tx } => assert_eq!(signed_tx, &signed),
+            other => panic!("unexpected status: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn normal_sign_request_is_not_sign_only() {
+        let req = PendingRequest::new_sign_tx(
+            "req2".to_string(),
+            vec![1, 2, 3],
+            serde_json::json!({}),
+            "msg".to_string(),
+        );
+        assert!(matches!(
+            req.request_type,
+            RequestType::SignTransaction {
+                sign_only: false,
+                ..
+            }
+        ));
     }
 }

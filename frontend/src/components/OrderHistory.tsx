@@ -9,6 +9,7 @@ import {
 import { formatErg } from '../utils/format'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
 import { SwapRefundModal } from './SwapRefundModal'
+import { Button, Spinner } from './ui'
 
 interface OrderHistoryProps {
   walletAddress: string | null
@@ -64,7 +65,7 @@ export function OrderHistory({ walletAddress, explorerUrl }: OrderHistoryProps) 
     return (
       <div className="order-history">
         <div className="order-history-loading">
-          <div className="spinner-small" />
+          <Spinner size={16} />
           <span>Scanning for orders...</span>
         </div>
       </div>
@@ -161,9 +162,9 @@ function ProxyRow({
       </td>
       <td className="order-actions">
         <ExplorerButton onClick={onExplorer} />
-        <button className="btn btn-danger btn-sm" onClick={onRefund}>
+        <Button variant="danger" size="sm" onClick={onRefund}>
           Refund
-        </button>
+        </Button>
       </td>
     </tr>
   )

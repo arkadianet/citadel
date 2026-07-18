@@ -228,6 +228,79 @@ pub fn build_pool_graph_with_limit(
     }
 }
 
+/// Ensure the graph contains every pool that directly connects `source` and
+/// `target`, regardless of the liquidity floor or per-pair cap.
+///
+/// The floor exists to bound multi-hop path explosion; a directly-requested
+/// pair cannot explode the search, and dropping it makes real pools invisible
+/// (e.g. a small N2T pool showing no route at all). Price impact on the quote
+/// communicates the thin liquidity.
+pub fn ensure_direct_pair_edges(
+    graph: &mut PoolGraph,
+    pools: &[AmmPool],
+    source: &str,
+    target: &str,
+) {
+    for pool in pools {
+        let (token_a, token_b, reserves_a, reserves_b) = match pool.pool_type {
+            PoolType::N2T => (
+                ERG_TOKEN_ID.to_string(),
+                pool.token_y.token_id.clone(),
+                pool.erg_reserves.unwrap_or(0),
+                pool.token_y.amount,
+            ),
+            PoolType::T2T => match pool.token_x.as_ref() {
+                Some(x) => (
+                    x.token_id.clone(),
+                    pool.token_y.token_id.clone(),
+                    x.amount,
+                    pool.token_y.amount,
+                ),
+                None => continue,
+            },
+        };
+
+        let connects =
+            (token_a == source && token_b == target) || (token_a == target && token_b == source);
+        if !connects || reserves_a == 0 || reserves_b == 0 {
+            continue;
+        }
+
+        let already_present = graph
+            .adjacency
+            .get(token_a.as_str())
+            .map(|edges| edges.iter().any(|e| e.pool.pool_id == pool.pool_id))
+            .unwrap_or(false);
+        if already_present {
+            continue;
+        }
+
+        graph
+            .adjacency
+            .entry(token_a.clone())
+            .or_default()
+            .push(PoolEdge {
+                pool: pool.clone(),
+                token_in: token_a.clone(),
+                token_out: token_b.clone(),
+                reserves_in: reserves_a,
+                reserves_out: reserves_b,
+            });
+        graph
+            .adjacency
+            .entry(token_b.clone())
+            .or_default()
+            .push(PoolEdge {
+                pool: pool.clone(),
+                token_in: token_b.clone(),
+                token_out: token_a.clone(),
+                reserves_in: reserves_b,
+                reserves_out: reserves_a,
+            });
+        graph.pool_count += 1;
+    }
+}
+
 /// BFS for all acyclic paths up to `max_hops`. No token or pool_id reused within a path.
 pub fn find_paths(
     graph: &PoolGraph,
@@ -1827,5 +1900,29 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_direct_pair_included_despite_low_liquidity() {
+        // 1 ERG pool: below the 10 ERG floor, dropped from the normal graph.
+        let tiny = make_n2t_pool("tiny_pool", 1_000_000_000, "etosi", "eTosi", 1_000_000, 997);
+        let pools = vec![tiny];
+
+        let mut graph = build_pool_graph(&pools, DEFAULT_MIN_LIQUIDITY_NANO);
+        assert!(
+            find_paths(&graph, ERG_TOKEN_ID, "etosi", 3).is_empty(),
+            "precondition: tiny pool filtered out"
+        );
+
+        ensure_direct_pair_edges(&mut graph, &pools, ERG_TOKEN_ID, "etosi");
+
+        let paths = find_paths(&graph, ERG_TOKEN_ID, "etosi", 3);
+        assert_eq!(paths.len(), 1, "direct pair must be routable");
+        assert_eq!(paths[0][0].pool.pool_id, "tiny_pool");
+
+        // Reverse direction works too, and re-adding is idempotent.
+        assert_eq!(find_paths(&graph, "etosi", ERG_TOKEN_ID, 3).len(), 1);
+        ensure_direct_pair_edges(&mut graph, &pools, ERG_TOKEN_ID, "etosi");
+        assert_eq!(find_paths(&graph, ERG_TOKEN_ID, "etosi", 3).len(), 1);
     }
 }

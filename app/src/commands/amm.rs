@@ -1071,7 +1071,10 @@ pub async fn find_swap_routes(
         .await
         .str_err()?;
 
-    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    let mut graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    // The requested pair is always routable even if its pools sit below the
+    // liquidity floor -- price impact on the quote conveys thinness.
+    amm::ensure_direct_pair_edges(&mut graph, &pools, &source_token, &target_token);
     let max_hops = max_hops.unwrap_or(3);
     let max_routes = max_routes.unwrap_or(5);
     let slippage_pct = slippage.unwrap_or(0.5);
@@ -1131,7 +1134,8 @@ pub async fn find_split_route(
         .await
         .str_err()?;
 
-    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    let mut graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    amm::ensure_direct_pair_edges(&mut graph, &pools, &source_token, &target_token);
     let max_hops = 3;
     let max_splits = max_splits.unwrap_or(2);
     let _slippage_pct = slippage.unwrap_or(0.5);
@@ -1248,7 +1252,8 @@ pub async fn find_swap_routes_by_output(
         .await
         .str_err()?;
 
-    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    let mut graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
+    amm::ensure_direct_pair_edges(&mut graph, &pools, &source_token, &target_token);
     let max_hops = max_hops.unwrap_or(3);
     let max_routes = max_routes.unwrap_or(5);
     let slippage_pct = slippage.unwrap_or(0.5);
@@ -1311,4 +1316,235 @@ pub async fn scan_circular_arbs(
     let max_hops = max_hops.unwrap_or(4);
     // Min profit: 0.0001 ERG = 100_000 nanoERG
     Ok(amm::find_circular_arbs(&graph, max_hops, 100_000))
+}
+
+// =============================================================================
+// Arb chain execution (pre-built 0-conf sequential legs)
+// =============================================================================
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbChainLegDto {
+    pub pool_id: String,
+    pub tx_id: String,
+    pub unsigned_tx: serde_json::Value,
+    pub summary: amm::DirectSwapSummary,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbChainBuildResponse {
+    pub legs: Vec<ArbChainLegDto>,
+    pub projected_profit_nano: i64,
+}
+
+/// Build a full arb chain over `pool_ids` (hop order). Pools are re-fetched
+/// fresh; aborts if the recomputed profit dropped below `min_profit_nano`.
+#[tauri::command]
+pub async fn build_arb_chain_tx(
+    state: State<'_, AppState>,
+    pool_ids: Vec<String>,
+    input_nano: u64,
+    user_utxos: Vec<serde_json::Value>,
+    current_height: i32,
+    min_profit_nano: Option<i64>,
+) -> Result<ArbChainBuildResponse, String> {
+    let client = state.require_node_client().await?;
+
+    let all_pools = amm::discover_pools(&client).await.str_err()?;
+    let mut pools: Vec<(amm::AmmPool, ergo_tx::Eip12InputBox)> = Vec::with_capacity(pool_ids.len());
+    for pool_id in &pool_ids {
+        let pool = all_pools
+            .iter()
+            .find(|p| &p.pool_id == pool_id)
+            .cloned()
+            .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+        let pool_box = client
+            .get_eip12_box_by_id(&pool.box_id)
+            .await
+            .map_err(|e| format!("Failed to fetch pool box: {}", e))?;
+        pools.push((pool, pool_box));
+    }
+
+    let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
+    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
+
+    let build = amm::build_arb_chain(
+        &pools,
+        input_nano,
+        &parsed_utxos,
+        &user_ergo_tree,
+        current_height,
+        min_profit_nano.unwrap_or(0),
+    )
+    .str_err()?;
+
+    let legs = build
+        .legs
+        .into_iter()
+        .map(|leg| {
+            Ok(ArbChainLegDto {
+                pool_id: leg.pool_id,
+                tx_id: leg.tx_id,
+                unsigned_tx: serde_json::to_value(&leg.unsigned_tx)
+                    .map_err(|e| format!("Failed to serialize leg tx: {}", e))?,
+                summary: leg.summary,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    Ok(ArbChainBuildResponse {
+        legs,
+        projected_profit_nano: build.projected_profit_nano,
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbLegSignResponse {
+    pub request_id: String,
+    pub nautilus_url: String,
+}
+
+/// Start a sign-only Nautilus request for one arb leg. The signed tx is
+/// captured by the local server and broadcast later via `submit_arb_chain`.
+#[tauri::command]
+pub async fn start_arb_leg_sign(
+    state: State<'_, AppState>,
+    unsigned_tx: serde_json::Value,
+    message: String,
+) -> Result<ArbLegSignResponse, String> {
+    let server = state.ergopay_server().await.str_err()?;
+    let request_id = server.create_sign_only_request(unsigned_tx, message).await;
+    let nautilus_url = server.get_nautilus_url(&request_id);
+    Ok(ArbLegSignResponse {
+        request_id,
+        nautilus_url,
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbChainSubmitResponse {
+    /// Tx ids of successfully broadcast legs, in order.
+    pub tx_ids: Vec<String>,
+    /// Index of the first leg that failed to broadcast (if any).
+    pub failed_leg: Option<usize>,
+    pub error: Option<String>,
+}
+
+/// Broadcast the signed legs in order. Stops at the first rejection so the
+/// caller can report exactly which legs landed.
+#[tauri::command]
+pub async fn submit_arb_chain(
+    state: State<'_, AppState>,
+    request_ids: Vec<String>,
+) -> Result<ArbChainSubmitResponse, String> {
+    let client = state.require_node_client().await?;
+    let server = state.ergopay_server().await.str_err()?;
+
+    // Collect all signed txs first -- refuse to broadcast a partial chain.
+    let mut signed_txs = Vec::with_capacity(request_ids.len());
+    for (idx, request_id) in request_ids.iter().enumerate() {
+        let signed = server
+            .get_signed_tx(request_id)
+            .await
+            .ok_or_else(|| format!("Leg {} is not signed yet", idx + 1))?;
+        signed_txs.push(signed);
+    }
+
+    let mut tx_ids = Vec::with_capacity(signed_txs.len());
+    for (idx, signed_tx) in signed_txs.iter().enumerate() {
+        match client.submit_transaction(signed_tx).await {
+            Ok(tx_id) => tx_ids.push(tx_id),
+            Err(e) => {
+                return Ok(ArbChainSubmitResponse {
+                    tx_ids,
+                    failed_leg: Some(idx),
+                    error: Some(format!("Leg {} rejected: {}", idx + 1, e)),
+                });
+            }
+        }
+    }
+
+    Ok(ArbChainSubmitResponse {
+        tx_ids,
+        failed_leg: None,
+        error: None,
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SwapChainBuildResponse {
+    pub legs: Vec<ArbChainLegDto>,
+    /// Token the chain ends in (null = ERG).
+    pub final_token: Option<String>,
+    pub final_output: u64,
+}
+
+/// Build a multi-hop swap chain over `pool_ids` (hop order) starting from
+/// `source_token` (None = ERG). Same 0-conf pre-built chaining as arb
+/// execution, but for open routes (ends in the target token).
+#[tauri::command]
+pub async fn build_swap_chain_tx(
+    state: State<'_, AppState>,
+    pool_ids: Vec<String>,
+    source_token: Option<String>,
+    input_amount: u64,
+    user_utxos: Vec<serde_json::Value>,
+    current_height: i32,
+) -> Result<SwapChainBuildResponse, String> {
+    let client = state.require_node_client().await?;
+
+    let all_pools = amm::discover_pools(&client).await.str_err()?;
+    let mut pools: Vec<(amm::AmmPool, ergo_tx::Eip12InputBox)> = Vec::with_capacity(pool_ids.len());
+    for pool_id in &pool_ids {
+        let pool = all_pools
+            .iter()
+            .find(|p| &p.pool_id == pool_id)
+            .cloned()
+            .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+        let pool_box = client
+            .get_eip12_box_by_id(&pool.box_id)
+            .await
+            .map_err(|e| format!("Failed to fetch pool box: {}", e))?;
+        pools.push((pool, pool_box));
+    }
+
+    let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
+    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
+
+    // Frontend sends "ERG" for the native side; the builder wants None.
+    let source = source_token.filter(|t| t != "ERG");
+
+    let build = amm::build_swap_chain(
+        &pools,
+        source,
+        input_amount,
+        &parsed_utxos,
+        &user_ergo_tree,
+        current_height,
+    )
+    .str_err()?;
+
+    let legs = build
+        .legs
+        .into_iter()
+        .map(|leg| {
+            Ok(ArbChainLegDto {
+                pool_id: leg.pool_id,
+                tx_id: leg.tx_id,
+                unsigned_tx: serde_json::to_value(&leg.unsigned_tx)
+                    .map_err(|e| format!("Failed to serialize leg tx: {}", e))?,
+                summary: leg.summary,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    Ok(SwapChainBuildResponse {
+        legs,
+        final_token: build.final_token,
+        final_output: build.final_output,
+    })
 }

@@ -12,7 +12,7 @@ import { getCachedTokenInfo } from '../api/tokenCache'
 import { TX_FEE_NANO, MIN_BOX_VALUE_NANO } from '../constants'
 import { formatErg, formatTokenAmount } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
-import { PageHeader, Tabs, EmptyState } from './ui'
+import { PageHeader, Tabs, EmptyState, Button, Spinner, FormField, Input, Select } from './ui'
 import './UtxoManagementTab.css'
 
 interface UtxoManagementTabProps {
@@ -384,7 +384,7 @@ export function UtxoManagementTab({
           <div className="card">
             <div className="card-content">
               <div className="swap-preview-loading">
-                <div className="spinner-small" />
+                <Spinner size={20} />
                 <span>Building transaction...</span>
               </div>
             </div>
@@ -483,8 +483,8 @@ export function UtxoManagementTab({
                   <p className="signing-hint">Waiting for Nautilus approval...</p>
                 </div>
                 <div className="button-group">
-                  <button className="btn btn-secondary" onClick={() => setSignMethod('choose')}>Back</button>
-                  <button className="btn btn-primary" onClick={handleNautilusSign}>Open Nautilus Again</button>
+                  <Button variant="secondary" onClick={() => setSignMethod('choose')}>Back</Button>
+                  <Button variant="primary" onClick={handleNautilusSign}>Open Nautilus Again</Button>
                 </div>
               </div>
             </div>
@@ -507,7 +507,7 @@ export function UtxoManagementTab({
                   <QRCodeSVG value={qrUrl} size={200} />
                 </div>
                 <p className="signing-hint">Waiting for signature...</p>
-                <button className="btn btn-secondary" onClick={() => setSignMethod('choose')}>Back</button>
+                <Button variant="secondary" onClick={() => setSignMethod('choose')}>Back</Button>
               </div>
             </div>
           </div>
@@ -532,7 +532,7 @@ export function UtxoManagementTab({
                 </div>
                 <h3>UTXOs {action}!</h3>
                 {txId && <TxSuccess txId={txId} explorerUrl={explorerUrl} />}
-                <button className="btn btn-primary" onClick={handleReset}>Done</button>
+                <Button variant="primary" onClick={handleReset}>Done</Button>
               </div>
             </div>
           </div>
@@ -557,10 +557,10 @@ export function UtxoManagementTab({
                 <h3>Transaction Failed</h3>
                 <p className="error-message">{error}</p>
                 <div className="button-group">
-                  <button className="btn btn-secondary" onClick={handleReset}>Start Over</button>
-                  <button className="btn btn-primary" onClick={() => { setStep('select'); setError(null) }}>
+                  <Button variant="secondary" onClick={handleReset}>Start Over</Button>
+                  <Button variant="primary" onClick={() => { setStep('select'); setError(null) }}>
                     Try Again
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -619,10 +619,10 @@ export function UtxoManagementTab({
                 </div>
 
                 <div className="button-group" style={{ marginTop: 'var(--space-md)' }}>
-                  <button className="btn btn-secondary" onClick={() => setStep('select')}>Back</button>
-                  <button className="btn btn-primary utxo-action-btn" onClick={handleConsolidate} disabled={loading}>
+                  <Button variant="secondary" onClick={() => setStep('select')}>Back</Button>
+                  <Button variant="primary" onClick={handleConsolidate} disabled={loading}>
                     {loading ? 'Building...' : 'Consolidate'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -671,10 +671,10 @@ export function UtxoManagementTab({
               </div>
 
               <div className="button-group" style={{ marginTop: 'var(--space-md)' }}>
-                <button className="btn btn-secondary" onClick={() => setStep('select')}>Back</button>
-                <button className="btn btn-primary utxo-action-btn" onClick={handleSplit} disabled={loading}>
+                <Button variant="secondary" onClick={() => setStep('select')}>Back</Button>
+                <Button variant="primary" onClick={handleSplit} disabled={loading}>
                   {loading ? 'Building...' : 'Split'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -724,8 +724,8 @@ export function UtxoManagementTab({
           <div className="utxo-list-panel">
             <div className="utxo-list-toolbar">
               <div className="utxo-toolbar-actions">
-                <button className="utxo-toolbar-btn" onClick={selectAllUtxos}>Select All</button>
-                <button className="utxo-toolbar-btn" onClick={deselectAllUtxos}>Deselect All</button>
+                <Button size="sm" variant="ghost" onClick={selectAllUtxos}>Select All</Button>
+                <Button size="sm" variant="ghost" onClick={deselectAllUtxos}>Deselect All</Button>
               </div>
               {selectedBoxIds.size > 0 && (
                 <span className="utxo-select-badge">{selectedBoxIds.size}</span>
@@ -735,7 +735,7 @@ export function UtxoManagementTab({
             <div className="utxo-list">
               {loadingUtxos ? (
                 <div className="utxo-list-empty">
-                  <div className="spinner-small" />
+                  <Spinner size={20} />
                   <span>Loading UTXOs...</span>
                 </div>
               ) : utxos.length === 0 ? (
@@ -826,13 +826,14 @@ export function UtxoManagementTab({
                 {error && <div className="message error">{error}</div>}
 
                 <div className="utxo-summary-footer">
-                  <button
+                  <Button
+                    variant="primary"
                     className="utxo-submit-btn"
                     onClick={() => setStep('confirm')}
                     disabled={selectedBoxIds.size < 2}
                   >
                     {selectedBoxIds.size < 2 ? 'Select at least 2 boxes' : 'Review Consolidation'}
-                  </button>
+                  </Button>
                 </div>
               </>
             )}
@@ -863,9 +864,8 @@ export function UtxoManagementTab({
 
           <div className="utxo-split-form">
             {splitType === 'token' && (
-              <div className="utxo-split-field">
-                <label>Token</label>
-                <select
+              <FormField label="Token">
+                <Select
                   value={splitTokenId}
                   onChange={e => setSplitTokenId(e.target.value)}
                   className="utxo-split-select"
@@ -876,13 +876,12 @@ export function UtxoManagementTab({
                       {getTokenName(t.token_id, t.name)} ({formatTokenAmount(t.amount, t.decimals)})
                     </option>
                   ))}
-                </select>
-              </div>
+                </Select>
+              </FormField>
             )}
 
-            <div className="utxo-split-field">
-              <label>{splitType === 'erg' ? 'ERG per box' : 'Tokens per box'}</label>
-              <input
+            <FormField label={splitType === 'erg' ? 'ERG per box' : 'Tokens per box'}>
+              <Input
                 type="text"
                 inputMode="decimal"
                 value={splitAmount}
@@ -890,11 +889,10 @@ export function UtxoManagementTab({
                 placeholder={splitType === 'erg' ? '1.0' : '100'}
                 className="utxo-split-input"
               />
-            </div>
+            </FormField>
 
-            <div className="utxo-split-field">
-              <label>Number of boxes (1-30)</label>
-              <input
+            <FormField label="Number of boxes (1-30)">
+              <Input
                 type="text"
                 inputMode="numeric"
                 value={splitCount}
@@ -902,12 +900,11 @@ export function UtxoManagementTab({
                 placeholder="5"
                 className="utxo-split-input"
               />
-            </div>
+            </FormField>
 
             {splitType === 'token' && (
-              <div className="utxo-split-field">
-                <label>ERG per box</label>
-                <input
+              <FormField label="ERG per box">
+                <Input
                   type="text"
                   inputMode="decimal"
                   value={splitErgPerBox}
@@ -915,7 +912,7 @@ export function UtxoManagementTab({
                   placeholder="0.001"
                   className="utxo-split-input"
                 />
-              </div>
+              </FormField>
             )}
 
             {/* Live preview */}
@@ -940,14 +937,15 @@ export function UtxoManagementTab({
 
             {error && <div className="message error" style={{ marginTop: 'var(--space-sm)' }}>{error}</div>}
 
-            <button
+            <Button
+              variant="primary"
               className="utxo-submit-btn"
               style={{ marginTop: 'var(--space-md)' }}
               onClick={() => setStep('confirm')}
               disabled={!splitIsValid}
             >
               Review Split
-            </button>
+            </Button>
           </div>
         </div>
       )}

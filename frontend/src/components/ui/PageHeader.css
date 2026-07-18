@@ -65,6 +65,7 @@
   color: rgb(var(--text));
   font-weight: 600;
   font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
 }
 
 .ds-page-info-divider {

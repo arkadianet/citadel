@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { FormField, Input } from './ui'
 import './AdvancedOptions.css'
 
 interface AdvancedOptionsProps {
@@ -34,27 +35,31 @@ export function AdvancedOptions({
 
       {expanded && (
         <div className="advanced-body">
-          <div className="advanced-field">
-            <label>Recipient address</label>
-            <span className="advanced-field-hint">
-              Leave empty to receive at your wallet address
-            </span>
-            <input
+          <FormField
+            label="Recipient address"
+            hint={
+              recipientAddress && addressValid === true
+                ? <span className="advanced-valid">Valid address</span>
+                : 'Leave empty to receive at your wallet address'
+            }
+            error={
+              recipientAddress && addressValid === false
+                ? 'Invalid Ergo address'
+                : undefined
+            }
+          >
+            <Input
               type="text"
+              size="sm"
               value={recipientAddress}
               onChange={e => onRecipientChange(e.target.value)}
               placeholder="9..."
+              invalid={!!recipientAddress && addressValid === false}
               className={`advanced-input ${
-                recipientAddress && addressValid === false ? 'invalid' : ''
-              } ${recipientAddress && addressValid === true ? 'valid' : ''}`}
+                recipientAddress && addressValid === true ? 'valid' : ''
+              }`}
             />
-            {recipientAddress && addressValid === false && (
-              <span className="advanced-error">Invalid Ergo address</span>
-            )}
-            {recipientAddress && addressValid === true && (
-              <span className="advanced-valid">Valid address</span>
-            )}
-          </div>
+          </FormField>
         </div>
       )}
     </div>

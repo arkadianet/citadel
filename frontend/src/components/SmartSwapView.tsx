@@ -9,7 +9,9 @@ import {
 import { TokenSelector, type TokenEntry } from './TokenSelector'
 import { RouteList } from './RouteList'
 import { SmartSwapModal } from './SmartSwapModal'
+import { SwapChainModal } from './SwapChainModal'
 import { formatTokenAmount } from '../utils/format'
+import { Button, Spinner } from './ui'
 import './SmartSwap.css'
 
 // =============================================================================
@@ -329,15 +331,15 @@ export function SmartSwapView({
 
   const canExecute =
     selectedRoute !== null &&
-    selectedRoute.route.hops.length === 1 &&
     walletAddress !== null &&
     !insufficientBalance
+
+  const isMultiHop = (selectedRoute?.route.hops.length ?? 0) > 1
 
   const executionBlockReason: string | null = (() => {
     if (!selectedRoute) return useSplit ? 'Split execution not yet supported' : null
     if (!walletAddress) return 'Connect wallet'
     if (insufficientBalance) return 'Insufficient balance'
-    if (selectedRoute.route.hops.length > 1) return 'Multi-hop execution coming soon'
     return null
   })()
 
@@ -506,8 +508,8 @@ export function SmartSwapView({
       {/* Routes section */}
       <div className={`smart-swap-routes${routeStale && routeLoading ? ' stale' : ''}`}>
         {routeLoading && routes.length === 0 && (
-          <div className="smart-swap-spinner">
-            <span className="smart-swap-spinner-icon">⟳</span> Finding routes…
+          <div className="smart-swap-loading">
+            <Spinner size={16} /> Finding routes…
           </div>
         )}
 
@@ -518,13 +520,14 @@ export function SmartSwapView({
         {routeError && !routeLoading && (
           <div className="smart-swap-error">
             <span>{routeError}</span>
-            <button
+            <Button
               type="button"
-              className="smart-swap-retry-btn"
+              size="sm"
+              variant="danger"
               onClick={() => findRoutes()}
             >
               Retry
-            </button>
+            </Button>
           </div>
         )}
 
@@ -545,17 +548,18 @@ export function SmartSwapView({
       </div>
 
       {/* Confirm button */}
-      <button
+      <Button
         type="button"
+        variant="primary"
         className="smart-swap-confirm-btn"
         disabled={!canExecute}
         onClick={() => setShowSwapModal(true)}
         title={executionBlockReason ?? undefined}
       >
-        {executionBlockReason ?? 'Swap'}
-      </button>
+        {executionBlockReason ?? (isMultiHop ? `Swap (${selectedRoute?.route.hops.length} hops, Nautilus)` : 'Swap')}
+      </Button>
 
-      {showSwapModal && selectedRoute && walletAddress && (
+      {showSwapModal && selectedRoute && walletAddress && !isMultiHop && (
         <SmartSwapModal
           isOpen={showSwapModal}
           onClose={() => setShowSwapModal(false)}
@@ -565,6 +569,16 @@ export function SmartSwapView({
           walletAddress={walletAddress}
           explorerUrl={_explorerUrl}
           onSuccess={() => setShowSwapModal(false)}
+        />
+      )}
+
+      {showSwapModal && selectedRoute && walletAddress && isMultiHop && (
+        <SwapChainModal
+          isOpen={showSwapModal}
+          onClose={() => setShowSwapModal(false)}
+          routeQuote={selectedRoute}
+          sourceAmount={rawInput}
+          onSuccess={() => findRoutes()}
         />
       )}
     </div>

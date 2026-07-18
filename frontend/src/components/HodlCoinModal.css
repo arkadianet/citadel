@@ -1,149 +1,67 @@
 /* ============================================================================
-   HodlCoin Modal
+   HodlCoin Modal — content inside the shared ds Modal shell.
+   Shared classes used but defined elsewhere: .modal-actions, .mint-signing-step,
+   .wallet-options/.wallet-option, .qr-container, .success-step, .error-step.
    ============================================================================ */
 
-.hodl-modal {
-  background: var(--glass-display);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 480px;
-  max-height: 90vh;
-  overflow-y: auto;
-  animation: hodlModalIn 0.2s ease-out;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25), var(--glass-inner-edge);
-}
+.hodl-modal-flow {
+  /* HodlCoin violet identity */
+  --protocol-accent: #8b5cf6; /* protocol accent */
+  --protocol-accent-deep: #6d28d9; /* protocol accent */
+  --protocol-accent-light: #a78bfa; /* protocol accent */
+  --protocol-accent-bg: color-mix(in srgb, var(--protocol-accent) 8%, transparent);
 
-@keyframes hodlModalIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-.hodl-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-md);
-  border-bottom: 1px solid var(--glass-border);
-}
-
-.hodl-modal-header h2 {
-  font-size: var(--text-base);
-  font-weight: 700;
-  color: rgb(var(--text));
-  margin: 0;
-}
-
-/* ============================================================================
-   Tabs
-   ============================================================================ */
-
-.hodl-tabs {
-  display: flex;
-  padding: 0 var(--space-md);
-  gap: var(--space-xs);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
-}
-
-.hodl-tab-btn {
-  flex: 1;
-  padding: var(--space-sm);
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--slate-400);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.hodl-tab-btn:hover {
-  color: rgb(var(--text));
-}
-
-.hodl-tab-btn.active {
-  color: #a78bfa;
-  border-bottom-color: #8b5cf6;
-}
-
-/* ============================================================================
-   Content
-   ============================================================================ */
-
-.hodl-modal-content {
-  padding: var(--space-md);
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--ds-space-3);
 }
 
 /* ============================================================================
-   Input Group
+   Input
    ============================================================================ */
-
-.hodl-input-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-}
-
-.hodl-input-group label {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--slate-400);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
 
 .hodl-input-wrapper {
   display: flex;
   align-items: center;
-  background: var(--slate-800);
-  border: 1px solid var(--slate-700);
-  border-radius: var(--radius-md);
+  background: var(--ds-input-bg);
+  border: 1px solid var(--ds-input-border);
+  border-radius: var(--ds-radius-md);
   overflow: hidden;
-  transition: border-color 0.15s;
+  transition: border-color var(--ds-transition-fast);
 }
 
 .hodl-input-wrapper:focus-within {
-  border-color: #8b5cf6;
+  border-color: var(--protocol-accent);
 }
 
 .hodl-input-wrapper input {
   flex: 1;
   background: transparent;
   border: none;
-  color: rgb(var(--text));
+  color: var(--text-strong);
   font-size: var(--text-base);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   padding: var(--space-sm);
   outline: none;
   min-width: 0;
 }
 
 .hodl-max-btn {
-  background: rgba(139, 92, 246, 0.1);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  border-radius: var(--radius-sm);
-  color: #a78bfa;
+  background: color-mix(in srgb, var(--protocol-accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--protocol-accent) 30%, transparent);
+  border-radius: var(--ds-radius-sm);
+  color: var(--protocol-accent-light);
   padding: 4px 10px;
   font-size: var(--text-xs);
   font-weight: 600;
   cursor: pointer;
   margin-right: var(--space-xs);
-  transition: background 0.15s;
+  transition: background var(--ds-transition-fast);
 }
 
 .hodl-max-btn:hover {
-  background: rgba(139, 92, 246, 0.2);
-}
-
-.hodl-input-hint {
-  font-size: var(--text-xs);
-  color: var(--slate-500);
+  background: color-mix(in srgb, var(--protocol-accent) 20%, transparent);
 }
 
 /* ============================================================================
@@ -163,29 +81,30 @@
 }
 
 .hodl-info-row > span:last-child {
-  color: rgb(var(--text));
+  color: var(--text-strong);
   font-weight: 500;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
   text-align: right;
 }
 
 .hodl-info-row.highlight {
   padding: var(--space-xs) var(--space-sm);
-  background: rgba(139, 92, 246, 0.08);
-  border-radius: var(--radius-sm);
+  background: var(--protocol-accent-bg);
+  border-radius: var(--ds-radius-sm);
 }
 
 .hodl-info-row.highlight > span:last-child {
-  color: #a78bfa;
+  color: var(--protocol-accent-light);
   font-weight: 700;
 }
 
 .hodl-info-row.fee > span:last-child {
-  color: var(--red-400);
+  color: var(--ds-danger);
 }
 
 .hodl-info-row.total {
-  border-top: 1px solid rgba(148, 163, 184, 0.06);
+  border-top: 1px solid var(--ds-border);
   padding-top: var(--space-sm);
   font-weight: 600;
 }
@@ -207,7 +126,7 @@
 .hodl-preview-section h3 {
   font-size: var(--text-sm);
   font-weight: 600;
-  color: rgb(var(--text));
+  color: var(--text-strong);
   margin: 0 0 var(--space-xs) 0;
 }
 

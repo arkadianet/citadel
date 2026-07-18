@@ -7,7 +7,7 @@ import { WithdrawModal } from './WithdrawModal'
 import { BorrowModal } from './BorrowModal'
 import { RepayModal } from './RepayModal'
 import { RefundModal } from './RefundModal'
-import { PageHeader, Tabs, EmptyState } from './ui'
+import { PageHeader, Tabs, EmptyState, Modal, Button, Spinner } from './ui'
 import {
   getLendingMarkets,
   getLendingPositions,
@@ -222,7 +222,7 @@ export function LendingTab({
     return (
       <div className="lending-tab">
         <div className="empty-state">
-          <div className="spinner" />
+          <Spinner size={32} />
           <p>Loading lending markets...</p>
         </div>
       </div>
@@ -241,27 +241,15 @@ export function LendingTab({
     <div className="lending-tab">
       {/* Wallet Connect Modal */}
       {showWalletConnect && (
-        <div className="modal-overlay" onClick={() => setShowWalletConnect(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Connect Wallet</h2>
-              <button className="close-btn" onClick={() => setShowWalletConnect(false)}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-            <div className="modal-content">
-              <WalletConnect
-                onConnected={(address) => {
-                  onWalletConnected(address)
-                  setShowWalletConnect(false)
-                }}
-                onCancel={() => setShowWalletConnect(false)}
-              />
-            </div>
-          </div>
-        </div>
+        <Modal open={true} onClose={() => setShowWalletConnect(false)} title="Connect Wallet">
+          <WalletConnect
+            onConnected={(address) => {
+              onWalletConnected(address)
+              setShowWalletConnect(false)
+            }}
+            onCancel={() => setShowWalletConnect(false)}
+          />
+        </Modal>
       )}
 
       {/* Protocol Header */}
@@ -348,7 +336,7 @@ export function LendingTab({
       {/* Positions Loading/Error */}
       {walletAddress && positionsLoading && !positions && (
         <div className="lending-positions-loading">
-          <div className="spinner-small" />
+          <Spinner size={20} />
           <span>Loading your positions...</span>
         </div>
       )}
@@ -368,7 +356,7 @@ export function LendingTab({
           role="button"
           tabIndex={0}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--warning, #f59e0b)" strokeWidth="2">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--ds-warning)" strokeWidth="2">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 8v4" />
             <path d="M12 16h.01" />
@@ -376,7 +364,7 @@ export function LendingTab({
           <span>
             You have <strong>{stuckBoxes.length}</strong> stuck proxy box{stuckBoxes.length !== 1 ? 'es' : ''} that can be recovered.
           </span>
-          <button className="btn btn-secondary btn-sm">View Details</button>
+          <Button size="sm">View Details</Button>
         </div>
       )}
 

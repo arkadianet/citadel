@@ -7,6 +7,7 @@ import { AdvancedOptions, useRecipientAddress } from './AdvancedOptions'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import { TX_FEE_NANO } from '../constants'
 import type { TxStatusResponse } from '../api/types'
+import { Modal, Button, Spinner } from './ui'
 import '../components/DexyMintModal.css'
 
 export type SigmaUsdAction = 'mint_sigusd' | 'redeem_sigusd' | 'mint_sigrsv' | 'redeem_sigrsv'
@@ -353,18 +354,8 @@ export function TransactionModal({
   const showInfo = (ergInput || tokenInput) && calculated.tokenAmount > 0
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal dexy-mint-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>{config.title}</h2>
-          <button className="close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
-
-        <div className="modal-content">
+    <Modal open={isOpen} onClose={onClose} title={config.title} size="sm">
+      <div className="dexy-mint-modal">
           {step === 'input' && (
             <div className="mint-input-step">
               {/* Swap Inputs */}
@@ -466,16 +457,16 @@ export function TransactionModal({
               {error && <div className="message error">{error}</div>}
 
               <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={onClose}>
+                <Button variant="secondary" onClick={onClose}>
                   Cancel
-                </button>
-                <button
-                  className="btn btn-primary"
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={handleSign}
                   disabled={loading || !calculated.isValid || (!!recipientAddress && addressValid !== true)}
                 >
                   {loading ? 'Building...' : 'Sign Transaction'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -517,10 +508,10 @@ export function TransactionModal({
                     </svg>
                   </div>
                   <p>Approve in Nautilus</p>
-                  <div className="waiting-spinner" />
-                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>
+                  <Spinner size={28} />
+                  <Button variant="secondary" onClick={flow.handleBackToChoice}>
                     Back
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -537,10 +528,10 @@ export function TransactionModal({
                       fgColor="black"
                     />
                   </div>
-                  <div className="waiting-spinner" />
-                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>
+                  <Spinner size={28} />
+                  <Button variant="secondary" onClick={flow.handleBackToChoice}>
                     Back
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -556,9 +547,9 @@ export function TransactionModal({
               </div>
               <h3>Transaction Submitted!</h3>
               {flow.txId && <TxSuccess txId={flow.txId} explorerUrl={explorerUrl} />}
-              <button className="btn btn-primary" onClick={() => { if (flow.txId) onSuccess(flow.txId); onClose(); }}>
+              <Button variant="primary" onClick={() => { if (flow.txId) onSuccess(flow.txId); onClose(); }}>
                 Done
-              </button>
+              </Button>
             </div>
           )}
 
@@ -574,17 +565,16 @@ export function TransactionModal({
               <h3>Transaction Failed</h3>
               <p className="error-message">{error}</p>
               <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={onClose}>
+                <Button variant="secondary" onClick={onClose}>
                   Close
-                </button>
-                <button className="btn btn-primary" onClick={() => { setStep('input'); setError(null) }}>
+                </Button>
+                <Button variant="primary" onClick={() => { setStep('input'); setError(null) }}>
                   Try Again
-                </button>
+                </Button>
               </div>
             </div>
           )}
-        </div>
       </div>
-    </div>
+    </Modal>
   )
 }

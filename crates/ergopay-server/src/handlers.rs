@@ -83,12 +83,16 @@ pub async fn handle_tx(
         return Err(StatusCode::GONE);
     }
 
-    // Must be a sign transaction request
+    // Must be a sign transaction request. Sign-only requests are
+    // Nautilus-only (mobile ErgoPay wallets broadcast on signing).
     let (reduced_tx, message) = match &request.request_type {
         RequestType::SignTransaction {
+            sign_only: true, ..
+        } => return Err(StatusCode::BAD_REQUEST),
+        RequestType::SignTransaction {
             reduced_tx,
-            unsigned_tx: _,
             message,
+            ..
         } => (reduced_tx, message),
         _ => return Err(StatusCode::BAD_REQUEST),
     };
@@ -152,13 +156,43 @@ pub async fn handle_nautilus_page(
         return Err(StatusCode::GONE);
     }
 
-    let message = match &request.request_type {
-        RequestType::SignTransaction { message, .. } => message.clone(),
+    let (message, sign_only) = match &request.request_type {
+        RequestType::SignTransaction {
+            message, sign_only, ..
+        } => (message.clone(), *sign_only),
         _ => return Err(StatusCode::BAD_REQUEST),
     };
 
-    let html = generate_signing_page(&request_id, &message, &state.host, state.port);
+    let html = generate_signing_page(&request_id, &message, &state.host, state.port, sign_only);
     Ok(Html(html))
+}
+
+/// Receive a signed (but NOT broadcast) transaction from the sign-only
+/// Nautilus page. The app broadcasts it later (e.g. as part of an arb chain).
+/// POST /nautilus/signed/{id}
+pub async fn handle_signed_tx(
+    State(state): State<Arc<ServerState>>,
+    Path(request_id): Path<String>,
+    Json(signed_tx): Json<serde_json::Value>,
+) -> Result<StatusCode, StatusCode> {
+    let mut requests = state.pending_requests.write().await;
+
+    let request = requests.get_mut(&request_id).ok_or(StatusCode::NOT_FOUND)?;
+
+    if !matches!(
+        request.request_type,
+        RequestType::SignTransaction {
+            sign_only: true,
+            ..
+        }
+    ) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    request.status = RequestStatus::Signed { signed_tx };
+    tracing::info!("Signed tx captured for request {}", request_id);
+
+    Ok(StatusCode::OK)
 }
 
 /// Serve Nautilus connect page

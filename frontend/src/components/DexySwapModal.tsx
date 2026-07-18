@@ -12,6 +12,7 @@ import { formatErg } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
 import { AdvancedOptions, useRecipientAddress } from './AdvancedOptions'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
+import { Modal, Button } from './ui'
 import './DexySwapModal.css'
 
 interface DexyState {
@@ -342,18 +343,7 @@ export function DexySwapModal({
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal dexy-swap-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Swap {config.name}</h2>
-          <button className="close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
-
-        <div className="modal-content">
+    <Modal open={isOpen} onClose={onClose} title={`Swap ${config.name}`} size="md">
           {step === 'input' && (
             <div className="swap-input-step">
               {/* Direction Toggle */}
@@ -537,16 +527,16 @@ export function DexySwapModal({
               {error && <div className="message error">{error}</div>}
 
               <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={onClose}>
+                <Button variant="secondary" onClick={onClose}>
                   Cancel
-                </button>
-                <button
-                  className="btn btn-primary"
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={handlePreviewConfirm}
                   disabled={loading || !canSwap || (!!recipientAddress && addressValid !== true)}
                 >
                   {loading ? 'Building...' : 'Swap'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -589,9 +579,9 @@ export function DexySwapModal({
                   </div>
                   <p>Approve in Nautilus</p>
                   <div className="waiting-spinner" />
-                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>
+                  <Button variant="secondary" onClick={flow.handleBackToChoice}>
                     Back
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -609,9 +599,9 @@ export function DexySwapModal({
                     />
                   </div>
                   <div className="waiting-spinner" />
-                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>
+                  <Button variant="secondary" onClick={flow.handleBackToChoice}>
                     Back
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -627,9 +617,9 @@ export function DexySwapModal({
               </div>
               <h3>Swap Submitted!</h3>
               {flow.txId && <TxSuccess txId={flow.txId} explorerUrl={explorerUrl} />}
-              <button className="btn btn-primary" onClick={onSuccess}>
+              <Button variant="primary" onClick={onSuccess}>
                 Done
-              </button>
+              </Button>
             </div>
           )}
 
@@ -645,17 +635,15 @@ export function DexySwapModal({
               <h3>Swap Failed</h3>
               <p className="error-message">{error}</p>
               <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={onClose}>
+                <Button variant="secondary" onClick={onClose}>
                   Close
-                </button>
-                <button className="btn btn-primary" onClick={() => setStep('input')}>
+                </Button>
+                <Button variant="primary" onClick={() => setStep('input')}>
                   Try Again
-                </button>
+                </Button>
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

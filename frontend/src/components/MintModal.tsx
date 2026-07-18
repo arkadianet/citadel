@@ -5,6 +5,7 @@ import { formatErg } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import type { TxStatusResponse } from '../api/types'
+import { Modal, Button, FormField, Input } from './ui'
 
 interface MintPreviewResponse {
   erg_cost_nano: string
@@ -123,39 +124,32 @@ export function MintModal({ isOpen, onClose, walletAddress, ergBalance, explorer
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal mint-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Mint SigUSD</h2>
-          <button className="close-btn" onClick={onClose}>×</button>
-        </div>
-
-        <div className="modal-content">
+    <Modal open={isOpen} onClose={onClose} title="Mint SigUSD" size="sm">
           {step === 'input' && (
             <div className="mint-input-step">
-              <div className="form-group">
-                <label className="form-label">Amount (SigUSD)</label>
-                <input
+              <FormField label="Amount (SigUSD)">
+                <Input
                   type="number"
-                  className="input"
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
                   placeholder="0.00"
                   min="0.01"
                   step="0.01"
                 />
-              </div>
+              </FormField>
               <p className="balance-hint">
                 Available: {(ergBalance / 1e9).toFixed(4)} ERG
               </p>
               {error && <div className="message error">{error}</div>}
-              <button
-                className="btn btn-primary"
-                onClick={handlePreview}
-                disabled={loading || !amount}
-              >
-                {loading ? 'Calculating...' : 'Preview'}
-              </button>
+              <div className="modal-actions">
+                <Button
+                  variant="primary"
+                  onClick={handlePreview}
+                  disabled={loading || !amount}
+                >
+                  {loading ? 'Calculating...' : 'Preview'}
+                </Button>
+              </div>
             </div>
           )}
 
@@ -184,17 +178,17 @@ export function MintModal({ isOpen, onClose, walletAddress, ergBalance, explorer
                 </div>
               </div>
               {error && <div className="message error">{error}</div>}
-              <div className="button-group">
-                <button className="btn btn-secondary" onClick={() => setStep('input')}>
+              <div className="modal-actions">
+                <Button variant="secondary" onClick={() => setStep('input')}>
                   Back
-                </button>
-                <button
-                  className="btn btn-primary"
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={handleSign}
                   disabled={loading}
                 >
                   {loading ? 'Building...' : 'Sign with Wallet'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -246,9 +240,9 @@ export function MintModal({ isOpen, onClose, walletAddress, ergBalance, explorer
                 </div>
                 <p className="signing-hint">Waiting for Nautilus approval...</p>
               </div>
-              <div className="button-group">
-                <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>Back</button>
-                <button className="btn btn-primary" onClick={flow.handleNautilusSign}>Open Nautilus Again</button>
+              <div className="modal-actions">
+                <Button variant="secondary" onClick={flow.handleBackToChoice}>Back</Button>
+                <Button variant="primary" onClick={flow.handleNautilusSign}>Open Nautilus Again</Button>
               </div>
             </div>
           )}
@@ -260,7 +254,7 @@ export function MintModal({ isOpen, onClose, walletAddress, ergBalance, explorer
                 <QRCodeSVG value={flow.qrUrl} size={200} />
               </div>
               <p className="signing-hint">Waiting for signature...</p>
-              <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>Back</button>
+              <Button variant="secondary" onClick={flow.handleBackToChoice}>Back</Button>
             </div>
           )}
 
@@ -270,9 +264,9 @@ export function MintModal({ isOpen, onClose, walletAddress, ergBalance, explorer
               <h3>Transaction Submitted!</h3>
               <p>Your mint transaction has been submitted.</p>
               {flow.txId && <TxSuccess txId={flow.txId} explorerUrl={explorerUrl} />}
-              <button className="btn btn-primary" onClick={() => { if (flow.txId) onSuccess(flow.txId); onClose(); }}>
+              <Button variant="primary" onClick={() => { if (flow.txId) onSuccess(flow.txId); onClose(); }}>
                 Done
-              </button>
+              </Button>
             </div>
           )}
 
@@ -281,13 +275,11 @@ export function MintModal({ isOpen, onClose, walletAddress, ergBalance, explorer
               <div className="error-icon">✕</div>
               <h3>Transaction Failed</h3>
               <p>{error}</p>
-              <button className="btn btn-primary" onClick={() => setStep('input')}>
+              <Button variant="primary" onClick={() => setStep('input')}>
                 Try Again
-              </button>
+              </Button>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

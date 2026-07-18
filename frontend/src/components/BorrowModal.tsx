@@ -29,6 +29,7 @@ import type { WalletBalance } from './MarketCard'
 import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import type { TxStatusResponse } from '../api/types'
+import { Modal, Button, Spinner, FormField, Select } from './ui'
 import './LendModal.css' // Reuse LendModal styles
 
 interface BorrowModalProps {
@@ -306,43 +307,32 @@ export function BorrowModal({
   // If pool has no collateral options, borrowing isn't available
   if (!hasCollateralOption) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
-        <div className="modal lend-modal" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header">
-            <h2>Borrow {pool.symbol}</h2>
-            <button className="close-btn" onClick={onClose}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
+      <Modal open={isOpen} onClose={onClose} title={`Borrow ${pool.symbol}`}>
+        <div className="lend-modal">
+          <div className="message warning">
+            Borrowing is not available for the {pool.name}. This pool does not have collateral options configured.
           </div>
-          <div className="modal-content">
-            <div className="message warning">
-              Borrowing is not available for the {pool.name}. This pool does not have collateral options configured.
-            </div>
-            <div className="modal-actions">
-              <button className="btn btn-primary" onClick={onClose}>Close</button>
-            </div>
+          <div className="modal-actions">
+            <Button variant="primary" onClick={onClose}>Close</Button>
           </div>
         </div>
-      </div>
+      </Modal>
     )
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal lend-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Borrow {pool.symbol}</h2>
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title={
+        <>
+          Borrow {pool.symbol}
           <span className="modal-header-detail">{formatApy(pool.borrow_apy)} Interest Rate</span>
-          <button className="close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="modal-content">
+        </>
+      }
+    >
+      {/* Keep .lend-modal wrapper so scoped LendModal.css rules still apply */}
+      <div className="lend-modal">
           {step === 'input' && (
             <div className="lend-input-step">
               {/* Borrow Amount Input (primary) */}
@@ -369,10 +359,8 @@ export function BorrowModal({
 
               {/* Collateral Type Selector (ERG pool with multiple options) */}
               {pool.collateral_options.length > 1 && (
-                <div className="form-group">
-                  <label className="form-label">Collateral Token</label>
-                  <select
-                    className="input"
+                <FormField label="Collateral Token">
+                  <Select
                     value={selectedCollateralIdx}
                     onChange={(e) => {
                       setSelectedCollateralIdx(Number(e.target.value))
@@ -383,8 +371,8 @@ export function BorrowModal({
                         {opt.token_name}
                       </option>
                     ))}
-                  </select>
-                </div>
+                  </Select>
+                </FormField>
               )}
 
               {/* Collateral Loan Ratio */}
@@ -496,16 +484,16 @@ export function BorrowModal({
               {error && <div className="message error">{error}</div>}
 
               <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={onClose}>
+                <Button variant="secondary" onClick={onClose}>
                   Cancel
-                </button>
-                <button
-                  className="btn btn-primary"
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={handleBuild}
                   disabled={loading || !calculated.isValid || priceLoading}
                 >
                   {loading ? 'Building...' : `Borrow ${pool.symbol}`}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -553,16 +541,16 @@ export function BorrowModal({
               {error && <div className="message error">{error}</div>}
 
               <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={() => setStep('input')}>
+                <Button variant="secondary" onClick={() => setStep('input')}>
                   Back
-                </button>
-                <button
-                  className="btn btn-primary"
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={handleSign}
                   disabled={loading}
                 >
                   {loading ? 'Preparing...' : 'Sign Transaction'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -604,10 +592,10 @@ export function BorrowModal({
                     </svg>
                   </div>
                   <p>Approve in Nautilus</p>
-                  <div className="waiting-spinner" />
-                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>
+                  <Spinner size={28} />
+                  <Button variant="secondary" onClick={flow.handleBackToChoice}>
                     Back
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -624,10 +612,10 @@ export function BorrowModal({
                       fgColor="black"
                     />
                   </div>
-                  <div className="waiting-spinner" />
-                  <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>
+                  <Spinner size={28} />
+                  <Button variant="secondary" onClick={flow.handleBackToChoice}>
                     Back
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -647,9 +635,9 @@ export function BorrowModal({
                 The Duckpools bot will process your request and send {pool.symbol} to your wallet.
               </p>
               {flow.txId && <TxSuccess txId={flow.txId} explorerUrl={explorerUrl} />}
-              <button className="btn btn-primary" onClick={onSuccess}>
+              <Button variant="primary" onClick={onSuccess}>
                 Done
-              </button>
+              </Button>
             </div>
           )}
 
@@ -665,18 +653,17 @@ export function BorrowModal({
               <h3>Transaction Failed</h3>
               <p className="error-message">{error}</p>
               <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={onClose}>
+                <Button variant="secondary" onClick={onClose}>
                   Close
-                </button>
-                <button className="btn btn-primary" onClick={() => setStep('input')}>
+                </Button>
+                <Button variant="primary" onClick={() => setStep('input')}>
                   Try Again
-                </button>
+                </Button>
               </div>
             </div>
           )}
-        </div>
       </div>
-    </div>
+    </Modal>
   )
 }
 

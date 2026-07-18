@@ -20,6 +20,7 @@ import { TimelockTab } from './components/TimelockTab'
 import { RouterTab } from './components/RouterTab'
 import { ArbScannerTab } from './components/ArbScannerTab'
 import { StakeRecoveryTab } from './components/StakeRecoveryTab'
+import { Button } from './components/ui'
 import { ExplorerNavProvider, type ExplorerTarget } from './contexts/ExplorerNavContext'
 import './App.css'
 
@@ -73,7 +74,9 @@ interface WalletBalance {
     amount: number
     name: string | null
     decimals: number
+    pending_amount: number
   }>
+  pending_erg_nano: number
 }
 
 type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management' | 'stake-recovery'
@@ -308,7 +311,17 @@ function App() {
           {walletAddress ? (
             <div className="wallet-info">
               {walletBalance && (
-                <span className="wallet-balance">{walletBalance.erg_formatted} ERG</span>
+                <span className="wallet-balance">
+                  {walletBalance.erg_formatted} ERG
+                  {walletBalance.pending_erg_nano !== 0 && (
+                    <span
+                      className="pending-indicator"
+                      title={`${(walletBalance.pending_erg_nano / 1e9).toFixed(4)} ERG unconfirmed`}
+                    >
+                      {' '}⏳
+                    </span>
+                  )}
+                </span>
               )}
               <button
                 className="wallet-indicator"
@@ -453,6 +466,7 @@ function App() {
               ergUsdPrice={oraclePrice?.erg_usd ?? 0}
               canMintSigusd={sigmaUsdState?.can_mint_sigusd ?? false}
               reserveRatioPct={sigmaUsdState?.reserve_ratio_pct ?? 0}
+              onBalanceRefresh={fetchWalletBalance}
             />
           )}
 
@@ -500,6 +514,7 @@ function App() {
           {view === 'arb-scanner' && (
             <ArbScannerTab
               walletAddress={walletAddress}
+              onBalanceRefresh={fetchWalletBalance}
             />
           )}
 
@@ -581,13 +596,13 @@ function App() {
                   />
                 </div>
 
-                <button
-                  className="btn btn-primary"
+                <Button
+                  variant="primary"
                   onClick={() => handleConnect()}
                   disabled={connecting || !nodeUrl}
                 >
                   {connecting ? 'Connecting...' : isConnected ? 'Reconnect' : 'Connect'}
-                </button>
+                </Button>
 
                 {error && <div className="message error">{error}</div>}
 

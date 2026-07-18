@@ -2,11 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { scanCircularArbs } from '../api/arb'
 import type { CircularArbSnapshot, CircularArb } from '../api/arb'
 import type { RouteHop } from '../api/router'
-import { PageHeader } from './ui'
+import { PageHeader, Button, Skeleton } from './ui'
+import { ArbExecuteModal } from './ArbExecuteModal'
 import './ArbScannerTab.css'
 
 interface ArbScannerTabProps {
   walletAddress: string | null
+  onBalanceRefresh?: () => void
 }
 
 function formatErg(nano: number): string {
@@ -40,10 +42,11 @@ function impactClass(impact: number): string {
   return 'impact-high'
 }
 
-export function ArbScannerTab({ walletAddress: _walletAddress }: ArbScannerTabProps) {
+export function ArbScannerTab({ walletAddress, onBalanceRefresh }: ArbScannerTabProps) {
   const [snapshot, setSnapshot] = useState<CircularArbSnapshot | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [executing, setExecuting] = useState<CircularArb | null>(null)
 
   const doScan = useCallback(async () => {
     setLoading(true)
@@ -76,22 +79,19 @@ export function ArbScannerTab({ walletAddress: _walletAddress }: ArbScannerTabPr
         title="Arb Scanner"
         subtitle="Scan for circular arbitrage opportunities across all DEX pools"
         actions={
-          <button
-            className="arb-scanner-refresh"
-            onClick={doScan}
-            disabled={loading}
-          >
+          <Button size="sm" onClick={doScan} disabled={loading}>
             {loading ? 'Scanning...' : 'Refresh'}
-          </button>
+          </Button>
         }
       />
 
       {error && <div className="message error">{error}</div>}
 
       {loading && !snapshot && (
-        <div className="empty-state">
-          <div className="spinner" />
-          <p>Scanning pools for arb opportunities...</p>
+        <div className="arb-scanner-cards">
+          <Skeleton height="40px" />
+          <Skeleton height="180px" />
+          <Skeleton height="180px" />
         </div>
       )}
 
@@ -113,7 +113,12 @@ export function ArbScannerTab({ walletAddress: _walletAddress }: ArbScannerTabPr
 
               <div className="arb-scanner-cards">
                 {snapshot.windows.map((arb, idx) => (
-                  <ArbCard key={idx} arb={arb} />
+                  <ArbCard
+                    key={idx}
+                    arb={arb}
+                    canExecute={!!walletAddress}
+                    onExecute={() => setExecuting(arb)}
+                  />
                 ))}
               </div>
             </>
@@ -128,11 +133,28 @@ export function ArbScannerTab({ walletAddress: _walletAddress }: ArbScannerTabPr
           )}
         </>
       )}
+
+      {executing && (
+        <ArbExecuteModal
+          isOpen={!!executing}
+          arb={executing}
+          onClose={() => setExecuting(null)}
+          onDone={() => {
+            onBalanceRefresh?.()
+            setTimeout(() => onBalanceRefresh?.(), 2000)
+            doScan()
+          }}
+        />
+      )}
     </div>
   )
 }
 
-function ArbCard({ arb }: { arb: CircularArb }) {
+function ArbCard({ arb, canExecute, onExecute }: {
+  arb: CircularArb
+  canExecute: boolean
+  onExecute: () => void
+}) {
   return (
     <div className="arb-card">
       <div className="arb-card-header">
@@ -141,6 +163,16 @@ function ArbCard({ arb }: { arb: CircularArb }) {
         <span className="arb-card-profit-badge">
           {arb.profit_pct >= 0 ? '+' : ''}{arb.profit_pct.toFixed(2)}%
         </span>
+        <Button
+          variant="primary"
+          size="sm"
+          className="arb-card-execute"
+          disabled={!canExecute}
+          title={canExecute ? 'Pre-build and sign all legs' : 'Connect a wallet to execute'}
+          onClick={onExecute}
+        >
+          Execute
+        </Button>
       </div>
 
       <div className="arb-card-amounts">

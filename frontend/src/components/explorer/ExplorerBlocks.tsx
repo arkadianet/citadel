@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { getBlockHeaders, formatTimeAgo, formatDifficulty, formatSize, type BlockHeader } from '../../api/explorer'
 import { ExplorerSkeleton } from './ExplorerSkeleton'
 import { Pagination } from './Pagination'
+import { Badge } from '../ui'
 import type { ExplorerRoute } from '../ExplorerTab'
 
 interface Props {
@@ -64,7 +65,7 @@ export function ExplorerBlocks({ onNavigate }: Props) {
       <div className="explorer-section-header">
         <h2 className="explorer-section-title">Recent Blocks</h2>
         {headers.length > 0 && (
-          <span className="explorer-badge">Latest: {headers[0].height.toLocaleString()}</span>
+          <Badge variant="success">Latest: {headers[0].height.toLocaleString()}</Badge>
         )}
       </div>
       <div className="explorer-table-wrap">
