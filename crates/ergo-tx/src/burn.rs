@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 
+use crate::dev_fee::{append_dev_fee_output, resolved_config};
 use crate::eip12::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
 
 use citadel_core::constants::TX_FEE_NANO as TX_FEE;
@@ -19,6 +20,7 @@ pub struct BurnSummary {
     pub burned_token_id: String,
     pub burned_amount: u64,
     pub miner_fee: i64,
+    pub citadel_fee_nano: i64,
     pub change_erg: i64,
 }
 
@@ -32,6 +34,7 @@ pub struct BurnItem {
 pub struct MultiBurnSummary {
     pub burned_tokens: Vec<BurnItem>,
     pub miner_fee: i64,
+    pub citadel_fee_nano: i64,
     pub change_erg: i64,
 }
 
@@ -57,6 +60,9 @@ pub enum BurnError {
 
     #[error("Duplicate token in burn list: {0}")]
     DuplicateToken(String),
+
+    #[error("Citadel fee config error: {0}")]
+    DevFee(String),
 }
 
 /// Build an EIP-12 unsigned tx that burns a specified amount of a token.
@@ -90,7 +96,10 @@ pub fn build_burn_tx(
         });
     }
 
-    let min_erg_needed = TX_FEE + citadel_core::constants::MIN_BOX_VALUE_NANO;
+    let fee_cfg = resolved_config();
+    let citadel_fee = fee_cfg.budget();
+
+    let min_erg_needed = TX_FEE + citadel_fee + citadel_core::constants::MIN_BOX_VALUE_NANO;
     if total_erg < min_erg_needed {
         return Err(BurnError::InsufficientErg {
             have: total_erg,
@@ -98,7 +107,7 @@ pub fn build_burn_tx(
         });
     }
 
-    let change_erg = total_erg - TX_FEE;
+    let change_erg = total_erg - TX_FEE - citadel_fee;
 
     let mut token_totals: HashMap<String, u64> = HashMap::new();
     for input in user_inputs {
@@ -128,12 +137,15 @@ pub fn build_burn_tx(
         additional_registers: HashMap::new(),
     };
 
-    let fee_output = Eip12Output::fee(TX_FEE, current_height);
+    let mut outputs = vec![change_output];
+    append_dev_fee_output(&mut outputs, &fee_cfg, current_height)
+        .map_err(|e| BurnError::DevFee(e.to_string()))?;
+    outputs.push(Eip12Output::fee(TX_FEE, current_height));
 
     let unsigned_tx = Eip12UnsignedTx {
         inputs: user_inputs.to_vec(),
         data_inputs: vec![],
-        outputs: vec![change_output, fee_output],
+        outputs,
     };
 
     Ok(BurnBuildResult {
@@ -142,6 +154,7 @@ pub fn build_burn_tx(
             burned_token_id: burn_token_id.to_string(),
             burned_amount: burn_amount,
             miner_fee: TX_FEE,
+            citadel_fee_nano: citadel_fee,
             change_erg,
         },
     })
@@ -175,7 +188,10 @@ pub fn build_multi_burn_tx(
         .map(|b| b.value.parse::<i64>().unwrap_or(0))
         .sum();
 
-    let min_erg_needed = TX_FEE + citadel_core::constants::MIN_BOX_VALUE_NANO;
+    let fee_cfg = resolved_config();
+    let citadel_fee = fee_cfg.budget();
+
+    let min_erg_needed = TX_FEE + citadel_fee + citadel_core::constants::MIN_BOX_VALUE_NANO;
     if total_erg < min_erg_needed {
         return Err(BurnError::InsufficientErg {
             have: total_erg,
@@ -207,7 +223,7 @@ pub fn build_multi_burn_tx(
         }
     }
 
-    let total_change_erg = total_erg - TX_FEE;
+    let total_change_erg = total_erg - TX_FEE - citadel_fee;
 
     // Sort deterministically so the same input always produces the same output.
     let mut change_assets: Vec<Eip12Asset> = token_totals
@@ -244,7 +260,7 @@ pub fn build_multi_burn_tx(
             .collect()
     };
 
-    let mut outputs: Vec<Eip12Output> = Vec::with_capacity(chunks.len() + 1);
+    let mut outputs: Vec<Eip12Output> = Vec::with_capacity(chunks.len() + 2);
     let last_idx = chunks.len() - 1;
     for (i, chunk) in chunks.into_iter().enumerate() {
         let erg_for_this = if i == last_idx { last_box_erg } else { min_box };
@@ -256,6 +272,8 @@ pub fn build_multi_burn_tx(
             additional_registers: HashMap::new(),
         });
     }
+    append_dev_fee_output(&mut outputs, &fee_cfg, current_height)
+        .map_err(|e| BurnError::DevFee(e.to_string()))?;
     outputs.push(Eip12Output::fee(TX_FEE, current_height));
 
     let change_erg = total_change_erg;
@@ -271,6 +289,7 @@ pub fn build_multi_burn_tx(
         summary: MultiBurnSummary {
             burned_tokens: burn_items.to_vec(),
             miner_fee: TX_FEE,
+            citadel_fee_nano: citadel_fee,
             change_erg,
         },
     })

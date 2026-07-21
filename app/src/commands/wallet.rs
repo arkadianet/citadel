@@ -383,24 +383,28 @@ pub async fn build_send_tx(
 
     let all_inputs = super::parse_eip12_utxos(user_utxos)?;
 
+    let citadel_fee = ergo_tx::resolved_dev_fee_config().budget();
+
     // Select inputs: leave headroom for fee + possible change min-box
     let selected = match send_token {
         Some((tid, amount)) => {
-            let with_change = (send_erg + TX_FEE_NANO + MIN_BOX_VALUE_NANO) as u64;
+            let with_change =
+                (send_erg + TX_FEE_NANO + citadel_fee + MIN_BOX_VALUE_NANO) as u64;
             match ergo_tx::select_token_boxes(&all_inputs, tid, amount, with_change) {
                 Ok(sel) => sel,
                 Err(_) => {
-                    let exact = (send_erg + TX_FEE_NANO) as u64;
+                    let exact = (send_erg + TX_FEE_NANO + citadel_fee) as u64;
                     ergo_tx::select_token_boxes(&all_inputs, tid, amount, exact).str_err()?
                 }
             }
         }
         None => {
-            let with_change = (send_erg + TX_FEE_NANO + MIN_BOX_VALUE_NANO) as u64;
+            let with_change =
+                (send_erg + TX_FEE_NANO + citadel_fee + MIN_BOX_VALUE_NANO) as u64;
             match ergo_tx::select_erg_boxes(&all_inputs, with_change) {
                 Ok(sel) => sel,
                 Err(_) => {
-                    let exact = (send_erg + TX_FEE_NANO) as u64;
+                    let exact = (send_erg + TX_FEE_NANO + citadel_fee) as u64;
                     ergo_tx::select_erg_boxes(&all_inputs, exact).str_err()?
                 }
             }
@@ -427,6 +431,7 @@ pub async fn build_send_tx(
         "tokenAmount": result.summary.token_amount.map(|a| a.to_string()),
         "changeErg": result.summary.change_erg,
         "minerFee": result.summary.miner_fee,
+        "citadelFeeNano": result.summary.citadel_fee_nano,
         "inputCount": result.summary.input_count,
     }))
 }

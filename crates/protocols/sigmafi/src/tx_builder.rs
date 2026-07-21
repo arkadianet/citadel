@@ -1,4 +1,7 @@
 //! SigmaFi transaction builders (EIP-12 format)
+//!
+//! Citadel app fee: deferred (phase 2). Open/cancel funding txs look flexible;
+//! close/repay/liquidate need script review before appending an extra output.
 
 use std::collections::HashMap;
 

@@ -109,6 +109,7 @@ pub struct SwapPreviewResponse {
     pub effective_rate: f64,
     pub execution_fee_nano: u64,
     pub miner_fee_nano: u64,
+    pub citadel_fee_nano: u64,
     pub total_erg_cost_nano: u64,
 }
 
@@ -126,6 +127,7 @@ pub struct SwapTxSummaryDto {
     pub output_token: String,
     pub execution_fee: u64,
     pub miner_fee: u64,
+    pub citadel_fee_nano: u64,
     pub total_erg_cost: u64,
 }
 
@@ -160,12 +162,15 @@ pub async fn preview_swap(
     let execution_fee_nano: u64 = (base_execution_fee as f64 * nitro_mult) as u64;
     let proxy_box_value: u64 = 4_000_000;
     let miner_fee_nano: u64 = 1_100_000;
+    let citadel_fee_nano = ergo_tx::resolved_dev_fee_config().budget() as u64;
 
     let total_erg_cost_nano = match &input {
         amm::SwapInput::Erg { amount: erg_amt } => {
-            erg_amt + execution_fee_nano + proxy_box_value + miner_fee_nano
+            erg_amt + execution_fee_nano + proxy_box_value + miner_fee_nano + citadel_fee_nano
         }
-        amm::SwapInput::Token { .. } => execution_fee_nano + proxy_box_value + miner_fee_nano,
+        amm::SwapInput::Token { .. } => {
+            execution_fee_nano + proxy_box_value + miner_fee_nano + citadel_fee_nano
+        }
     };
 
     Ok(SwapPreviewResponse {
@@ -179,6 +184,7 @@ pub async fn preview_swap(
         effective_rate: quote.effective_rate,
         execution_fee_nano,
         miner_fee_nano,
+        citadel_fee_nano,
         total_erg_cost_nano,
     })
 }
@@ -249,6 +255,7 @@ pub async fn build_swap_tx(
             output_token: result.summary.output_token,
             execution_fee: result.summary.execution_fee,
             miner_fee: result.summary.miner_fee,
+            citadel_fee_nano: result.summary.citadel_fee_nano,
             total_erg_cost: result.summary.total_erg_cost,
         },
     })
@@ -266,6 +273,7 @@ pub struct DirectSwapPreviewResponse {
     pub fee_amount: u64,
     pub effective_rate: f64,
     pub miner_fee_nano: u64,
+    pub citadel_fee_nano: u64,
     pub total_erg_cost_nano: u64,
 }
 
@@ -283,6 +291,7 @@ pub struct DirectSwapSummaryDto {
     pub min_output: u64,
     pub output_token: String,
     pub miner_fee: u64,
+    pub citadel_fee_nano: u64,
     pub total_erg_cost: u64,
 }
 
@@ -312,11 +321,14 @@ pub async fn preview_direct_swap(
     let min_output = amm::calculator::apply_slippage(quote.output.amount, slippage_pct);
 
     let miner_fee_nano: u64 = 1_100_000;
+    let citadel_fee_nano = ergo_tx::resolved_dev_fee_config().budget() as u64;
     let min_box_value: u64 = 1_000_000;
 
     let total_erg_cost_nano = match &input {
-        amm::SwapInput::Erg { amount: erg_amt } => erg_amt + min_box_value + miner_fee_nano,
-        amm::SwapInput::Token { .. } => miner_fee_nano,
+        amm::SwapInput::Erg { amount: erg_amt } => {
+            erg_amt + min_box_value + miner_fee_nano + citadel_fee_nano
+        }
+        amm::SwapInput::Token { .. } => miner_fee_nano + citadel_fee_nano,
     };
 
     Ok(DirectSwapPreviewResponse {
@@ -329,6 +341,7 @@ pub async fn preview_direct_swap(
         fee_amount: quote.fee_amount,
         effective_rate: quote.effective_rate,
         miner_fee_nano,
+        citadel_fee_nano,
         total_erg_cost_nano,
     })
 }
@@ -398,6 +411,7 @@ pub async fn build_direct_swap_tx(
             min_output: result.summary.min_output,
             output_token: result.summary.output_token,
             miner_fee: result.summary.miner_fee,
+            citadel_fee_nano: result.summary.citadel_fee_nano,
             total_erg_cost: result.summary.total_erg_cost,
         },
     })
@@ -606,6 +620,7 @@ pub async fn build_swap_refund_tx(
             output_token: "ERG".to_string(),
             execution_fee: 0,
             miner_fee: result.summary.miner_fee,
+            citadel_fee_nano: 0,
             total_erg_cost: result.summary.miner_fee,
         },
     })

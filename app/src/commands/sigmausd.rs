@@ -90,9 +90,10 @@ pub async fn preview_mint_sigusd(
     }
 
     let calc = cost_to_mint_sigusd(request.amount, sigmausd_state.oracle_erg_per_usd_nano);
+    let citadel_fee = ergo_tx::resolved_dev_fee_config().budget();
     let tx_fee = TX_FEE_NANO;
     let min_box = MIN_BOX_VALUE_NANO;
-    let total = calc.net_amount + tx_fee + min_box;
+    let total = calc.net_amount + tx_fee + citadel_fee + min_box;
 
     Ok(MintPreviewResponse {
         erg_cost_nano: calc.net_amount.to_string(),
@@ -238,9 +239,10 @@ fn preview_mint_sigusd_internal(
     }
 
     let calc = cost_to_mint_sigusd(amount, sigmausd_state.oracle_erg_per_usd_nano);
+    let citadel_fee = ergo_tx::resolved_dev_fee_config().budget();
     let tx_fee = TX_FEE_NANO;
     let min_box = MIN_BOX_VALUE_NANO;
-    let total = calc.net_amount + tx_fee + min_box;
+    let total = calc.net_amount + tx_fee + citadel_fee + min_box;
 
     Ok(SigmaUsdPreviewResponse {
         erg_amount_nano: calc.net_amount.to_string(),
@@ -275,9 +277,10 @@ fn preview_redeem_sigusd_internal(
     }
 
     let calc = erg_from_redeem_sigusd(amount, sigmausd_state.oracle_erg_per_usd_nano);
+    let citadel_fee = ergo_tx::resolved_dev_fee_config().budget();
     let tx_fee = TX_FEE_NANO;
-    // Negative total means user receives ERG
-    let total = -(calc.net_amount as i64) + tx_fee;
+    // Negative total means user receives ERG (after miner + Citadel fees)
+    let total = -(calc.net_amount as i64) + tx_fee + citadel_fee;
 
     Ok(SigmaUsdPreviewResponse {
         erg_amount_nano: calc.net_amount.to_string(),
@@ -325,9 +328,10 @@ fn preview_mint_sigrsv_internal(
     }
 
     let calc = cost_to_mint_sigrsv(amount, sigmausd_state.sigrsv_price_nano);
+    let citadel_fee = ergo_tx::resolved_dev_fee_config().budget();
     let tx_fee = TX_FEE_NANO;
     let min_box = MIN_BOX_VALUE_NANO;
-    let total = calc.net_amount + tx_fee + min_box;
+    let total = calc.net_amount + tx_fee + citadel_fee + min_box;
 
     Ok(SigmaUsdPreviewResponse {
         erg_amount_nano: calc.net_amount.to_string(),
@@ -375,9 +379,10 @@ fn preview_redeem_sigrsv_internal(
     }
 
     let calc = erg_from_redeem_sigrsv(amount, sigmausd_state.sigrsv_price_nano);
+    let citadel_fee = ergo_tx::resolved_dev_fee_config().budget();
     let tx_fee = TX_FEE_NANO;
-    // Negative total means user receives ERG
-    let total = -(calc.net_amount as i64) + tx_fee;
+    // Negative total means user receives ERG (after miner + Citadel fees)
+    let total = -(calc.net_amount as i64) + tx_fee + citadel_fee;
 
     Ok(SigmaUsdPreviewResponse {
         erg_amount_nano: calc.net_amount.to_string(),

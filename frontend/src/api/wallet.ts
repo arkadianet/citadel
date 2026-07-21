@@ -50,6 +50,8 @@ export interface SendBuildResponse {
   tokenAmount: string | null
   changeErg: number
   minerFee: number
+  /** Citadel app fee in nanoERG (0 when disabled) */
+  citadelFeeNano: number
   inputCount: number
 }
 

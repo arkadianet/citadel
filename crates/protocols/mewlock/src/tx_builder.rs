@@ -11,6 +11,9 @@ use ergo_tx::{
 
 use crate::constants::{self, MEWLOCK_ERGO_TREE};
 
+// Citadel app fee: skipped on unlock (protocol 3% fee path); lock funding is
+// phase-2 candidate once UI disclosure is wired for MewLock modals.
+
 const MINER_FEE: i64 = 1_100_000;
 const MIN_CHANGE_VALUE: i64 = 1_000_000;
 const MIN_BOX_VALUE: i64 = 1_000_000;

@@ -5,7 +5,7 @@ import { formatErg } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
 import { AdvancedOptions, useRecipientAddress } from './AdvancedOptions'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
-import { TX_FEE_NANO } from '../constants'
+import { DEV_FEE_NANO, TX_FEE_NANO } from '../constants'
 import type { TxStatusResponse } from '../api/types'
 import { Modal, Button, Spinner } from './ui'
 import '../components/DexyMintModal.css'
@@ -125,6 +125,7 @@ export function TransactionModal({
 
     const tokenMultiplier = Math.pow(10, config.decimals)
     const txFeeErg = TX_FEE_NANO / 1e9
+    const citadelFeeErg = DEV_FEE_NANO / 1e9
     let tokenAmount: number
     let ergBase: number
 
@@ -135,13 +136,13 @@ export function TransactionModal({
         ergBase = tokenAmount * priceErg
       } else {
         // User typed desired ERG output → calculate token amount
-        ergBase = (value + txFeeErg) / (1 - PROTOCOL_FEE_RATE)
+        ergBase = (value + txFeeErg + citadelFeeErg) / (1 - PROTOCOL_FEE_RATE)
         tokenAmount = ergBase / priceErg
         tokenAmount = Math.ceil(tokenAmount * tokenMultiplier) / tokenMultiplier
         ergBase = tokenAmount * priceErg
       }
       const protocolFee = ergBase * PROTOCOL_FEE_RATE
-      const netErg = ergBase - protocolFee - txFeeErg
+      const netErg = ergBase - protocolFee - txFeeErg - citadelFeeErg
 
       const tokenAmountRaw = Math.round(tokenAmount * tokenMultiplier)
       const hasEnoughTokens = tokenBalance !== undefined ? tokenAmountRaw <= tokenBalance : true
@@ -159,7 +160,7 @@ export function TransactionModal({
         ergAmount: ergBase,
         protocolFee,
         netErg,
-        totalErg: txFeeErg,
+        totalErg: txFeeErg + citadelFeeErg,
         isValid: tokenAmount > 0 && netErg > 0 && hasEnoughTokens && withinLimit,
         hasEnoughErg,
         hasEnoughTokens,
@@ -172,13 +173,13 @@ export function TransactionModal({
         ergBase = tokenAmount * priceErg
       } else {
         // User typed ERG amount → calculate tokens
-        ergBase = (value - txFeeErg) / (1 + PROTOCOL_FEE_RATE)
+        ergBase = (value - txFeeErg - citadelFeeErg) / (1 + PROTOCOL_FEE_RATE)
         tokenAmount = ergBase / priceErg
         tokenAmount = Math.floor(tokenAmount * tokenMultiplier) / tokenMultiplier
         ergBase = tokenAmount * priceErg
       }
       const protocolFee = ergBase * PROTOCOL_FEE_RATE
-      const totalErg = ergBase + protocolFee + txFeeErg
+      const totalErg = ergBase + protocolFee + txFeeErg + citadelFeeErg
 
       const tokenAmountRaw = Math.round(tokenAmount * tokenMultiplier)
       const hasEnoughErg = totalErg <= ergBalance / 1e9
@@ -225,14 +226,15 @@ export function TransactionModal({
     const parsed = parseFloat(value)
     if (!isNaN(parsed) && parsed > 0 && priceErg) {
       const txFeeErg = TX_FEE_NANO / 1e9
+      const citadelFeeErg = DEV_FEE_NANO / 1e9
       const tokenMultiplier = Math.pow(10, config.decimals)
       let tokenValue: number
       if (config.isRedeem) {
-        const ergBase = (parsed + txFeeErg) / (1 - PROTOCOL_FEE_RATE)
+        const ergBase = (parsed + txFeeErg + citadelFeeErg) / (1 - PROTOCOL_FEE_RATE)
         tokenValue = ergBase / priceErg
         tokenValue = Math.ceil(tokenValue * tokenMultiplier) / tokenMultiplier
       } else {
-        const ergBase = (parsed - txFeeErg) / (1 + PROTOCOL_FEE_RATE)
+        const ergBase = (parsed - txFeeErg - citadelFeeErg) / (1 + PROTOCOL_FEE_RATE)
         tokenValue = ergBase / priceErg
         tokenValue = Math.floor(tokenValue * tokenMultiplier) / tokenMultiplier
       }
@@ -253,14 +255,15 @@ export function TransactionModal({
     const parsed = parseFloat(value)
     if (!isNaN(parsed) && parsed > 0 && priceErg) {
       const txFeeErg = TX_FEE_NANO / 1e9
+      const citadelFeeErg = DEV_FEE_NANO / 1e9
       const ergBase = parsed * priceErg
       if (config.isRedeem) {
         const protocolFee = ergBase * PROTOCOL_FEE_RATE
-        const netErg = ergBase - protocolFee - txFeeErg
+        const netErg = ergBase - protocolFee - txFeeErg - citadelFeeErg
         setErgInput(netErg > 0 ? netErg.toFixed(4) : '')
       } else {
         const protocolFee = ergBase * PROTOCOL_FEE_RATE
-        const totalErg = ergBase + protocolFee + txFeeErg
+        const totalErg = ergBase + protocolFee + txFeeErg + citadelFeeErg
         setErgInput(totalErg.toFixed(4))
       }
     } else {
@@ -271,6 +274,7 @@ export function TransactionModal({
   const handleMaxClick = () => {
     if (!priceErg) return
     const txFeeErg = TX_FEE_NANO / 1e9
+    const citadelFeeErg = DEV_FEE_NANO / 1e9
     const tokenMultiplier = Math.pow(10, config.decimals)
 
     if (config.isRedeem) {
@@ -282,14 +286,14 @@ export function TransactionModal({
       const maxToken = maxRaw / tokenMultiplier
       const ergBase = maxToken * priceErg
       const protocolFee = ergBase * PROTOCOL_FEE_RATE
-      const netErg = ergBase - protocolFee - txFeeErg
+      const netErg = ergBase - protocolFee - txFeeErg - citadelFeeErg
 
       setTokenInput(config.decimals === 0 ? Math.floor(maxToken).toString() : maxToken.toFixed(config.decimals))
       setErgInput(netErg > 0 ? netErg.toFixed(4) : '0')
       setLastEdited('token')
     } else {
       // Max from ERG balance
-      const availableErg = (ergBalance / 1e9) - txFeeErg - 0.001 // small buffer
+      const availableErg = (ergBalance / 1e9) - txFeeErg - citadelFeeErg - 0.001 // small buffer
       const ergBase = availableErg / (1 + PROTOCOL_FEE_RATE)
       let maxToken = ergBase / priceErg
       maxToken = Math.floor(maxToken * tokenMultiplier) / tokenMultiplier
@@ -304,7 +308,7 @@ export function TransactionModal({
 
       const ergForMax = maxToken * priceErg
       const fee = ergForMax * PROTOCOL_FEE_RATE
-      const total = ergForMax + fee + txFeeErg
+      const total = ergForMax + fee + txFeeErg + citadelFeeErg
 
       setTokenInput(config.decimals === 0 ? Math.floor(maxToken).toString() : maxToken.toFixed(config.decimals))
       setErgInput(total.toFixed(4))
@@ -445,8 +449,16 @@ export function TransactionModal({
                     <span>Transaction Fee</span>
                     <span>{(TX_FEE_NANO / 1e9).toFixed(4)} ERG</span>
                   </div>
+                  <div className="info-row">
+                    <span>Citadel fee</span>
+                    <span>{(DEV_FEE_NANO / 1e9).toFixed(4)} ERG</span>
+                  </div>
                 </div>
               )}
+
+              <p className="preview-note" style={{ opacity: 0.75, fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                Includes {(DEV_FEE_NANO / 1e9).toFixed(3)} ERG Citadel fee
+              </p>
 
               <AdvancedOptions
                 recipientAddress={recipientAddress}

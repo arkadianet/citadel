@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 
+use crate::dev_fee::{append_dev_fee_output, resolved_config};
 use crate::eip12::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
 
 use citadel_core::constants::{MIN_BOX_VALUE_NANO as MIN_BOX_VALUE, TX_FEE_NANO as TX_FEE};
@@ -36,6 +37,9 @@ pub enum SendError {
         "Change amount {change} nanoERG is below minimum box value of {min} nanoERG"
     )]
     ChangeBelowMin { change: i64, min: i64 },
+
+    #[error("Citadel fee config error: {0}")]
+    DevFee(String),
 }
 
 #[derive(Debug)]
@@ -45,6 +49,8 @@ pub struct SendSummary {
     pub token_amount: Option<u64>,
     pub change_erg: i64,
     pub miner_fee: i64,
+    /// Citadel app fee in nanoERG (0 when disabled)
+    pub citadel_fee_nano: i64,
     pub input_count: usize,
 }
 
@@ -59,6 +65,7 @@ pub struct SendBuildResult {
 /// - `send_erg` is the ERG attached to the recipient output (must be >= MIN_BOX_VALUE).
 /// - Optional token is placed on the recipient output.
 /// - Leftover ERG/tokens go to `change_ergo_tree` (wallet primary address).
+/// - When enabled, appends Citadel app fee (0.011 ERG) before miner fee.
 pub fn build_send_tx(
     user_inputs: &[Eip12InputBox],
     recipient_ergo_tree: &str,
@@ -110,7 +117,10 @@ pub fn build_send_tx(
         }
     }
 
-    let min_needed = send_erg + TX_FEE;
+    let fee_cfg = resolved_config();
+    let citadel_fee = fee_cfg.budget();
+
+    let min_needed = send_erg + TX_FEE + citadel_fee;
     if total_erg < min_needed {
         return Err(SendError::InsufficientErg {
             have: total_erg,
@@ -118,7 +128,7 @@ pub fn build_send_tx(
         });
     }
 
-    let remainder = total_erg - send_erg - TX_FEE;
+    let remainder = total_erg - send_erg - TX_FEE - citadel_fee;
 
     // Subtract sent token from totals for change
     if let Some((token_id, amount)) = send_token {
@@ -137,7 +147,7 @@ pub fn build_send_tx(
         if has_change_tokens && remainder < MIN_BOX_VALUE {
             return Err(SendError::InsufficientErg {
                 have: total_erg,
-                need: send_erg + TX_FEE + MIN_BOX_VALUE,
+                need: send_erg + TX_FEE + citadel_fee + MIN_BOX_VALUE,
             });
         }
         if remainder > 0 && remainder < MIN_BOX_VALUE {
@@ -153,7 +163,7 @@ pub fn build_send_tx(
         None => vec![],
     };
 
-    let mut outputs = Vec::with_capacity(3);
+    let mut outputs = Vec::with_capacity(4);
     outputs.push(Eip12Output {
         value: send_erg.to_string(),
         ergo_tree: recipient_ergo_tree.to_string(),
@@ -184,6 +194,8 @@ pub fn build_send_tx(
         0
     };
 
+    append_dev_fee_output(&mut outputs, &fee_cfg, current_height)
+        .map_err(|e| SendError::DevFee(e.to_string()))?;
     outputs.push(Eip12Output::fee(TX_FEE, current_height));
 
     let unsigned_tx = Eip12UnsignedTx {
@@ -200,6 +212,7 @@ pub fn build_send_tx(
             token_amount: send_token.map(|(_, amt)| amt),
             change_erg,
             miner_fee: TX_FEE,
+            citadel_fee_nano: citadel_fee,
             input_count: user_inputs.len(),
         },
     })
@@ -208,7 +221,9 @@ pub fn build_send_tx(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dev_fee::{with_test_dev_fee, DevFeeConfig};
     use crate::eip12::Eip12Asset;
+    use citadel_core::constants::DEV_FEE_NANO;
     use std::collections::HashMap;
 
     const USER_TREE: &str = "0008cduser";
@@ -249,6 +264,7 @@ mod tests {
 
         assert_eq!(result.summary.recipient_erg, 2_000_000_000);
         assert_eq!(result.summary.miner_fee, TX_FEE);
+        assert_eq!(result.summary.citadel_fee_nano, 0);
         assert_eq!(
             result.summary.change_erg,
             10_000_000_000 - 2_000_000_000 - TX_FEE
@@ -256,6 +272,60 @@ mod tests {
         assert_eq!(result.unsigned_tx.outputs.len(), 3); // recipient + change + fee
         assert_eq!(result.unsigned_tx.outputs[0].ergo_tree, RECIPIENT_TREE);
         assert_eq!(result.unsigned_tx.outputs[1].ergo_tree, USER_TREE);
+    }
+
+    #[test]
+    fn send_erg_with_citadel_fee() {
+        with_test_dev_fee(DevFeeConfig::enabled_default(), || {
+            let inputs = vec![make_box("10000000000", vec![])];
+            let result = build_send_tx(
+                &inputs,
+                RECIPIENT_TREE,
+                USER_TREE,
+                2_000_000_000,
+                None,
+                50000,
+            )
+            .unwrap();
+
+            assert_eq!(result.summary.citadel_fee_nano, DEV_FEE_NANO);
+            assert_eq!(
+                result.summary.change_erg,
+                10_000_000_000 - 2_000_000_000 - TX_FEE - DEV_FEE_NANO
+            );
+            // recipient + change + citadel + miner
+            assert_eq!(result.unsigned_tx.outputs.len(), 4);
+            let fee_out = &result.unsigned_tx.outputs[2];
+            assert_eq!(fee_out.value, DEV_FEE_NANO.to_string());
+            assert_eq!(
+                fee_out.ergo_tree,
+                crate::dev_fee::DEFAULT_DEV_FEE_ERGO_TREE
+            );
+        });
+    }
+
+    #[test]
+    fn send_insufficient_when_citadel_fee_enabled() {
+        with_test_dev_fee(DevFeeConfig::enabled_default(), || {
+            let send = 5_000_000_000i64;
+            // Exactly send + miner — missing citadel fee
+            let inputs = vec![make_box(&(send + TX_FEE).to_string(), vec![])];
+            let err = build_send_tx(
+                &inputs,
+                RECIPIENT_TREE,
+                USER_TREE,
+                send,
+                None,
+                50000,
+            )
+            .unwrap_err();
+            match err {
+                SendError::InsufficientErg { need, .. } => {
+                    assert_eq!(need, send + TX_FEE + DEV_FEE_NANO);
+                }
+                other => panic!("expected InsufficientErg, got {other:?}"),
+            }
+        });
     }
 
     #[test]

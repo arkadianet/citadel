@@ -1,6 +1,8 @@
 //! SigmaUSD Transaction Builder
 //!
 //! - Bank box MUST be input[0] (contract requirement)
+//! - Bank successor MUST be OUTPUTS(0); receipt with R4/R5 MUST be OUTPUTS(1)
+//! - Trailing outputs (change / Citadel fee / miner fee) are allowed
 //! - Data inputs require FULL box data, not just box ID
 //! - Token order in bank output must match bank input exactly
 
@@ -9,8 +11,9 @@ use std::str::FromStr;
 
 use citadel_core::{constants, ProtocolError, TxError};
 use ergo_tx::{
-    append_change_output, collect_change_tokens, encode_sigma_long, select_inputs_for_spend,
-    Eip12Asset, Eip12DataInputBox, Eip12InputBox, Eip12Output, Eip12UnsignedTx,
+    append_change_output, append_dev_fee_output, collect_change_tokens, encode_sigma_long,
+    resolved_dev_fee_config, select_inputs_for_spend, Eip12Asset, Eip12DataInputBox, Eip12InputBox,
+    Eip12Output, Eip12UnsignedTx,
 };
 
 use crate::calculator::{
@@ -131,6 +134,7 @@ pub struct TxSummary {
     pub token_name: String,
     pub protocol_fee_nano: i64,
     pub tx_fee_nano: i64,
+    pub citadel_fee_nano: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -250,7 +254,11 @@ pub fn build_mint_sigusd_tx(
     let erg_calc = cost_to_mint_sigusd(request.amount, ctx.oracle_rate);
     let erg_cost = erg_calc.net_amount;
 
-    let required_erg = erg_cost + constants::TX_FEE_NANO + constants::MIN_BOX_VALUE_NANO;
+    let fee_cfg = resolved_dev_fee_config();
+    let citadel_fee = fee_cfg.budget();
+
+    let required_erg =
+        erg_cost + constants::TX_FEE_NANO + citadel_fee + constants::MIN_BOX_VALUE_NANO;
     let selected =
         select_inputs_for_spend(&request.user_inputs, required_erg as u64, None).map_err(|e| {
             TxError::BuildFailed {
@@ -282,7 +290,7 @@ pub fn build_mint_sigusd_tx(
     );
     outputs.push(bank_output);
 
-    // Contract requires R4 = token amount, R5 = ERG amount
+    // Contract requires R4 = token amount, R5 = ERG amount; receipt must be OUTPUTS(1)
     let user_registers = ergo_tx::sigma_registers!(
         "R4" => encode_sigma_long(request.amount),
         "R5" => encode_sigma_long(erg_cost),
@@ -296,12 +304,7 @@ pub fn build_mint_sigusd_tx(
         additional_registers: user_registers,
     });
 
-    outputs.push(Eip12Output::fee(
-        constants::TX_FEE_NANO,
-        request.current_height,
-    ));
-
-    let erg_used = (erg_cost + constants::TX_FEE_NANO + constants::MIN_BOX_VALUE_NANO) as u64;
+    let erg_used = required_erg as u64;
     append_change_output(
         &mut outputs,
         &selected,
@@ -314,6 +317,16 @@ pub fn build_mint_sigusd_tx(
     .map_err(|e| TxError::BuildFailed {
         message: e.to_string(),
     })?;
+
+    append_dev_fee_output(&mut outputs, &fee_cfg, request.current_height).map_err(|e| {
+        TxError::BuildFailed {
+            message: e.to_string(),
+        }
+    })?;
+    outputs.push(Eip12Output::fee(
+        constants::TX_FEE_NANO,
+        request.current_height,
+    ));
 
     let unsigned_tx = Eip12UnsignedTx {
         inputs,
@@ -328,6 +341,7 @@ pub fn build_mint_sigusd_tx(
         token_name: "SigUSD".to_string(),
         protocol_fee_nano: erg_calc.fee,
         tx_fee_nano: constants::TX_FEE_NANO,
+        citadel_fee_nano: citadel_fee,
     };
 
     Ok(BuildResult {
@@ -359,9 +373,12 @@ pub fn build_redeem_sigusd_tx(
         });
     }
 
+    let fee_cfg = resolved_dev_fee_config();
+    let citadel_fee = fee_cfg.budget();
+
     let selected = select_inputs_for_spend(
         &request.user_inputs,
-        constants::TX_FEE_NANO as u64,
+        (constants::TX_FEE_NANO + citadel_fee) as u64,
         Some((&ctx.nft_ids.sigusd_token, request.amount as u64)),
     )
     .map_err(|e| TxError::BuildFailed {
@@ -392,7 +409,7 @@ pub fn build_redeem_sigusd_tx(
     );
     outputs.push(bank_output);
 
-    // Contract requires R4 = token amount, R5 = ERG amount
+    // Contract requires R4 = token amount, R5 = ERG amount; receipt must be OUTPUTS(1)
     let user_registers = ergo_tx::sigma_registers!(
         "R4" => encode_sigma_long(request.amount),
         "R5" => encode_sigma_long(erg_to_receive),
@@ -405,7 +422,8 @@ pub fn build_redeem_sigusd_tx(
         user_assets.push(Eip12Asset::new(&ctx.nft_ids.sigusd_token, remaining_sigusd));
     }
 
-    let user_output_erg = selected.total_erg as i64 + erg_to_receive - constants::TX_FEE_NANO;
+    let user_output_erg =
+        selected.total_erg as i64 + erg_to_receive - constants::TX_FEE_NANO - citadel_fee;
 
     outputs.push(Eip12Output {
         value: user_output_erg.to_string(),
@@ -415,6 +433,11 @@ pub fn build_redeem_sigusd_tx(
         additional_registers: user_registers,
     });
 
+    append_dev_fee_output(&mut outputs, &fee_cfg, request.current_height).map_err(|e| {
+        TxError::BuildFailed {
+            message: e.to_string(),
+        }
+    })?;
     outputs.push(Eip12Output::fee(
         constants::TX_FEE_NANO,
         request.current_height,
@@ -446,6 +469,7 @@ pub fn build_redeem_sigusd_tx(
         token_name: "SigUSD".to_string(),
         protocol_fee_nano: erg_calc.fee,
         tx_fee_nano: constants::TX_FEE_NANO,
+        citadel_fee_nano: citadel_fee,
     };
 
     Ok(BuildResult {
@@ -467,7 +491,11 @@ pub fn build_mint_sigrsv_tx(
     let erg_calc = cost_to_mint_sigrsv(request.amount, state.sigrsv_price_nano);
     let erg_cost = erg_calc.net_amount;
 
-    let required_erg = erg_cost + constants::TX_FEE_NANO + constants::MIN_BOX_VALUE_NANO;
+    let fee_cfg = resolved_dev_fee_config();
+    let citadel_fee = fee_cfg.budget();
+
+    let required_erg =
+        erg_cost + constants::TX_FEE_NANO + citadel_fee + constants::MIN_BOX_VALUE_NANO;
     let selected =
         select_inputs_for_spend(&request.user_inputs, required_erg as u64, None).map_err(|e| {
             TxError::BuildFailed {
@@ -500,7 +528,7 @@ pub fn build_mint_sigrsv_tx(
     );
     outputs.push(bank_output);
 
-    // Contract requires R4 = token amount, R5 = ERG amount
+    // Contract requires R4 = token amount, R5 = ERG amount; receipt must be OUTPUTS(1)
     let user_registers = ergo_tx::sigma_registers!(
         "R4" => encode_sigma_long(request.amount),
         "R5" => encode_sigma_long(erg_cost),
@@ -514,12 +542,7 @@ pub fn build_mint_sigrsv_tx(
         additional_registers: user_registers,
     });
 
-    outputs.push(Eip12Output::fee(
-        constants::TX_FEE_NANO,
-        request.current_height,
-    ));
-
-    let erg_used = (erg_cost + constants::TX_FEE_NANO + constants::MIN_BOX_VALUE_NANO) as u64;
+    let erg_used = required_erg as u64;
     append_change_output(
         &mut outputs,
         &selected,
@@ -532,6 +555,16 @@ pub fn build_mint_sigrsv_tx(
     .map_err(|e| TxError::BuildFailed {
         message: e.to_string(),
     })?;
+
+    append_dev_fee_output(&mut outputs, &fee_cfg, request.current_height).map_err(|e| {
+        TxError::BuildFailed {
+            message: e.to_string(),
+        }
+    })?;
+    outputs.push(Eip12Output::fee(
+        constants::TX_FEE_NANO,
+        request.current_height,
+    ));
 
     let unsigned_tx = Eip12UnsignedTx {
         inputs,
@@ -546,6 +579,7 @@ pub fn build_mint_sigrsv_tx(
         token_name: "SigRSV".to_string(),
         protocol_fee_nano: erg_calc.fee,
         tx_fee_nano: constants::TX_FEE_NANO,
+        citadel_fee_nano: citadel_fee,
     };
 
     Ok(BuildResult {
@@ -578,9 +612,12 @@ pub fn build_redeem_sigrsv_tx(
         });
     }
 
+    let fee_cfg = resolved_dev_fee_config();
+    let citadel_fee = fee_cfg.budget();
+
     let selected = select_inputs_for_spend(
         &request.user_inputs,
-        constants::TX_FEE_NANO as u64,
+        (constants::TX_FEE_NANO + citadel_fee) as u64,
         Some((&ctx.nft_ids.sigrsv_token, request.amount as u64)),
     )
     .map_err(|e| TxError::BuildFailed {
@@ -612,7 +649,7 @@ pub fn build_redeem_sigrsv_tx(
     );
     outputs.push(bank_output);
 
-    // Contract requires R4 = token amount, R5 = ERG amount
+    // Contract requires R4 = token amount, R5 = ERG amount; receipt must be OUTPUTS(1)
     let user_registers = ergo_tx::sigma_registers!(
         "R4" => encode_sigma_long(request.amount),
         "R5" => encode_sigma_long(erg_to_receive),
@@ -625,7 +662,8 @@ pub fn build_redeem_sigrsv_tx(
         user_assets.push(Eip12Asset::new(&ctx.nft_ids.sigrsv_token, remaining_sigrsv));
     }
 
-    let user_output_erg = selected.total_erg as i64 + erg_to_receive - constants::TX_FEE_NANO;
+    let user_output_erg =
+        selected.total_erg as i64 + erg_to_receive - constants::TX_FEE_NANO - citadel_fee;
 
     outputs.push(Eip12Output {
         value: user_output_erg.to_string(),
@@ -635,6 +673,11 @@ pub fn build_redeem_sigrsv_tx(
         additional_registers: user_registers,
     });
 
+    append_dev_fee_output(&mut outputs, &fee_cfg, request.current_height).map_err(|e| {
+        TxError::BuildFailed {
+            message: e.to_string(),
+        }
+    })?;
     outputs.push(Eip12Output::fee(
         constants::TX_FEE_NANO,
         request.current_height,
@@ -666,6 +709,7 @@ pub fn build_redeem_sigrsv_tx(
         token_name: "SigRSV".to_string(),
         protocol_fee_nano: erg_calc.fee,
         tx_fee_nano: constants::TX_FEE_NANO,
+        citadel_fee_nano: citadel_fee,
     };
 
     Ok(BuildResult {

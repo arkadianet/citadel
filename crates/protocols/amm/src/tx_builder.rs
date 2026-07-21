@@ -1,5 +1,8 @@
 //! Builds EIP-12 unsigned transactions for AMM swap proxy boxes.
 //! Spectrum bots detect proxy boxes and execute swaps against pool boxes.
+//!
+//! Citadel app fee (0.011 ERG) is appended on swap-order funding txs.
+//! AMM LP / pool-setup / refund builders are not wired yet.
 
 use std::collections::HashMap;
 
@@ -13,8 +16,8 @@ use serde::{Deserialize, Serialize};
 use crate::constants::swap_templates;
 use crate::state::{AmmError, AmmPool, PoolType, SwapInput, SwapRequest};
 use ergo_tx::{
-    append_change_output, select_inputs_for_spend, Eip12Asset, Eip12InputBox, Eip12Output,
-    Eip12UnsignedTx,
+    append_change_output, append_dev_fee_output, resolved_dev_fee_config, select_inputs_for_spend,
+    Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx,
 };
 
 const PROXY_BOX_VALUE: u64 = 4_000_000; // 0.004 ERG
@@ -36,6 +39,7 @@ pub struct SwapTxSummary {
     pub output_token: String,
     pub execution_fee: u64,
     pub miner_fee: u64,
+    pub citadel_fee_nano: u64,
     pub total_erg_cost: u64,
 }
 
@@ -80,9 +84,15 @@ pub fn build_swap_order_eip12(
         })?
     };
 
-    let total_erg_needed = proxy_box_erg_value.checked_add(TX_FEE).ok_or_else(|| {
-        AmmError::TxBuildError("Arithmetic overflow calculating total ERG needed".to_string())
-    })?;
+    let fee_cfg = resolved_dev_fee_config();
+    let citadel_fee = fee_cfg.budget() as u64;
+
+    let total_erg_needed = proxy_box_erg_value
+        .checked_add(TX_FEE)
+        .and_then(|v| v.checked_add(citadel_fee))
+        .ok_or_else(|| {
+            AmmError::TxBuildError("Arithmetic overflow calculating total ERG needed".to_string())
+        })?;
 
     let token_requirement = input_token
         .as_ref()
@@ -109,8 +119,7 @@ pub fn build_swap_order_eip12(
         additional_registers: HashMap::new(),
     };
 
-    let fee_output = Eip12Output::fee(TX_FEE as i64, current_height);
-    let mut outputs = vec![proxy_output, fee_output];
+    let mut outputs = vec![proxy_output];
 
     let spent: Vec<(&str, u64)> = input_token
         .as_ref()
@@ -126,6 +135,10 @@ pub fn build_swap_order_eip12(
         MIN_CHANGE_VALUE,
     )
     .map_err(|e| AmmError::TxBuildError(e.to_string()))?;
+
+    append_dev_fee_output(&mut outputs, &fee_cfg, current_height)
+        .map_err(|e| AmmError::TxBuildError(e.to_string()))?;
+    outputs.push(Eip12Output::fee(TX_FEE as i64, current_height));
 
     let unsigned_tx = Eip12UnsignedTx {
         inputs: selected.boxes,
@@ -160,6 +173,7 @@ pub fn build_swap_order_eip12(
         output_token: output_token_name,
         execution_fee: ex_fee,
         miner_fee: TX_FEE,
+        citadel_fee_nano: citadel_fee,
         total_erg_cost: total_erg_needed,
     };
 
@@ -373,6 +387,12 @@ fn build_prove_dlog(pk_hex: &str) -> Result<ProveDlog, AmmError> {
 
 #[cfg(test)]
 mod tests {
+    use ergo_tx::{with_test_dev_fee, DevFeeConfig};
+
+    fn no_citadel_fee<R>(f: impl FnOnce() -> R) -> R {
+        with_test_dev_fee(DevFeeConfig::disabled(), f)
+    }
+
     use super::*;
     use crate::state::{AmmPool, PoolType, SwapInput, SwapRequest, TokenAmount};
 
@@ -414,113 +434,122 @@ mod tests {
 
     #[test]
     fn test_build_swap_order_erg_to_token() {
-        let pool = test_n2t_pool();
-        let user_utxo = test_user_utxo();
-        let request = SwapRequest {
-            pool_id: pool.pool_id.clone(),
-            input: SwapInput::Erg {
-                amount: 1_000_000_000,
-            },
-            min_output: 9000,
-            redeemer_address: "9fMPy1XY3GW4T6t3LjYofqmzER6x9cV2ZfBGGfnkA5G7d1mVSaj".to_string(),
-        };
-        let user_pk = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        no_citadel_fee(|| {
+            let pool = test_n2t_pool();
+            let user_utxo = test_user_utxo();
+            let request = SwapRequest {
+                pool_id: pool.pool_id.clone(),
+                input: SwapInput::Erg {
+                    amount: 1_000_000_000,
+                },
+                min_output: 9000,
+                redeemer_address: "9fMPy1XY3GW4T6t3LjYofqmzER6x9cV2ZfBGGfnkA5G7d1mVSaj".to_string(),
+            };
+            let user_pk = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
 
-        let result = build_swap_order_eip12(
-            &request,
-            &pool,
-            &[user_utxo],
-            "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-            user_pk,
-            1_000_000,
-            None,
-            None,
-        );
+            let result = build_swap_order_eip12(
+                &request,
+                &pool,
+                &[user_utxo],
+                "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                user_pk,
+                1_000_000,
+                None,
+                None,
+            );
 
-        assert!(result.is_ok(), "Should build: {:?}", result.err());
-        let build = result.unwrap();
+            assert!(result.is_ok(), "Should build: {:?}", result.err());
+            let build = result.unwrap();
 
-        assert_eq!(build.unsigned_tx.outputs.len(), 3);
+            assert_eq!(build.unsigned_tx.outputs.len(), 3);
 
-        let proxy = &build.unsigned_tx.outputs[0];
-        assert_ne!(
-            proxy.ergo_tree,
-            "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
-        );
-        let proxy_value: u64 = proxy.value.parse().unwrap();
-        assert_eq!(proxy_value, 1_000_000_000 + EXECUTION_FEE + PROXY_BOX_VALUE);
+            let proxy = &build.unsigned_tx.outputs[0];
+            assert_ne!(
+                proxy.ergo_tree,
+                "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+            );
+            let proxy_value: u64 = proxy.value.parse().unwrap();
+            assert_eq!(proxy_value, 1_000_000_000 + EXECUTION_FEE + PROXY_BOX_VALUE);
 
-        let fee_output = &build.unsigned_tx.outputs[1];
-        assert_eq!(fee_output.value, TX_FEE.to_string());
+            let change_output = &build.unsigned_tx.outputs[1];
+            let change_value: u64 = change_output.value.parse().unwrap();
+            let expected_change = 10_000_000_000 - proxy_value - TX_FEE;
+            assert_eq!(change_value, expected_change);
 
-        let change_output = &build.unsigned_tx.outputs[2];
-        let change_value: u64 = change_output.value.parse().unwrap();
-        let expected_change = 10_000_000_000 - proxy_value - TX_FEE;
-        assert_eq!(change_value, expected_change);
+            let fee_output = &build.unsigned_tx.outputs[2];
+            assert_eq!(fee_output.value, TX_FEE.to_string());
 
-        assert_eq!(build.summary.input_amount, 1_000_000_000);
-        assert_eq!(build.summary.input_token, "ERG");
-        assert_eq!(build.summary.min_output, 9000);
-        assert_eq!(build.summary.output_token, "TestToken");
-        assert_eq!(build.summary.miner_fee, TX_FEE);
-        assert_eq!(build.summary.execution_fee, EXECUTION_FEE);
-    }
+            assert_eq!(build.summary.input_amount, 1_000_000_000);
+            assert_eq!(build.summary.input_token, "ERG");
+            assert_eq!(build.summary.min_output, 9000);
+            assert_eq!(build.summary.output_token, "TestToken");
+            assert_eq!(build.summary.miner_fee, TX_FEE);
+            assert_eq!(build.summary.execution_fee, EXECUTION_FEE);
+            assert_eq!(build.summary.citadel_fee_nano, 0);
+            });
+}
 
     #[test]
     fn test_build_swap_order_token_to_erg() {
-        let pool = test_n2t_pool();
-        let token_id =
-            "0000000000000000000000000000000000000000000000000000000000000002".to_string();
-        let user_utxo = Eip12InputBox {
-            assets: vec![Eip12Asset {
-                token_id: token_id.clone(),
-                amount: "50000".to_string(),
-            }],
-            ..test_user_utxo()
-        };
-        let request = SwapRequest {
-            pool_id: pool.pool_id.clone(),
-            input: SwapInput::Token {
-                token_id: token_id.clone(),
-                amount: 10000,
-            },
-            min_output: 500_000_000,
-            redeemer_address: "addr".to_string(),
-        };
+        no_citadel_fee(|| {
+            let pool = test_n2t_pool();
+            let token_id =
+                "0000000000000000000000000000000000000000000000000000000000000002".to_string();
+            let user_utxo = Eip12InputBox {
+                assets: vec![Eip12Asset {
+                    token_id: token_id.clone(),
+                    amount: "50000".to_string(),
+                }],
+                ..test_user_utxo()
+            };
+            let request = SwapRequest {
+                pool_id: pool.pool_id.clone(),
+                input: SwapInput::Token {
+                    token_id: token_id.clone(),
+                    amount: 10000,
+                },
+                min_output: 500_000_000,
+                redeemer_address: "addr".to_string(),
+            };
 
-        let result = build_swap_order_eip12(
-            &request,
-            &pool,
-            &[user_utxo],
-            "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-            1_000_000,
-            None,
-            None,
-        );
+            let result = build_swap_order_eip12(
+                &request,
+                &pool,
+                &[user_utxo],
+                "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                1_000_000,
+                None,
+                None,
+            );
 
-        assert!(result.is_ok(), "Should build: {:?}", result.err());
-        let build = result.unwrap();
+            assert!(result.is_ok(), "Should build: {:?}", result.err());
+            let build = result.unwrap();
 
-        assert_eq!(build.unsigned_tx.outputs.len(), 3);
+            assert_eq!(build.unsigned_tx.outputs.len(), 3);
 
-        let proxy = &build.unsigned_tx.outputs[0];
-        assert_eq!(proxy.assets.len(), 1);
-        assert_eq!(proxy.assets[0].token_id, token_id);
-        assert_eq!(proxy.assets[0].amount, "10000");
+            let proxy = &build.unsigned_tx.outputs[0];
+            assert_eq!(proxy.assets.len(), 1);
+            assert_eq!(proxy.assets[0].token_id, token_id);
+            assert_eq!(proxy.assets[0].amount, "10000");
 
-        let proxy_value: u64 = proxy.value.parse().unwrap();
-        assert_eq!(proxy_value, EXECUTION_FEE + PROXY_BOX_VALUE);
+            let proxy_value: u64 = proxy.value.parse().unwrap();
+            assert_eq!(proxy_value, EXECUTION_FEE + PROXY_BOX_VALUE);
 
-        let change = &build.unsigned_tx.outputs[2];
-        let change_tokens: Vec<&Eip12Asset> = change
-            .assets
-            .iter()
-            .filter(|a| a.token_id == token_id)
-            .collect();
-        assert_eq!(change_tokens.len(), 1);
-        assert_eq!(change_tokens[0].amount, "40000"); // 50000 - 10000
-    }
+            let change = &build.unsigned_tx.outputs[1];
+            let change_tokens: Vec<&Eip12Asset> = change
+                .assets
+                .iter()
+                .filter(|a| a.token_id == token_id)
+                .collect();
+            assert_eq!(change_tokens.len(), 1);
+            assert_eq!(change_tokens[0].amount, "40000"); // 50000 - 10000
+            assert_eq!(
+                build.unsigned_tx.outputs.last().unwrap().value,
+                TX_FEE.to_string()
+            );
+            });
+}
 
     #[test]
     fn test_build_swap_insufficient_erg() {
@@ -602,39 +631,41 @@ mod tests {
 
     #[test]
     fn test_build_swap_no_change_when_exact() {
-        let pool = test_n2t_pool();
-        let proxy_val = 1_000_000_000u64 + EXECUTION_FEE + PROXY_BOX_VALUE;
-        let total = proxy_val + TX_FEE;
+        no_citadel_fee(|| {
+            let pool = test_n2t_pool();
+            let proxy_val = 1_000_000_000u64 + EXECUTION_FEE + PROXY_BOX_VALUE;
+            let total = proxy_val + TX_FEE;
 
-        let user_utxo = Eip12InputBox {
-            value: total.to_string(),
-            ..test_user_utxo()
-        };
-        let request = SwapRequest {
-            pool_id: pool.pool_id.clone(),
-            input: SwapInput::Erg {
-                amount: 1_000_000_000,
-            },
-            min_output: 9000,
-            redeemer_address: "addr".to_string(),
-        };
+            let user_utxo = Eip12InputBox {
+                value: total.to_string(),
+                ..test_user_utxo()
+            };
+            let request = SwapRequest {
+                pool_id: pool.pool_id.clone(),
+                input: SwapInput::Erg {
+                    amount: 1_000_000_000,
+                },
+                min_output: 9000,
+                redeemer_address: "addr".to_string(),
+            };
 
-        let result = build_swap_order_eip12(
-            &request,
-            &pool,
-            &[user_utxo],
-            "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-            1_000_000,
-            None,
-            None,
-        );
+            let result = build_swap_order_eip12(
+                &request,
+                &pool,
+                &[user_utxo],
+                "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                1_000_000,
+                None,
+                None,
+            );
 
-        assert!(result.is_ok(), "Should build: {:?}", result.err());
-        let build = result.unwrap();
+            assert!(result.is_ok(), "Should build: {:?}", result.err());
+            let build = result.unwrap();
 
-        assert_eq!(build.unsigned_tx.outputs.len(), 2);
-    }
+            assert_eq!(build.unsigned_tx.outputs.len(), 2);
+            });
+}
 
     #[test]
     fn test_build_prove_dlog() {

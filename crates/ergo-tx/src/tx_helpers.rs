@@ -93,6 +93,8 @@ pub fn fee_output(fee: i64, height: i32) -> Eip12Output {
     Eip12Output::fee(fee, height)
 }
 
+pub use crate::dev_fee::{append_dev_fee_output, dev_fee_budget, DevFeeConfig, DevFeeError};
+
 #[cfg(test)]
 mod tests {
     use super::*;

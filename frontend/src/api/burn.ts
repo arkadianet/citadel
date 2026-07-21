@@ -17,6 +17,7 @@ export interface BurnBuildResponse {
   /// String-form precise amount (see note on BurnItemInput.amount).
   burnedAmount: string
   minerFee: number
+  citadelFeeNano: number
   changeErg: number
 }
 
@@ -38,6 +39,7 @@ export interface MultiBurnBuildResponse {
   unsignedTx: object
   burnedTokens: BurnedTokenEntry[]
   minerFee: number
+  citadelFeeNano: number
   changeErg: number
 }
 

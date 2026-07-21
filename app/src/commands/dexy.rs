@@ -152,9 +152,10 @@ pub async fn preview_mint_dexy(
         dexy_state.oracle_rate_nano,
         variant.decimals(),
     );
+    let citadel_fee = ergo_tx::resolved_dev_fee_config().budget();
     let tx_fee = TX_FEE_NANO;
     let min_box = MIN_BOX_VALUE_NANO;
-    let total = calc.erg_amount + tx_fee + min_box;
+    let total = calc.erg_amount + tx_fee + citadel_fee + min_box;
 
     Ok(DexyPreviewResponse {
         erg_cost_nano: calc.erg_amount.to_string(),
@@ -320,6 +321,7 @@ pub async fn preview_dexy_swap(
             / dexy::constants::LP_SWAP_FEE_DENOM as f64
             * 100.0,
         miner_fee_nano: TX_FEE_NANO,
+        citadel_fee_nano: ergo_tx::resolved_dev_fee_config().budget(),
         lp_erg_reserves: dexy_state.lp_erg_reserves,
         lp_dexy_reserves: dexy_state.lp_dexy_reserves,
     })

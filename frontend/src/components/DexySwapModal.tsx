@@ -13,6 +13,7 @@ import { TxSuccess } from './TxSuccess'
 import { AdvancedOptions, useRecipientAddress } from './AdvancedOptions'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import { Modal, Button } from './ui'
+import { DEV_FEE_NANO } from '../constants'
 import './DexySwapModal.css'
 
 interface DexyState {
@@ -499,6 +500,12 @@ export function DexySwapModal({
                       <span>Miner Fee</span>
                       <span>{formatErg(preview.miner_fee_nano)} ERG</span>
                     </div>
+                    {(preview.citadel_fee_nano ?? DEV_FEE_NANO) > 0 && (
+                      <div className="info-row">
+                        <span>Citadel fee</span>
+                        <span>{formatErg(preview.citadel_fee_nano ?? DEV_FEE_NANO)} ERG</span>
+                      </div>
+                    )}
                     {state && (
                       <div className="info-row">
                         <span>LP Reserves</span>
@@ -510,6 +517,12 @@ export function DexySwapModal({
                   </>
                 )}
               </div>
+
+              {(preview?.citadel_fee_nano ?? DEV_FEE_NANO) > 0 && (
+                <p className="message" style={{ opacity: 0.75, fontSize: '0.85rem' }}>
+                  Includes {formatErg(preview?.citadel_fee_nano ?? DEV_FEE_NANO)} ERG Citadel fee
+                </p>
+              )}
 
               {/* High price impact warning */}
               {preview && preview.price_impact > 5 && (
