@@ -105,6 +105,107 @@ function formatCompact(n: number): string {
   return n.toFixed(2)
 }
 
+function renderProtocolRow(
+  item: ProtocolInteraction,
+  idx: number,
+  onOpen: (txId: string) => void,
+) {
+  const isMint = item.operation === 'mint'
+  const ergAbs = Math.abs(item.erg_change_nano) / 1e9
+  const icon = TOKEN_ICONS[item.token]
+  return (
+    <button
+      key={`${item.tx_id}-${idx}`}
+      type="button"
+      className="su-feed-row"
+      onClick={() => onOpen(item.tx_id)}
+    >
+      <div className={`su-feed-icon ${isMint ? 'mint' : 'redeem'}`} aria-hidden>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          {isMint
+            ? <path d="M12 19V5M5 12l7-7 7 7" />
+            : <path d="M12 5v14M5 12l7 7 7-7" />
+          }
+        </svg>
+      </div>
+      <div className="su-feed-info">
+        <div className="su-feed-label">
+          {icon && <img src={icon} alt="" />}
+          <span className="su-feed-op">{isMint ? 'Mint' : 'Redeem'}</span>
+        </div>
+      </div>
+      <div className="su-feed-amounts">
+        {item.token_amount_change > 0 && (() => {
+          const decimals = TOKEN_DECIMALS[item.token] ?? 0
+          const amt = decimals > 0
+            ? (item.token_amount_change / Math.pow(10, decimals)).toLocaleString(undefined, { maximumFractionDigits: decimals })
+            : item.token_amount_change.toLocaleString()
+          return (
+            <span className={`amt ${isMint ? 'positive' : 'negative'}`}>
+              {isMint ? '+' : '-'}{amt}
+            </span>
+          )
+        })()}
+        {ergAbs > 0 && (
+          <span className="amt muted">
+            {ergAbs.toLocaleString(undefined, { maximumFractionDigits: 2 })} ERG
+          </span>
+        )}
+      </div>
+      <span className="su-feed-time">
+        {item.timestamp > 0 ? formatTimeAgo(item.timestamp) : `#${item.height}`}
+      </span>
+    </button>
+  )
+}
+
+function renderUserRow(
+  tx: RecentTx,
+  tokenId: string,
+  onOpen: (txId: string) => void,
+) {
+  const changes = tx.token_changes.filter(tc => tc.token_id === tokenId)
+  const ergChange = tx.erg_change_nano / 1e9
+  const isReceive = tx.erg_change_nano > 0
+  return (
+    <button
+      key={tx.tx_id}
+      type="button"
+      className="su-feed-row"
+      onClick={() => onOpen(tx.tx_id)}
+    >
+      <div className={`su-feed-icon ${isReceive ? 'mint' : 'redeem'}`} aria-hidden>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          {isReceive
+            ? <path d="M12 5v14M5 12l7 7 7-7" />
+            : <path d="M12 19V5M5 12l7-7 7 7" />
+          }
+        </svg>
+      </div>
+      <div className="su-feed-info">
+        <span className="su-feed-op mono">{tx.tx_id.slice(0, 8)}…</span>
+      </div>
+      <div className="su-feed-amounts">
+        {changes.map(tc => {
+          const amt = tc.amount / Math.pow(10, tc.decimals)
+          const isPos = tc.amount > 0
+          return (
+            <span key={tc.token_id} className={`amt ${isPos ? 'positive' : 'negative'}`}>
+              {isPos ? '+' : ''}{amt.toLocaleString(undefined, { maximumFractionDigits: tc.decimals })}
+            </span>
+          )
+        })}
+        <span className="amt muted">
+          {isReceive ? '+' : ''}{ergChange.toLocaleString(undefined, { maximumFractionDigits: 4 })} ERG
+        </span>
+      </div>
+      <span className="su-feed-time">
+        {tx.timestamp > 0 ? formatTimeAgo(tx.timestamp) : `#${tx.inclusion_height}`}
+      </span>
+    </button>
+  )
+}
+
 export function SigmaUsdTab({
   isConnected,
   capabilityTier,
@@ -133,7 +234,8 @@ export function SigmaUsdTab({
     if (!isConnected || capabilityTier === 'Basic') return
     setActivityLoading(true)
     try {
-      const data = await getSigmaUsdActivity(10)
+      // count = per-token budget (SigUSD + SigRSV)
+      const data = await getSigmaUsdActivity(8)
       setActivity(data)
     } catch (e) {
       console.error('Failed to fetch SigmaUSD activity:', e)
@@ -150,11 +252,11 @@ export function SigmaUsdTab({
     }
     setUserTxsLoading(true)
     try {
-      const res = await invoke<{ transactions: RecentTx[] }>('get_recent_transactions', { limit: 20 })
+      const res = await invoke<{ transactions: RecentTx[] }>('get_recent_transactions', { limit: 40 })
       const sigmaTxs = res.transactions.filter(tx =>
         tx.token_changes.some(tc => SIGMAUSD_TOKEN_ID_SET.has(tc.token_id))
       )
-      setUserTxs(sigmaTxs.slice(0, 10))
+      setUserTxs(sigmaTxs.slice(0, 20))
     } catch (e) {
       console.error('Failed to fetch user SigmaUSD transactions:', e)
       setUserTxs([])
@@ -170,7 +272,7 @@ export function SigmaUsdTab({
       return
     }
     setActivityLoading(true)
-    getSigmaUsdActivity(10)
+    getSigmaUsdActivity(8)
       .then(data => { if (!cancelled) setActivity(data) })
       .catch(e => {
         console.error('Failed to fetch SigmaUSD activity:', e)
@@ -187,13 +289,13 @@ export function SigmaUsdTab({
       return
     }
     setUserTxsLoading(true)
-    invoke<{ transactions: RecentTx[] }>('get_recent_transactions', { limit: 20 })
+    invoke<{ transactions: RecentTx[] }>('get_recent_transactions', { limit: 40 })
       .then(res => {
         if (cancelled) return
         const sigmaTxs = res.transactions.filter(tx =>
           tx.token_changes.some(tc => SIGMAUSD_TOKEN_ID_SET.has(tc.token_id))
         )
-        setUserTxs(sigmaTxs.slice(0, 10))
+        setUserTxs(sigmaTxs.slice(0, 20))
       })
       .catch(e => {
         console.error('Failed to fetch user SigmaUSD transactions:', e)
@@ -202,6 +304,15 @@ export function SigmaUsdTab({
       .finally(() => { if (!cancelled) setUserTxsLoading(false) })
     return () => { cancelled = true }
   }, [isConnected, walletBalance])
+
+  const sigusdActivity = activity.filter(i => i.token === 'SigUSD')
+  const sigrsvActivity = activity.filter(i => i.token === 'SigRSV')
+  const userSigusdTxs = userTxs.filter(tx =>
+    tx.token_changes.some(tc => tc.token_id === SIGMAUSD_TOKEN_IDS.sigusd)
+  )
+  const userSigrsvTxs = userTxs.filter(tx =>
+    tx.token_changes.some(tc => tc.token_id === SIGMAUSD_TOKEN_IDS.sigrsv)
+  )
 
   if (!isConnected) {
     return (
@@ -519,58 +630,51 @@ export function SigmaUsdTab({
             ) : activity.length === 0 ? (
               <div className="su-feed-state">No recent protocol activity</div>
             ) : (
-              <div className="su-feed-list">
-                {activity.map((item, idx) => {
-                  const isMint = item.operation === 'mint'
-                  const ergAbs = Math.abs(item.erg_change_nano) / 1e9
-                  const icon = TOKEN_ICONS[item.token]
-                  return (
-                    <button
-                      key={`${item.tx_id}-${idx}`}
-                      type="button"
-                      className="su-feed-row"
-                      onClick={() => navigateToExplorer({ page: 'transaction', id: item.tx_id })}
-                    >
-                      <div className={`su-feed-icon ${isMint ? 'mint' : 'redeem'}`} aria-hidden>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          {isMint
-                            ? <path d="M12 19V5M5 12l7-7 7 7" />
-                            : <path d="M12 5v14M5 12l7 7 7-7" />
-                          }
-                        </svg>
-                      </div>
-                      <div className="su-feed-info">
-                        <div className="su-feed-label">
-                          {icon && <img src={icon} alt="" />}
-                          <span className="su-feed-op">{isMint ? 'Mint' : 'Redeem'}</span>
-                          <span className="su-feed-token">{item.token}</span>
-                        </div>
-                        <span className="su-feed-protocol">{item.protocol}</span>
-                      </div>
-                      <div className="su-feed-amounts">
-                        {item.token_amount_change > 0 && (() => {
-                          const decimals = TOKEN_DECIMALS[item.token] ?? 0
-                          const amt = decimals > 0
-                            ? (item.token_amount_change / Math.pow(10, decimals)).toLocaleString(undefined, { maximumFractionDigits: decimals })
-                            : item.token_amount_change.toLocaleString()
-                          return (
-                            <span className={`amt ${isMint ? 'positive' : 'negative'}`}>
-                              {isMint ? '+' : '-'}{amt} {item.token}
-                            </span>
-                          )
-                        })()}
-                        {ergAbs > 0 && (
-                          <span className="amt muted">
-                            {ergAbs.toLocaleString(undefined, { maximumFractionDigits: 2 })} ERG
-                          </span>
-                        )}
-                      </div>
-                      <span className="su-feed-time">
-                        {item.timestamp > 0 ? formatTimeAgo(item.timestamp) : `#${item.height}`}
+              <div className="su-feed-split">
+                <div className="su-feed-col">
+                  <div className="su-feed-col-head">
+                    <img src="/icons/sigmausd.svg" alt="" />
+                    <span>SigUSD</span>
+                    {sigusdActivity[0] && (
+                      <span className="su-feed-col-age mono">
+                        {sigusdActivity[0].timestamp > 0
+                          ? formatTimeAgo(sigusdActivity[0].timestamp)
+                          : `#${sigusdActivity[0].height}`}
                       </span>
-                    </button>
-                  )
-                })}
+                    )}
+                  </div>
+                  {sigusdActivity.length === 0 ? (
+                    <div className="su-feed-col-empty">No recent SigUSD txs</div>
+                  ) : (
+                    <div className="su-feed-list">
+                      {sigusdActivity.map((item, idx) =>
+                        renderProtocolRow(item, idx, (id) => navigateToExplorer({ page: 'transaction', id }))
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="su-feed-col">
+                  <div className="su-feed-col-head">
+                    <img src="/icons/sigrsv.svg" alt="" />
+                    <span>SigRSV</span>
+                    {sigrsvActivity[0] && (
+                      <span className="su-feed-col-age mono">
+                        {sigrsvActivity[0].timestamp > 0
+                          ? formatTimeAgo(sigrsvActivity[0].timestamp)
+                          : `#${sigrsvActivity[0].height}`}
+                      </span>
+                    )}
+                  </div>
+                  {sigrsvActivity.length === 0 ? (
+                    <div className="su-feed-col-empty">No recent SigRSV txs</div>
+                  ) : (
+                    <div className="su-feed-list">
+                      {sigrsvActivity.map((item, idx) =>
+                        renderProtocolRow(item, idx, (id) => navigateToExplorer({ page: 'transaction', id }))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )
           ) : !walletAddress ? (
@@ -583,49 +687,37 @@ export function SigmaUsdTab({
           ) : userTxs.length === 0 ? (
             <div className="su-feed-state">No recent SigmaUSD transactions</div>
           ) : (
-            <div className="su-feed-list">
-              {userTxs.map(tx => {
-                const sigmaChanges = tx.token_changes.filter(tc => SIGMAUSD_TOKEN_ID_SET.has(tc.token_id))
-                const ergChange = tx.erg_change_nano / 1e9
-                const isReceive = tx.erg_change_nano > 0
-                return (
-                  <button
-                    key={tx.tx_id}
-                    type="button"
-                    className="su-feed-row"
-                    onClick={() => navigateToExplorer({ page: 'transaction', id: tx.tx_id })}
-                  >
-                    <div className={`su-feed-icon ${isReceive ? 'mint' : 'redeem'}`} aria-hidden>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        {isReceive
-                          ? <path d="M12 5v14M5 12l7 7 7-7" />
-                          : <path d="M12 19V5M5 12l7-7 7 7" />
-                        }
-                      </svg>
-                    </div>
-                    <div className="su-feed-info">
-                      <span className="su-feed-op mono">{tx.tx_id.slice(0, 8)}…{tx.tx_id.slice(-6)}</span>
-                    </div>
-                    <div className="su-feed-amounts">
-                      {sigmaChanges.map(tc => {
-                        const amt = tc.amount / Math.pow(10, tc.decimals)
-                        const isPos = tc.amount > 0
-                        return (
-                          <span key={tc.token_id} className={`amt ${isPos ? 'positive' : 'negative'}`}>
-                            {isPos ? '+' : ''}{amt.toLocaleString(undefined, { maximumFractionDigits: tc.decimals })} {tc.name ?? tc.token_id.slice(0, 6)}
-                          </span>
-                        )
-                      })}
-                      <span className="amt muted">
-                        {isReceive ? '+' : ''}{ergChange.toLocaleString(undefined, { maximumFractionDigits: 4 })} ERG
-                      </span>
-                    </div>
-                    <span className="su-feed-time">
-                      {tx.timestamp > 0 ? formatTimeAgo(tx.timestamp) : `#${tx.inclusion_height}`}
-                    </span>
-                  </button>
-                )
-              })}
+            <div className="su-feed-split">
+              <div className="su-feed-col">
+                <div className="su-feed-col-head">
+                  <img src="/icons/sigmausd.svg" alt="" />
+                  <span>SigUSD</span>
+                </div>
+                {userSigusdTxs.length === 0 ? (
+                  <div className="su-feed-col-empty">No SigUSD activity</div>
+                ) : (
+                  <div className="su-feed-list">
+                    {userSigusdTxs.map(tx =>
+                      renderUserRow(tx, SIGMAUSD_TOKEN_IDS.sigusd, (id) => navigateToExplorer({ page: 'transaction', id }))
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="su-feed-col">
+                <div className="su-feed-col-head">
+                  <img src="/icons/sigrsv.svg" alt="" />
+                  <span>SigRSV</span>
+                </div>
+                {userSigrsvTxs.length === 0 ? (
+                  <div className="su-feed-col-empty">No SigRSV activity</div>
+                ) : (
+                  <div className="su-feed-list">
+                    {userSigrsvTxs.map(tx =>
+                      renderUserRow(tx, SIGMAUSD_TOKEN_IDS.sigrsv, (id) => navigateToExplorer({ page: 'transaction', id }))
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
