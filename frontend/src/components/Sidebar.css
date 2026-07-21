@@ -12,6 +12,8 @@
   flex-shrink: 0;
   overflow: hidden;
   transition: width var(--ds-transition-base);
+  height: 100%;
+  min-height: 0;
 }
 
 .sidebar.expanded {
@@ -31,6 +33,54 @@
   flex-direction: column;
   gap: 2px;
   padding: var(--space-xs);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sidebar-footer {
+  flex-shrink: 0;
+  padding: var(--space-xs);
+  border-top: 1px solid var(--ds-border);
+}
+
+.sidebar-donate {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+  transition: background var(--ds-transition-fast), border-color var(--ds-transition-fast),
+    color var(--ds-transition-fast);
+  color: var(--slate-400);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar-donate:hover {
+  background: var(--ds-success-bg);
+  border-color: color-mix(in srgb, var(--emerald-400) 35%, transparent);
+  color: var(--emerald-400);
+}
+
+.sidebar-donate:hover .sidebar-dashboard-icon {
+  color: var(--emerald-400);
+}
+
+.sidebar-donate:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
+}
+
+.sidebar.collapsed .sidebar-donate:hover .sidebar-tooltip {
+  opacity: 1;
 }
 
 .sidebar-item {

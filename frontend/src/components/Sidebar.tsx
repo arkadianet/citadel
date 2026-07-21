@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { DonateModal } from './DonateModal'
 import './Sidebar.css'
 
 type View = 'home' | 'wallet' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'stake-recovery'
@@ -9,6 +11,10 @@ interface SidebarProps {
   capabilityTier?: string
   collapsed: boolean
   onToggleCollapse: () => void
+  walletAddress: string | null
+  ergBalanceNano?: number
+  explorerUrl: string
+  onRequestConnect: () => void
 }
 
 const protocols: Array<{
@@ -110,8 +116,20 @@ function ProtocolIcon({ icon }: { icon: string; className: string }) {
   return <div className="sidebar-dashboard-icon">{content}</div>
 }
 
-export function Sidebar({ view, onNavigate, isConnected, capabilityTier, collapsed, onToggleCollapse }: SidebarProps) {
+export function Sidebar({
+  view,
+  onNavigate,
+  isConnected,
+  capabilityTier,
+  collapsed,
+  onToggleCollapse,
+  walletAddress,
+  ergBalanceNano = 0,
+  explorerUrl,
+  onRequestConnect,
+}: SidebarProps) {
   const canUseProtocols = isConnected && capabilityTier !== 'Basic'
+  const [donateOpen, setDonateOpen] = useState(false)
 
   const handleDashboardClick = () => {
     if (view === 'home') {
@@ -119,6 +137,14 @@ export function Sidebar({ view, onNavigate, isConnected, capabilityTier, collaps
     } else {
       onNavigate('home')
     }
+  }
+
+  const handleDonateClick = () => {
+    if (!walletAddress) {
+      onRequestConnect()
+      return
+    }
+    setDonateOpen(true)
   }
 
   return (
@@ -269,6 +295,37 @@ export function Sidebar({ view, onNavigate, isConnected, capabilityTier, collaps
           <span className="sidebar-tooltip">Stake Recovery</span>
         </button>
       </div>
+
+      <div className="sidebar-footer">
+        <button
+          type="button"
+          className="sidebar-donate"
+          onClick={handleDonateClick}
+          aria-label="Buy me a coffee"
+        >
+          <div className="sidebar-dashboard-icon" aria-hidden>
+            <svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 8h1a4 4 0 010 8h-1" />
+              <path d="M3 8h14v9a4 4 0 01-4 4H7a4 4 0 01-4-4V8z" />
+              <path d="M6 2v2M10 2v2M14 2v2" />
+            </svg>
+          </div>
+          <div className="sidebar-item-text">
+            <span className="sidebar-item-name">Buy me a coffee</span>
+            <span className="sidebar-item-desc">Optional tip</span>
+          </div>
+          <span className="sidebar-tooltip">Buy me a coffee</span>
+        </button>
+      </div>
+
+      <DonateModal
+        open={donateOpen}
+        onClose={() => setDonateOpen(false)}
+        walletAddress={walletAddress}
+        ergBalanceNano={ergBalanceNano}
+        explorerUrl={explorerUrl}
+        onRequestConnect={onRequestConnect}
+      />
     </nav>
   )
 }
