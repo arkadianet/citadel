@@ -5,6 +5,7 @@
 pub mod box_selector;
 pub mod burn;
 pub mod eip12;
+pub mod send;
 pub mod sigma;
 pub mod tx_helpers;
 pub mod utxo_management;
@@ -31,6 +32,7 @@ pub use burn::{
     MultiBurnBuildResult, MultiBurnSummary,
 };
 pub use eip12::*;
+pub use send::{build_send_tx, SendBuildResult, SendError, SendSummary};
 pub use sigma::*;
 pub use tx_helpers::{
     append_change_output, select_inputs_for_multi_spend, select_inputs_for_spend, ChangeOutputError,

@@ -16,7 +16,7 @@ import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import type { TxStatusResponse } from '../api/types'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
-import { PageHeader, Tabs, Card, CardBody, EmptyState, Button, Spinner } from './ui'
+import { Tabs, EmptyState } from './ui'
 import './DexyTab.css'
 
 interface DexyState {
@@ -102,11 +102,6 @@ function pollLpTxStatus(requestId: string): Promise<TxStatusResponse> {
   return invoke<TxStatusResponse>('get_mint_tx_status', { requestId })
 }
 
-const TOKEN_ICONS: Record<string, string> = {
-  DexyGold: '/icons/dexygold.svg',
-  USE: '/icons/use.svg',
-}
-
 const TOKEN_DECIMALS: Record<string, number> = {
   DexyGold: 0,
   USE: 3,
@@ -123,6 +118,114 @@ function formatTimeAgo(timestampMs: number): string {
   const days = Math.floor(hours / 24)
   if (days < 30) return `${days}d ago`
   return new Date(timestampMs).toLocaleDateString()
+}
+
+function renderDexyProtocolRow(
+  item: ProtocolInteraction,
+  idx: number,
+  onOpen: (txId: string) => void,
+) {
+  const op = item.operation
+  const opLabel = op === 'mint' ? 'Mint'
+    : op === 'redeem' ? 'Redeem'
+    : op === 'swap' ? 'Swap'
+    : op === 'lp_deposit' ? 'Add LP'
+    : op === 'lp_redeem' ? 'Remove LP'
+    : item.operation
+  const opClass = op === 'mint' || op === 'lp_deposit' ? 'mint'
+    : op === 'swap' ? 'swap' : 'redeem'
+  const ergAbs = Math.abs(item.erg_change_nano) / 1e9
+  return (
+    <button
+      key={`${item.tx_id}-${idx}`}
+      type="button"
+      className="dexy-activity-row"
+      onClick={() => onOpen(item.tx_id)}
+    >
+      <div className={`activity-op-icon ${opClass}`}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          {op === 'swap'
+            ? <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
+            : op === 'mint' || op === 'lp_deposit'
+              ? <path d="M12 19V5M5 12l7-7 7 7" />
+              : <path d="M12 5v14M5 12l7 7 7-7" />
+          }
+        </svg>
+      </div>
+      <div className="activity-info">
+        <span className="activity-op">{opLabel}</span>
+      </div>
+      <div className="activity-amounts">
+        {item.token_amount_change > 0 && (() => {
+          const decimals = TOKEN_DECIMALS[item.token] ?? 0
+          const amt = decimals > 0
+            ? (item.token_amount_change / Math.pow(10, decimals)).toLocaleString(undefined, { maximumFractionDigits: decimals })
+            : item.token_amount_change.toLocaleString()
+          const isPositive = op === 'mint' || op === 'lp_deposit'
+          return (
+            <span className={`activity-token-amt ${isPositive ? 'positive' : 'negative'}`}>
+              {amt}
+            </span>
+          )
+        })()}
+        {ergAbs > 0 && (
+          <span className="activity-erg-amt">
+            {ergAbs.toLocaleString(undefined, { maximumFractionDigits: 2 })} ERG
+          </span>
+        )}
+      </div>
+      <span className="activity-time">
+        {item.timestamp > 0 ? formatTimeAgo(item.timestamp) : `#${item.height}`}
+      </span>
+    </button>
+  )
+}
+
+function renderDexyUserRow(
+  tx: RecentTx,
+  tokenIds: string[],
+  onOpen: (txId: string) => void,
+) {
+  const changes = tx.token_changes.filter(tc => tokenIds.includes(tc.token_id))
+  const ergChange = tx.erg_change_nano / 1e9
+  const isReceive = tx.erg_change_nano > 0
+  return (
+    <button
+      key={tx.tx_id}
+      type="button"
+      className="dexy-activity-row"
+      onClick={() => onOpen(tx.tx_id)}
+    >
+      <div className={`activity-op-icon ${isReceive ? 'mint' : 'redeem'}`}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          {isReceive
+            ? <path d="M12 5v14M5 12l7 7 7-7" />
+            : <path d="M12 19V5M5 12l7-7 7 7" />
+          }
+        </svg>
+      </div>
+      <div className="activity-info">
+        <span className="activity-op mono">{tx.tx_id.slice(0, 8)}…</span>
+      </div>
+      <div className="activity-amounts">
+        {changes.map(tc => {
+          const amt = tc.amount / Math.pow(10, tc.decimals)
+          const isPos = tc.amount > 0
+          return (
+            <span key={tc.token_id} className={`activity-token-amt ${isPos ? 'positive' : 'negative'}`}>
+              {isPos ? '+' : ''}{amt.toLocaleString(undefined, { maximumFractionDigits: tc.decimals })} {tc.name ?? 'LP'}
+            </span>
+          )
+        })}
+        <span className="activity-erg-amt">
+          {isReceive ? '+' : ''}{ergChange.toLocaleString(undefined, { maximumFractionDigits: 4 })} ERG
+        </span>
+      </div>
+      <span className="activity-time">
+        {tx.timestamp > 0 ? formatTimeAgo(tx.timestamp) : `#${tx.inclusion_height}`}
+      </span>
+    </button>
+  )
 }
 
 export function DexyTab({
@@ -145,6 +248,7 @@ export function DexyTab({
   const [activityLoading, setActivityLoading] = useState(false)
   const [userTxs, setUserTxs] = useState<RecentTx[]>([])
   const [userTxsLoading, setUserTxsLoading] = useState(false)
+  const [feedTab, setFeedTab] = useState<'protocol' | 'yours'>('protocol')
 
   // Sub-tab state
   const [subTab, setSubTab] = useState<'overview' | 'liquidity'>('overview')
@@ -208,7 +312,8 @@ export function DexyTab({
     if (!isConnected || capabilityTier === 'Basic') return
     setActivityLoading(true)
     try {
-      const data = await getDexyActivity(10)
+      // count = per-variant budget (DexyGold + USE)
+      const data = await getDexyActivity(8)
       setActivity(data)
     } catch (e) {
       console.error('Failed to fetch Dexy activity:', e)
@@ -231,7 +336,7 @@ export function DexyTab({
       return
     }
     setActivityLoading(true)
-    getDexyActivity(10)
+    getDexyActivity(8)
       .then(data => { if (!cancelled) setActivity(data) })
       .catch(e => {
         console.error('Failed to fetch Dexy activity:', e)
@@ -249,11 +354,14 @@ export function DexyTab({
     }
     setUserTxsLoading(true)
     try {
-      const res = await invoke<{ transactions: RecentTx[] }>('get_recent_transactions', { limit: 20 })
+      const res = await invoke<{ transactions: RecentTx[] }>('get_recent_transactions', { limit: 40 })
       const dexyTxs = res.transactions.filter(tx =>
-        tx.token_changes.some(tc => DEXY_TOKEN_ID_SET.has(tc.token_id))
+        tx.token_changes.some(tc =>
+          DEXY_TOKEN_ID_SET.has(tc.token_id) ||
+          Object.values(LP_TOKEN_IDS).includes(tc.token_id)
+        )
       )
-      setUserTxs(dexyTxs.slice(0, 10))
+      setUserTxs(dexyTxs.slice(0, 20))
     } catch (e) {
       console.error('Failed to fetch user Dexy transactions:', e)
       setUserTxs([])
@@ -269,13 +377,16 @@ export function DexyTab({
       return
     }
     setUserTxsLoading(true)
-    invoke<{ transactions: RecentTx[] }>('get_recent_transactions', { limit: 20 })
+    invoke<{ transactions: RecentTx[] }>('get_recent_transactions', { limit: 40 })
       .then(res => {
         if (cancelled) return
         const dexyTxs = res.transactions.filter(tx =>
-          tx.token_changes.some(tc => DEXY_TOKEN_ID_SET.has(tc.token_id))
+          tx.token_changes.some(tc =>
+            DEXY_TOKEN_ID_SET.has(tc.token_id) ||
+            Object.values(LP_TOKEN_IDS).includes(tc.token_id)
+          )
         )
-        setUserTxs(dexyTxs.slice(0, 10))
+        setUserTxs(dexyTxs.slice(0, 20))
       })
       .catch(e => {
         console.error('Failed to fetch user Dexy transactions:', e)
@@ -488,10 +599,25 @@ export function DexyTab({
 
   const totalHoldingsUsd = ergUsd + goldUsd + useUsd + lpTotalUsd
 
+  const goldActivity = activity.filter(i => i.token === 'DexyGold' || i.protocol === 'DexyGold')
+  const usdActivity = activity.filter(i => i.token === 'USE' || i.protocol === 'DexyUSD')
+  const userGoldTxs = userTxs.filter(tx =>
+    tx.token_changes.some(tc =>
+      tc.token_id === DEXY_TOKEN_IDS.gold || tc.token_id === LP_TOKEN_IDS.gold
+    )
+  )
+  const userUsdTxs = userTxs.filter(tx =>
+    tx.token_changes.some(tc =>
+      tc.token_id === DEXY_TOKEN_IDS.usd || tc.token_id === LP_TOKEN_IDS.usd
+    )
+  )
+
   if (!isConnected) {
     return (
       <div className="dexy-tab">
-        <EmptyState title="Node Not Connected" description="Connect to a node first." />
+        <div className="dexy-empty-wrap">
+          <EmptyState title="Node not connected" description="Connect to a node first." />
+        </div>
       </div>
     )
   }
@@ -499,8 +625,11 @@ export function DexyTab({
   if (capabilityTier === 'Basic') {
     return (
       <div className="dexy-tab">
-        <div className="message error">
-          Dexy requires an indexed node with extraIndex enabled.
+        <div className="dexy-empty-wrap">
+          <EmptyState
+            title="Indexed node required"
+            description="Dexy needs an indexed node with extraIndex enabled."
+          />
         </div>
       </div>
     )
@@ -509,9 +638,11 @@ export function DexyTab({
   if (loading && !goldState && !usdState) {
     return (
       <div className="dexy-tab">
-        <div className="empty-state">
-          <Spinner size={32} />
-          <p>Loading Dexy protocol state...</p>
+        <div className="dexy-empty-wrap">
+          <div className="dexy-feed-state">
+            <div className="spinner-small" />
+            <span>Loading Dexy protocol state…</span>
+          </div>
         </div>
       </div>
     )
@@ -520,49 +651,45 @@ export function DexyTab({
   if (error && !goldState && !usdState) {
     return (
       <div className="dexy-tab">
-        <div className="message error">{error}</div>
+        <div className="dexy-empty-wrap">
+          <EmptyState title="Error" description={error} />
+        </div>
       </div>
     )
   }
 
   return (
     <div className="dexy-tab">
-      {/* Protocol Header */}
-      <PageHeader
-        icon={
-          <div className="dexy-icon-stack">
+      <header className="dexy-header">
+        <div className="dexy-header-left">
+          <div className="dexy-icon-stack" aria-hidden>
             <span className="icon-gold">
-              <img src="/icons/dexygold.svg" alt="DexyGold" />
+              <img src="/icons/dexygold.svg" alt="" />
             </span>
             <span className="icon-usd">
-              <img src="/icons/use.svg" alt="USE" />
+              <img src="/icons/use.svg" alt="" />
             </span>
           </div>
-        }
-        title="Dexy Protocol"
-        subtitle="Oracle-pegged stablecoins with LP dynamics"
-        info={[
-          { label: 'Variants', value: 'DexyGold, USE' },
-          { label: 'Actions', value: 'Mint, LP Swap, Liquidity' },
-        ]}
-      />
+          <div>
+            <h1 className="dexy-title">Dexy</h1>
+            <p className="dexy-subtitle">Oracle-pegged assets · Mint, swap, liquidity</p>
+          </div>
+        </div>
+        <Tabs
+          tabs={[
+            { id: 'overview', label: 'Overview' },
+            { id: 'liquidity', label: 'Liquidity' },
+          ]}
+          activeId={subTab}
+          onChange={(id) => setSubTab(id as 'overview' | 'liquidity')}
+          size="compact"
+        />
+      </header>
 
-      {/* Sub-tab Navigation */}
-      <Tabs
-        tabs={[
-          { id: 'overview', label: 'Overview' },
-          { id: 'liquidity', label: 'Liquidity' },
-        ]}
-        activeId={subTab}
-        onChange={(id) => setSubTab(id as 'overview' | 'liquidity')}
-        size="compact"
-      />
-
-      {subTab === 'overview' && (<>
-      {/* Two-column layout: protocol state (left) + actions/holdings (right) */}
+      {subTab === 'overview' && (
+      <div className="dexy-overview">
       <div className="dexy-columns">
         <div className="dexy-left">
-          {/* Asset Cards — protocol state */}
           <div className="token-cards-grid">
         <DexyAssetCard
           state={goldState}
@@ -589,32 +716,29 @@ export function DexyTab({
         </div>
 
         <div className="dexy-right">
-      {/* Your Holdings */}
       {walletAddress && walletBalance ? (
         <div className="dexy-holdings-section">
           <div className="dexy-holdings-header">
-            <h3>Your Holdings</h3>
+            <h3>Your holdings</h3>
             {ergUsdPrice && (
-              <span className="dexy-holdings-total">Total: ${totalHoldingsUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              <span className="dexy-holdings-total">${totalHoldingsUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
             )}
           </div>
           <div className="dexy-holdings-grid">
             <div className="dexy-holding-card orange">
               <div className="dexy-holding-header">
-                <div className="dexy-holding-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14">
-                    <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z" />
-                  </svg>
+                <div className="dexy-holding-icon" style={{ background: 'rgba(249, 115, 22, 0.3)', color: '#fb923c' }}>
+                  Σ
                 </div>
                 <span className="dexy-holding-name">ERG</span>
               </div>
-              <div className="dexy-holding-amount">{ergBalance.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</div>
+              <div className="dexy-holding-amount">{ergBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</div>
               {ergUsdPrice && <div className="dexy-holding-usd">${ergUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>}
             </div>
             <div className="dexy-holding-card amber">
               <div className="dexy-holding-header">
                 <div className="dexy-holding-icon-wrap gold">
-                  <img src="/icons/dexygold.svg" alt="DexyGold" />
+                  <img src="/icons/dexygold.svg" alt="" />
                 </div>
                 <span className="dexy-holding-name">DexyGold</span>
               </div>
@@ -624,7 +748,7 @@ export function DexyTab({
             <div className="dexy-holding-card emerald">
               <div className="dexy-holding-header">
                 <div className="dexy-holding-icon-wrap usd">
-                  <img src="/icons/use.svg" alt="USE" />
+                  <img src="/icons/use.svg" alt="" />
                 </div>
                 <span className="dexy-holding-name">USE</span>
               </div>
@@ -636,12 +760,12 @@ export function DexyTab({
                 <div className="dexy-holding-card amber">
                   <div className="dexy-holding-header">
                     <div className="dexy-holding-icon-wrap gold">
-                      <img src="/icons/dexygold.svg" alt="DexyGold LP" />
+                      <img src="/icons/dexygold.svg" alt="" />
                     </div>
                     <span className="dexy-holding-name">Gold LP</span>
                   </div>
                   <div className="dexy-holding-amount">{goldLpBalance.toLocaleString()} LP</div>
-                  <div className="dexy-holding-usd" style={{ color: 'var(--slate-400)' }}>
+                  <div className="dexy-holding-usd">
                     ~{goldLpErgShare.toFixed(2)} ERG + {goldLpTokenShare.toLocaleString(undefined, { maximumFractionDigits: 2 })} DexyGold
                     {ergUsdPrice ? ` ($${goldLpTotalUsd.toFixed(2)})` : ''}
                   </div>
@@ -651,12 +775,12 @@ export function DexyTab({
                 <div className="dexy-holding-card emerald">
                   <div className="dexy-holding-header">
                     <div className="dexy-holding-icon-wrap usd">
-                      <img src="/icons/use.svg" alt="USE LP" />
+                      <img src="/icons/use.svg" alt="" />
                     </div>
                     <span className="dexy-holding-name">USE LP</span>
                   </div>
                   <div className="dexy-holding-amount">{useLpBalance.toLocaleString()} LP</div>
-                  <div className="dexy-holding-usd" style={{ color: 'var(--slate-400)' }}>
+                  <div className="dexy-holding-usd">
                     ~{useLpErgShare.toFixed(2)} ERG + {useLpTokenShare.toLocaleString(undefined, { maximumFractionDigits: 3 })} USE
                     {ergUsdPrice ? ` ($${useLpTotalUsd.toFixed(2)})` : ''}
                   </div>
@@ -666,177 +790,160 @@ export function DexyTab({
           </div>
         </div>
       ) : !walletAddress && (
-        <EmptyState
-          icon={
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24">
-              <rect x="2" y="5" width="20" height="14" rx="2" />
-              <path d="M2 10h20" />
-            </svg>
-          }
-          title="Wallet Not Connected"
-          description="Connect your wallet using the button in the header to mint Dexy tokens."
-        />
+        <div className="dexy-wallet-prompt">
+          Connect a wallet in the header to mint and swap Dexy assets.
+        </div>
       )}
         </div>
       </div>
 
-      {/* Activity Feeds — side by side (full-width below columns) */}
-      <div className="dexy-activity-grid">
-        {/* Your Dexy Activity */}
-        <div className="dexy-activity-section">
-          <h3 className="dexy-section-header view-section-label">Your Dexy Activity</h3>
-          <Card className="dexy-activity-card" surface="display">
-            <CardBody>
-            {!walletAddress ? (
-              <div className="dexy-activity-empty">Connect wallet to see your activity</div>
-            ) : userTxsLoading ? (
-              <div className="dexy-activity-loading">
-                <Spinner size={16} />
-                <span>Loading...</span>
-              </div>
-            ) : userTxs.length === 0 ? (
-              <div className="dexy-activity-empty">No recent Dexy transactions</div>
-            ) : (
-              <div className="dexy-activity-list">
-                {userTxs.map(tx => {
-                  const dexyChanges = tx.token_changes.filter(tc => DEXY_TOKEN_ID_SET.has(tc.token_id))
-                  const ergChange = tx.erg_change_nano / 1e9
-                  const isReceive = tx.erg_change_nano > 0
-                  return (
-                    <div
-                      key={tx.tx_id}
-                      className="dexy-activity-row view-list-row"
-                      onClick={() => navigateToExplorer({ page: 'transaction', id: tx.tx_id })}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <div className={`activity-op-icon ${isReceive ? 'mint' : 'redeem'}`}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          {isReceive
-                            ? <path d="M12 5v14M5 12l7 7 7-7" />
-                            : <path d="M12 19V5M5 12l7-7 7 7" />
-                          }
-                        </svg>
-                      </div>
-                      <div className="activity-info">
-                        <span className="activity-op">{tx.tx_id.slice(0, 8)}...{tx.tx_id.slice(-6)}</span>
-                      </div>
-                      <div className="activity-amounts">
-                        {dexyChanges.map(tc => {
-                          const amt = tc.amount / Math.pow(10, tc.decimals)
-                          const isPos = tc.amount > 0
-                          return (
-                            <span key={tc.token_id} className={`activity-token-amt ${isPos ? 'positive' : 'negative'}`}>
-                              {isPos ? '+' : ''}{amt.toLocaleString(undefined, { maximumFractionDigits: tc.decimals })} {tc.name ?? tc.token_id.slice(0, 6)}
-                            </span>
-                          )
-                        })}
-                        <span className="activity-erg-amt">
-                          {isReceive ? '+' : ''}{ergChange.toLocaleString(undefined, { maximumFractionDigits: 4 })} ERG
-                        </span>
-                      </div>
-                      <span className="activity-time">
-                        {tx.timestamp > 0 ? formatTimeAgo(tx.timestamp) : `#${tx.inclusion_height}`}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-            </CardBody>
-          </Card>
+      <section className="dexy-feed-panel">
+        <div className="dexy-feed-head">
+          <div className="dexy-feed-tabs" role="tablist" aria-label="Activity">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={feedTab === 'protocol'}
+              className={`dexy-feed-tab ${feedTab === 'protocol' ? 'active' : ''}`}
+              onClick={() => setFeedTab('protocol')}
+            >
+              Protocol
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={feedTab === 'yours'}
+              className={`dexy-feed-tab ${feedTab === 'yours' ? 'active' : ''}`}
+              onClick={() => setFeedTab('yours')}
+            >
+              Yours
+            </button>
+          </div>
         </div>
-
-        {/* Recent Protocol Activity */}
-        <div className="dexy-activity-section">
-          <h3 className="dexy-section-header view-section-label">Recent Protocol Activity</h3>
-          <Card className="dexy-activity-card" surface="display">
-            <CardBody>
-            {activityLoading ? (
-              <div className="dexy-activity-loading">
-                <Spinner size={16} />
-                <span>Loading activity...</span>
+        <div className="dexy-feed-scroll">
+          {feedTab === 'protocol' ? (
+            activityLoading ? (
+              <div className="dexy-feed-state">
+                <div className="spinner-small" />
+                <span>Loading activity…</span>
               </div>
             ) : activity.length === 0 ? (
-              <div className="dexy-activity-empty">No recent Dexy protocol activity</div>
+              <div className="dexy-feed-state">No recent Dexy protocol activity</div>
             ) : (
-              <div className="dexy-activity-list">
-                {activity.map((item, idx) => {
-                  const op = item.operation
-                  const opLabel = op === 'mint' ? 'Mint'
-                    : op === 'redeem' ? 'Redeem'
-                    : op === 'swap' ? 'Swap'
-                    : op === 'lp_deposit' ? 'Add Liquidity'
-                    : op === 'lp_redeem' ? 'Remove Liquidity'
-                    : item.operation
-                  const opClass = op === 'mint' || op === 'lp_deposit' ? 'mint'
-                    : op === 'swap' ? 'swap' : 'redeem'
-                  const ergAbs = Math.abs(item.erg_change_nano) / 1e9
-                  const icon = TOKEN_ICONS[item.token]
-                  return (
-                    <div
-                      key={`${item.tx_id}-${idx}`}
-                      className="dexy-activity-row view-list-row"
-                      onClick={() => navigateToExplorer({ page: 'transaction', id: item.tx_id })}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <div className={`activity-op-icon ${opClass}`}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          {op === 'swap'
-                            ? <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
-                            : op === 'mint' || op === 'lp_deposit'
-                              ? <path d="M12 19V5M5 12l7-7 7 7" />
-                              : <path d="M12 5v14M5 12l7 7 7-7" />
-                          }
-                        </svg>
-                      </div>
-                      <div className="activity-info">
-                        <div className="activity-label">
-                          {icon && (
-                            <span className={`activity-token-icon-wrap ${item.token === 'DexyGold' ? 'gold' : 'usd'}`}>
-                              <img src={icon} alt="" />
-                            </span>
-                          )}
-                          <span className="activity-op">{opLabel}</span>
-                          <span className="activity-token">{item.token}</span>
-                        </div>
-                        <span className="activity-protocol">{item.protocol}</span>
-                      </div>
-                      <div className="activity-amounts">
-                        {item.token_amount_change > 0 && (() => {
-                          const decimals = TOKEN_DECIMALS[item.token] ?? 0
-                          const amt = decimals > 0
-                            ? (item.token_amount_change / Math.pow(10, decimals)).toLocaleString(undefined, { maximumFractionDigits: decimals })
-                            : item.token_amount_change.toLocaleString()
-                          const isPositive = op === 'mint' || op === 'lp_deposit'
-                          return (
-                            <span className={`activity-token-amt ${isPositive ? 'positive' : 'negative'}`}>
-                              {amt} {item.token}
-                            </span>
-                          )
-                        })()}
-                        {ergAbs > 0 && (
-                          <span className="activity-erg-amt">
-                            {ergAbs.toLocaleString(undefined, { maximumFractionDigits: 2 })} ERG
-                          </span>
-                        )}
-                      </div>
-                      <span className="activity-time">
-                        {item.timestamp > 0 ? formatTimeAgo(item.timestamp) : `#${item.height}`}
+              <div className="dexy-feed-split">
+                <div className="dexy-feed-col">
+                  <div className="dexy-feed-col-head">
+                    <span className="activity-token-icon-wrap gold">
+                      <img src="/icons/dexygold.svg" alt="" />
+                    </span>
+                    <span>DexyGold</span>
+                    {goldActivity[0] && (
+                      <span className="dexy-feed-col-age mono">
+                        {goldActivity[0].timestamp > 0
+                          ? formatTimeAgo(goldActivity[0].timestamp)
+                          : `#${goldActivity[0].height}`}
                       </span>
+                    )}
+                  </div>
+                  {goldActivity.length === 0 ? (
+                    <div className="dexy-feed-col-empty">No recent DexyGold txs</div>
+                  ) : (
+                    <div className="dexy-activity-list">
+                      {goldActivity.map((item, idx) =>
+                        renderDexyProtocolRow(item, idx, (id) => navigateToExplorer({ page: 'transaction', id }))
+                      )}
                     </div>
-                  )
-                })}
+                  )}
+                </div>
+                <div className="dexy-feed-col">
+                  <div className="dexy-feed-col-head">
+                    <span className="activity-token-icon-wrap usd">
+                      <img src="/icons/use.svg" alt="" />
+                    </span>
+                    <span>USE</span>
+                    {usdActivity[0] && (
+                      <span className="dexy-feed-col-age mono">
+                        {usdActivity[0].timestamp > 0
+                          ? formatTimeAgo(usdActivity[0].timestamp)
+                          : `#${usdActivity[0].height}`}
+                      </span>
+                    )}
+                  </div>
+                  {usdActivity.length === 0 ? (
+                    <div className="dexy-feed-col-empty">No recent USE txs</div>
+                  ) : (
+                    <div className="dexy-activity-list">
+                      {usdActivity.map((item, idx) =>
+                        renderDexyProtocolRow(item, idx, (id) => navigateToExplorer({ page: 'transaction', id }))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-            </CardBody>
-          </Card>
+            )
+          ) : !walletAddress ? (
+            <div className="dexy-feed-state">Connect wallet to see your activity</div>
+          ) : userTxsLoading ? (
+            <div className="dexy-feed-state">
+              <div className="spinner-small" />
+              <span>Loading…</span>
+            </div>
+          ) : userTxs.length === 0 ? (
+            <div className="dexy-feed-state">No recent Dexy transactions</div>
+          ) : (
+            <div className="dexy-feed-split">
+              <div className="dexy-feed-col">
+                <div className="dexy-feed-col-head">
+                  <span className="activity-token-icon-wrap gold">
+                    <img src="/icons/dexygold.svg" alt="" />
+                  </span>
+                  <span>DexyGold</span>
+                </div>
+                {userGoldTxs.length === 0 ? (
+                  <div className="dexy-feed-col-empty">No DexyGold activity</div>
+                ) : (
+                  <div className="dexy-activity-list">
+                    {userGoldTxs.map(tx =>
+                      renderDexyUserRow(
+                        tx,
+                        [DEXY_TOKEN_IDS.gold, LP_TOKEN_IDS.gold],
+                        (id) => navigateToExplorer({ page: 'transaction', id }),
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="dexy-feed-col">
+                <div className="dexy-feed-col-head">
+                  <span className="activity-token-icon-wrap usd">
+                    <img src="/icons/use.svg" alt="" />
+                  </span>
+                  <span>USE</span>
+                </div>
+                {userUsdTxs.length === 0 ? (
+                  <div className="dexy-feed-col-empty">No USE activity</div>
+                ) : (
+                  <div className="dexy-activity-list">
+                    {userUsdTxs.map(tx =>
+                      renderDexyUserRow(
+                        tx,
+                        [DEXY_TOKEN_IDS.usd, LP_TOKEN_IDS.usd],
+                        (id) => navigateToExplorer({ page: 'transaction', id }),
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
+      </section>
       </div>
-      </>)}
+      )}
 
-      {subTab === 'liquidity' && (() => {
+      {subTab === 'liquidity' && (
+      <div className="dexy-liquidity-body">
+      {(() => {
         const state = selectedVariant === 'gold' ? goldState : usdState
         const tokenName = selectedVariant === 'usd' ? 'USE' : 'DexyGold'
         const tokenDecimals = selectedVariant === 'usd' ? 3 : 0
@@ -917,7 +1024,7 @@ export function DexyTab({
                       </div>
                       <p>Approve in Nautilus</p>
                       <div className="waiting-spinner" />
-                      <Button variant="secondary" onClick={lpFlow.handleBackToChoice}>Back</Button>
+                      <button className="btn btn-secondary" onClick={lpFlow.handleBackToChoice}>Back</button>
                     </div>
                   )}
                   {lpFlow.signMethod === 'mobile' && lpFlow.qrUrl && (
@@ -927,7 +1034,7 @@ export function DexyTab({
                         <QRCodeSVG value={lpFlow.qrUrl} size={200} level="M" includeMargin bgColor="white" fgColor="black" />
                       </div>
                       <div className="waiting-spinner" />
-                      <Button variant="secondary" onClick={lpFlow.handleBackToChoice}>Back</Button>
+                      <button className="btn btn-secondary" onClick={lpFlow.handleBackToChoice}>Back</button>
                     </div>
                   )}
                 </div>
@@ -945,7 +1052,7 @@ export function DexyTab({
                   </div>
                   <h3>Transaction Submitted!</h3>
                   {lpFlow.txId && <TxSuccess txId={lpFlow.txId} explorerUrl={explorerUrl} />}
-                  <Button variant="primary" onClick={() => {
+                  <button className="btn btn-primary" onClick={() => {
                     setLpTxStep('idle')
                     setDepositErg('')
                     setDepositDexy('')
@@ -955,7 +1062,7 @@ export function DexyTab({
                     fetchAllStates()
                   }}>
                     Done
-                  </Button>
+                  </button>
                 </div>
               </div>
             )}
@@ -972,9 +1079,9 @@ export function DexyTab({
                   </div>
                   <h3>Transaction Failed</h3>
                   <p className="error-message">{lpTxError}</p>
-                  <Button variant="primary" onClick={() => setLpTxStep('idle')}>
+                  <button className="btn btn-primary" onClick={() => setLpTxStep('idle')}>
                     Try Again
-                  </Button>
+                  </button>
                 </div>
               </div>
             )}
@@ -1114,13 +1221,13 @@ export function DexyTab({
                   {depositPreview && !depositPreview.can_execute && depositPreview.error && (
                     <div className="dexy-lp-error">{depositPreview.error}</div>
                   )}
-                  <Button
-                    variant="primary"
+                  <button
+                    className="dexy-action-btn"
                     disabled={!depositPreview?.can_execute || !isConnected || !walletAddress || lpTxLoading}
                     onClick={handleDeposit}
                   >
                     {lpTxLoading ? 'Building...' : 'Add Liquidity'}
-                  </Button>
+                  </button>
                 </div>
               </div>
 
@@ -1252,19 +1359,21 @@ export function DexyTab({
                   {redeemPreview && !redeemPreview.can_execute && redeemPreview.error && (
                     <div className="dexy-lp-error">{redeemPreview.error}</div>
                   )}
-                  <Button
-                    variant="primary"
+                  <button
+                    className="dexy-action-btn"
                     disabled={!redeemPreview?.can_execute || !isConnected || !walletAddress || userLpBalance === 0 || lpTxLoading}
                     onClick={handleRedeem}
                   >
                     {lpTxLoading ? 'Building...' : 'Remove Liquidity'}
-                  </Button>
+                  </button>
                 </div>
               </div>
             </>)}
           </>
         )
       })()}
+      </div>
+      )}
 
       {/* Mint Modal */}
       {mintModalOpen && walletAddress && walletBalance && (
@@ -1375,7 +1484,7 @@ function DexyAssetCard({
         </div>
         <div className="token-card-body">
           <div className="asset-loading">
-            <Spinner size={16} />
+            <div className="spinner-small" />
             <span>Loading...</span>
           </div>
         </div>

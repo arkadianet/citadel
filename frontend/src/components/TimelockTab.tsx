@@ -16,21 +16,7 @@ import { formatErg, blocksToTime, truncateAddress } from '../utils/format'
 import { startSign, getTxStatus } from '../api/types'
 import { TxSuccess } from './TxSuccess'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
-import {
-  PageHeader,
-  Tabs,
-  Card,
-  CardHeader,
-  CardBody,
-  CardFooter,
-  Badge,
-  EmptyState,
-  Button,
-  Modal,
-  FormField,
-  Input,
-  Skeleton,
-} from './ui'
+import { EmptyState } from './ui'
 import './TimelockTab.css'
 
 interface WalletBalance {
@@ -111,7 +97,9 @@ export function TimelockTab({
   if (!isConnected) {
     return (
       <div className="timelock-tab">
-        <EmptyState title="Node Not Connected" description="Connect to a node to view timelocks." />
+        <div className="tl-empty-wrap">
+          <EmptyState title="Node Not Connected" description="Connect to a node to view timelocks." />
+        </div>
       </div>
     )
   }
@@ -119,110 +107,112 @@ export function TimelockTab({
   if (capabilityTier === 'Basic') {
     return (
       <div className="timelock-tab">
-        <EmptyState title="Indexed Node Required" description="MewLock requires an indexed node (Full or Extra tier)." />
+        <div className="tl-empty-wrap">
+          <EmptyState title="Indexed Node Required" description="MewLock requires an indexed node (Full or Extra tier)." />
+        </div>
       </div>
     )
   }
 
   return (
     <div className="timelock-tab">
-      {/* Header */}
-      <PageHeader
-        icon={
-          <div className="timelock-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 6v6l4 2" />
-            </svg>
+      <header className="tl-header">
+        <div className="tl-header-left">
+          <div className="tl-icon" aria-hidden>
+            <img src="/icons/mew.png" alt="" />
           </div>
-        }
-        title="MewLock Timelocks"
-        subtitle="Lock ERG and tokens until a future block height"
-        info={state ? [
-          { label: 'Total Locks', value: String(state.totalLocks) },
-          { label: 'My Locks', value: String(state.ownLocks) },
-          { label: 'Height', value: state.currentHeight.toLocaleString() },
-        ] : undefined}
-        actions={
+          <div>
+            <h1 className="tl-title">MewLock Timelocks</h1>
+            <p className="tl-subtitle">Lock ERG and tokens until a future block height</p>
+          </div>
+        </div>
+        <div className="tl-header-meta">
+          {state && (
+            <>
+              <span className="tl-meta-chip">Total <strong className="mono">{state.totalLocks}</strong></span>
+              <span className="tl-meta-chip">Mine <strong className="mono">{state.ownLocks}</strong></span>
+              <span className="tl-meta-chip mono">Height {state.currentHeight.toLocaleString()}</span>
+            </>
+          )}
           <button
-            className="timelock-create-btn"
+            className="tl-create-btn"
             onClick={() => setShowCreateModal(true)}
             disabled={!walletAddress}
           >
             + Create Lock
           </button>
-        }
-      />
+        </div>
+      </header>
 
-      {/* Filter Bar */}
-      <Tabs
-        tabs={[
-          { id: 'all', label: 'All Locks' },
-          { id: 'mine', label: 'My Locks' },
-          { id: 'unlockable', label: 'Unlockable' },
-        ]}
-        activeId={filter}
-        onChange={(id) => setFilter(id as Filter)}
-        size="compact"
-      />
-
-      {/* Sort Bar */}
-      <div className="timelock-sort-bar view-controls">
-        <span className="timelock-sort-label">Sort:</span>
-        {([
-          ['newest', 'Newest'],
-          ['value', 'Value'],
-          ['unlock', 'Unlock Time'],
-        ] as [SortKey, string][]).map(([key, label]) => (
-          <button
-            key={key}
-            className={`timelock-sort-btn view-sort-btn ${sortKey === key ? 'active' : ''}`}
-            onClick={() => setSortKey(key)}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="tl-controls">
+        <div className="tl-filter-tabs" role="tablist" aria-label="Filter locks">
+          {([
+            ['all', 'All Locks'],
+            ['mine', 'My Locks'],
+            ['unlockable', 'Unlockable'],
+          ] as [Filter, string][]).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={filter === key}
+              className={`tl-filter-tab ${filter === key ? 'active' : ''}`}
+              onClick={() => setFilter(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="tl-sort-group">
+          <span className="tl-sort-label">Sort</span>
+          {([
+            ['newest', 'Newest'],
+            ['value', 'Value'],
+            ['unlock', 'Unlock Time'],
+          ] as [SortKey, string][]).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={`tl-sort-btn ${sortKey === key ? 'active' : ''}`}
+              onClick={() => setSortKey(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Error */}
-      {error && <div className="timelock-error">{error}</div>}
+      {error && <div className="tl-error">{error}</div>}
 
-      {/* Loading */}
-      {loading && !state && (
-        <div className="timelock-grid view-grid">
-          {[0, 1, 2].map(i => (
-            <Skeleton key={i} height="220px" />
-          ))}
-        </div>
-      )}
-
-      {/* Empty State */}
-      {state && filteredLocks.length === 0 && !loading && (
-        <EmptyState
-          title="No Timelocks"
-          description={
-            filter === 'all'
-              ? 'No timelocks found on chain.'
-              : filter === 'mine'
-              ? 'You have no timelocks.'
-              : 'No unlockable locks found.'
-          }
-        />
-      )}
-
-      {/* Card Grid */}
-      {filteredLocks.length > 0 && (
-        <div className="timelock-grid view-grid">
-          {filteredLocks.map(lock => (
-            <LockCard
-              key={lock.boxId}
-              lock={lock}
-              onUnlock={() => setUnlockTarget(lock)}
-              explorerUrl={explorerUrl}
-            />
-          ))}
-        </div>
-      )}
+      <div className="tl-body">
+        {loading && !state ? (
+          <div className="tl-state">
+            <span className="spinner-small" />
+            Loading timelocks…
+          </div>
+        ) : state && filteredLocks.length === 0 ? (
+          <EmptyState
+            title="No Timelocks"
+            description={
+              filter === 'all'
+                ? 'No timelocks found on chain.'
+                : filter === 'mine'
+                ? 'You have no timelocks.'
+                : 'No unlockable locks found.'
+            }
+          />
+        ) : (
+          <div className="tl-grid">
+            {filteredLocks.map(lock => (
+              <LockCard
+                key={lock.boxId}
+                lock={lock}
+                onUnlock={() => setUnlockTarget(lock)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Create Lock Modal */}
       {showCreateModal && walletAddress && walletBalance && (
@@ -259,88 +249,80 @@ export function TimelockTab({
 function LockCard({
   lock,
   onUnlock,
-  explorerUrl: _explorerUrl,
 }: {
   lock: MewLockBox
   onUnlock: () => void
-  explorerUrl: string
 }) {
-  void _explorerUrl
   const isLocked = lock.blocksRemaining > 0
 
   return (
-    <Card className={`timelock-card ${lock.isOwn ? 'own' : ''} ${lock.isUnlockable ? 'unlockable' : ''}`} surface="display">
-      <CardHeader className="timelock-card-header">
-        <div className="timelock-card-header-left">
-          {lock.lockName && (
-            <span className="timelock-lock-name">{lock.lockName}</span>
-          )}
-          {!lock.lockName && (
-            <span className="timelock-lock-name" style={{ color: 'var(--slate-500)' }}>
-              Lock #{lock.boxId.slice(0, 8)}
-            </span>
-          )}
-          {lock.isOwn && <Badge variant="info">Your Lock</Badge>}
+    <div className={`tl-card ${lock.isOwn ? 'own' : ''} ${lock.isUnlockable ? 'unlockable' : ''}`}>
+      <div className="tl-card-head">
+        <div className="tl-card-head-left">
+          <span className="tl-lock-name">
+            {lock.lockName || `Lock #${lock.boxId.slice(0, 8)}`}
+          </span>
+          {lock.isOwn && <span className="tl-chip tl-chip--own">Yours</span>}
         </div>
-        <Badge variant={isLocked ? 'warning' : 'success'}>
+        <span className={`tl-status ${isLocked ? 'locked' : 'unlockable'}`}>
           {isLocked ? 'Locked' : 'Unlockable'}
-        </Badge>
-      </CardHeader>
+        </span>
+      </div>
 
-      <CardBody className="timelock-card-body">
-        <div className="timelock-row">
-          <span className="timelock-row-label">ERG Value</span>
-          <span className="timelock-row-value highlight">{formatErg(lock.ergValue)} ERG</span>
+      <div className="tl-card-body">
+        <div className="tl-row">
+          <span className="tl-row-label">ERG Value</span>
+          <span className="tl-row-value tl-row-value--accent mono">{formatErg(lock.ergValue)} ERG</span>
         </div>
 
         {lock.tokens.length > 0 && (
-          <div className="timelock-row">
-            <span className="timelock-row-label">Tokens</span>
-            <span className="timelock-row-value">
+          <div className="tl-row">
+            <span className="tl-row-label">Tokens</span>
+            <span className="tl-row-value mono">
               {lock.tokens.map(t =>
-                `${t.amount.toLocaleString()} ${t.name || t.tokenId.slice(0, 8) + '...'}`
+                `${t.amount.toLocaleString()} ${t.name || t.tokenId.slice(0, 8) + '…'}`
               ).join(', ')}
             </span>
           </div>
         )}
 
-        <div className="timelock-row">
-          <span className="timelock-row-label">Unlock Height</span>
-          <span className="timelock-row-value">{lock.unlockHeight.toLocaleString()}</span>
+        <div className="tl-row">
+          <span className="tl-row-label">Unlock Height</span>
+          <span className="tl-row-value mono">{lock.unlockHeight.toLocaleString()}</span>
         </div>
 
-        <div className="timelock-row">
-          <span className="timelock-row-label">Status</span>
-          <span className={`timelock-row-value ${isLocked ? '' : 'success'}`}>
+        <div className="tl-row">
+          <span className="tl-row-label">Status</span>
+          <span className={`tl-row-value ${isLocked ? '' : 'tl-row-value--success'}`}>
             {formatUnlockStatus(lock.blocksRemaining)}
           </span>
         </div>
 
-        <div className="timelock-row">
-          <span className="timelock-row-label">Owner</span>
-          <span className="timelock-row-value mono">{truncateAddress(lock.depositorAddress)}</span>
+        <div className="tl-row">
+          <span className="tl-row-label">Owner</span>
+          <span className="tl-row-value tl-row-value--faint mono">{truncateAddress(lock.depositorAddress)}</span>
         </div>
 
         {lock.lockDescription && (
-          <div className="timelock-row">
-            <span className="timelock-row-label">Description</span>
-            <span className="timelock-row-value mono" style={{ fontSize: '11px' }}>
+          <div className="tl-row">
+            <span className="tl-row-label">Description</span>
+            <span className="tl-row-value tl-row-value--faint mono">
               {lock.lockDescription.length > 60
-                ? lock.lockDescription.slice(0, 60) + '...'
+                ? lock.lockDescription.slice(0, 60) + '…'
                 : lock.lockDescription}
             </span>
           </div>
         )}
-      </CardBody>
+      </div>
 
       {lock.isUnlockable && (
-        <CardFooter className="timelock-card-actions">
-          <Button variant="primary" style={{ flex: 1 }} onClick={onUnlock}>
+        <div className="tl-card-actions">
+          <button className="tl-action-btn primary" onClick={onUnlock}>
             Unlock
-          </Button>
-        </CardFooter>
+          </button>
+        </div>
       )}
-    </Card>
+    </div>
   )
 }
 
@@ -429,33 +411,44 @@ function CreateLockModal({
   }
 
   return (
-    <Modal open={true} onClose={onClose} title="Create Timelock">
-      <>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Create Timelock</h2>
+          <button className="modal-close" onClick={onClose}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="modal-body">
           {step === 'input' && (
-            <div className="timelock-modal-form">
+            <div className="tl-modal-form">
               {/* Duration Selection */}
               <div className="form-group">
                 <label className="form-label">Lock Duration</label>
-                <div className="timelock-duration-grid">
+                <div className="tl-duration-grid">
                   {durations.map(d => (
                     <button
                       key={d.blocks}
-                      className={`timelock-duration-btn ${selectedDuration === d.blocks ? 'active' : ''}`}
+                      className={`tl-duration-btn ${selectedDuration === d.blocks ? 'active' : ''}`}
                       onClick={() => { setSelectedDuration(d.blocks); setCustomBlocks('') }}
                     >
                       {d.label}
                     </button>
                   ))}
                   <button
-                    className={`timelock-duration-btn ${selectedDuration === null && customBlocks ? 'active' : ''}`}
+                    className={`tl-duration-btn ${selectedDuration === null && customBlocks ? 'active' : ''}`}
                     onClick={() => setSelectedDuration(null)}
                   >
                     Custom
                   </button>
                 </div>
                 {selectedDuration === null && (
-                  <Input
+                  <input
                     type="number"
+                    className="input"
                     placeholder="Blocks (e.g. 43200 for ~60 days)"
                     value={customBlocks}
                     onChange={e => setCustomBlocks(e.target.value)}
@@ -466,96 +459,103 @@ function CreateLockModal({
 
               {/* Unlock Height Preview */}
               {unlockHeight > 0 && (
-                <div className="timelock-fee-preview">
+                <div className="tl-fee-preview">
                   Unlock at block <span>{unlockHeight.toLocaleString()}</span>
                   {' '}(~{blocksToTime(unlockHeight - currentHeight)} from now)
                 </div>
               )}
 
               {/* ERG Amount */}
-              <FormField label="ERG Amount" hint={`Balance: ${walletBalance.erg_formatted} ERG`}>
-                <Input
+              <div className="form-group">
+                <label className="form-label">
+                  ERG Amount
+                  <span className="tl-balance-hint">Balance: {walletBalance.erg_formatted} ERG</span>
+                </label>
+                <input
                   type="number"
+                  className="input"
                   placeholder="0.00"
                   value={ergAmount}
                   onChange={e => setErgAmount(e.target.value)}
                   min="0"
                   step="0.01"
                 />
-              </FormField>
+              </div>
 
               {/* Fee Preview */}
               {ergNano > 0 && (
-                <div className="timelock-fee-preview">
+                <div className="tl-fee-preview">
                   Withdrawal fee: <span>{formatErg(feePreview)} ERG</span> (3%)
                 </div>
               )}
 
               {/* Lock Name */}
-              <FormField label="Lock Name (optional)">
-                <Input
+              <div className="form-group">
+                <label className="form-label">Lock Name (optional)</label>
+                <input
                   type="text"
+                  className="input"
                   placeholder="My savings lock"
                   value={lockName}
                   onChange={e => setLockName(e.target.value)}
                   maxLength={64}
                 />
-              </FormField>
+              </div>
 
               {/* Lock Description */}
-              <FormField label="Description (optional)">
-                <Input
+              <div className="form-group">
+                <label className="form-label">Description (optional)</label>
+                <input
                   type="text"
+                  className="input"
                   placeholder="Locking until..."
                   value={lockDescription}
                   onChange={e => setLockDescription(e.target.value)}
                   maxLength={128}
                 />
-              </FormField>
+              </div>
 
-              {error && <div className="timelock-error">{error}</div>}
+              {error && <div className="tl-error">{error}</div>}
 
-              <Button
-                variant="primary"
+              <button
+                className="btn btn-primary tl-submit-btn"
                 onClick={handleSubmit}
                 disabled={!canSubmit || buildLoading}
-                loading={buildLoading}
-                style={{ width: '100%' }}
               >
                 {buildLoading ? 'Building...' : 'Create Lock'}
-              </Button>
+              </button>
             </div>
           )}
 
           {step === 'signing' && flow.signMethod === 'choose' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', padding: '24px 0' }}>
-              <p style={{ color: 'var(--slate-400)', textAlign: 'center' }}>Choose signing method</p>
-              <Button variant="primary" onClick={flow.handleNautilusSign} style={{ width: '100%' }}>
+            <div className="tl-sign-choice">
+              <p>Choose signing method</p>
+              <button className="btn btn-primary" onClick={flow.handleNautilusSign}>
                 Sign with Nautilus
-              </Button>
-              <Button variant="secondary" onClick={flow.handleMobileSign} style={{ width: '100%' }}>
+              </button>
+              <button className="btn btn-secondary" onClick={flow.handleMobileSign}>
                 Scan QR Code (ErgoPay)
-              </Button>
+              </button>
             </div>
           )}
 
           {step === 'signing' && flow.signMethod === 'nautilus' && (
-            <div style={{ textAlign: 'center', padding: '24px 0' }}>
-              <p style={{ color: 'var(--slate-400)' }}>Waiting for Nautilus confirmation...</p>
-              <div className="spinner-small" style={{ margin: '16px auto' }} />
-              <Button variant="secondary" onClick={flow.handleBackToChoice} style={{ marginTop: 12 }}>
+            <div className="tl-sign-wait">
+              <p>Waiting for Nautilus confirmation...</p>
+              <div className="spinner-small" />
+              <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>
                 Back
-              </Button>
+              </button>
             </div>
           )}
 
           {step === 'signing' && flow.signMethod === 'mobile' && flow.qrUrl && (
-            <div style={{ textAlign: 'center', padding: '16px 0' }}>
-              <p style={{ color: 'var(--slate-400)', marginBottom: 12 }}>Scan with ErgoPay wallet</p>
+            <div className="tl-sign-qr">
+              <p>Scan with ErgoPay wallet</p>
               <QRCodeSVG value={flow.qrUrl} size={200} bgColor="transparent" fgColor="#e2e8f0" />
-              <Button variant="secondary" onClick={flow.handleBackToChoice} style={{ marginTop: 12 }}>
+              <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>
                 Back
-              </Button>
+              </button>
             </div>
           )}
 
@@ -564,15 +564,16 @@ function CreateLockModal({
           )}
 
           {step === 'error' && (
-            <div style={{ textAlign: 'center', padding: '24px 0' }}>
-              <div className="timelock-error" style={{ marginBottom: 12 }}>{error}</div>
-              <Button variant="secondary" onClick={() => { setStep('input'); setError(null) }}>
+            <div className="tl-sign-wait">
+              <div className="tl-error">{error}</div>
+              <button className="btn btn-secondary" onClick={() => { setStep('input'); setError(null) }}>
                 Try Again
-              </Button>
+              </button>
             </div>
           )}
-      </>
-    </Modal>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -584,7 +585,6 @@ function UnlockModal({
   lock,
   onClose,
   walletAddress,
-  walletBalance: _walletBalance,
   currentHeight,
   explorerUrl,
   onSuccess,
@@ -597,7 +597,6 @@ function UnlockModal({
   explorerUrl: string
   onSuccess: () => void
 }) {
-  void _walletBalance
   const [step, setStep] = useState<'confirm' | 'building' | 'signing' | 'success' | 'error'>('confirm')
   const [error, setError] = useState<string | null>(null)
   const [buildLoading, setBuildLoading] = useState(false)
@@ -640,43 +639,53 @@ function UnlockModal({
   }
 
   return (
-    <Modal open={true} onClose={onClose} title="Unlock Timelock" size="sm">
-      <>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Unlock Timelock</h2>
+          <button className="modal-close" onClick={onClose}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="modal-body">
           {step === 'confirm' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="tl-confirm-form">
               {lock.lockName && (
-                <div className="timelock-row">
-                  <span className="timelock-row-label">Lock</span>
-                  <span className="timelock-row-value">{lock.lockName}</span>
+                <div className="tl-row">
+                  <span className="tl-row-label">Lock</span>
+                  <span className="tl-row-value">{lock.lockName}</span>
                 </div>
               )}
-              <div className="timelock-row">
-                <span className="timelock-row-label">Locked ERG</span>
-                <span className="timelock-row-value">{formatErg(lock.ergValue)} ERG</span>
+              <div className="tl-row">
+                <span className="tl-row-label">Locked ERG</span>
+                <span className="tl-row-value mono">{formatErg(lock.ergValue)} ERG</span>
               </div>
-              <div className="timelock-row">
-                <span className="timelock-row-label">Fee (3%)</span>
-                <span className="timelock-row-value" style={{ color: 'var(--red-400)' }}>
+              <div className="tl-row">
+                <span className="tl-row-label">Fee (3%)</span>
+                <span className="tl-row-value tl-row-value--danger mono">
                   -{formatErg(ergFee)} ERG
                 </span>
               </div>
-              <div className="timelock-row">
-                <span className="timelock-row-label">You Receive</span>
-                <span className="timelock-row-value success">~{formatErg(ergReceive)} ERG</span>
+              <div className="tl-row">
+                <span className="tl-row-label">You Receive</span>
+                <span className="tl-row-value tl-row-value--success mono">~{formatErg(ergReceive)} ERG</span>
               </div>
 
               {lock.tokens.length > 0 && (
                 <>
-                  <div style={{ borderTop: '1px solid var(--ds-border)', margin: '4px 0' }} />
+                  <div className="tl-divider" />
                   {lock.tokens.map(t => {
                     const tokenFee = t.amount > 34 ? Math.floor((t.amount * 3000) / 100000) : 0
                     return (
-                      <div key={t.tokenId} className="timelock-row">
-                        <span className="timelock-row-label">{t.name || t.tokenId.slice(0, 8) + '...'}</span>
-                        <span className="timelock-row-value">
+                      <div key={t.tokenId} className="tl-row">
+                        <span className="tl-row-label">{t.name || t.tokenId.slice(0, 8) + '…'}</span>
+                        <span className="tl-row-value mono">
                           {(t.amount - tokenFee).toLocaleString()}
                           {tokenFee > 0 && (
-                            <span style={{ color: 'var(--slate-500)', fontSize: '11px' }}> (-{tokenFee} fee)</span>
+                            <span className="tl-row-value--faint"> (-{tokenFee} fee)</span>
                           )}
                         </span>
                       </div>
@@ -685,49 +694,47 @@ function UnlockModal({
                 </>
               )}
 
-              {error && <div className="timelock-error">{error}</div>}
+              {error && <div className="tl-error">{error}</div>}
 
-              <Button
-                variant="primary"
+              <button
+                className="btn btn-primary tl-submit-btn"
                 onClick={handleUnlock}
                 disabled={buildLoading}
-                loading={buildLoading}
-                style={{ width: '100%', marginTop: 8 }}
               >
                 {buildLoading ? 'Building...' : 'Confirm Unlock'}
-              </Button>
+              </button>
             </div>
           )}
 
           {step === 'signing' && flow.signMethod === 'choose' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', padding: '24px 0' }}>
-              <p style={{ color: 'var(--slate-400)', textAlign: 'center' }}>Choose signing method</p>
-              <Button variant="primary" onClick={flow.handleNautilusSign} style={{ width: '100%' }}>
+            <div className="tl-sign-choice">
+              <p>Choose signing method</p>
+              <button className="btn btn-primary" onClick={flow.handleNautilusSign}>
                 Sign with Nautilus
-              </Button>
-              <Button variant="secondary" onClick={flow.handleMobileSign} style={{ width: '100%' }}>
+              </button>
+              <button className="btn btn-secondary" onClick={flow.handleMobileSign}>
                 Scan QR Code (ErgoPay)
-              </Button>
+              </button>
             </div>
           )}
 
           {step === 'signing' && flow.signMethod === 'nautilus' && (
-            <div style={{ textAlign: 'center', padding: '24px 0' }}>
-              <p style={{ color: 'var(--slate-400)' }}>Waiting for Nautilus confirmation...</p>
-              <div className="spinner-small" style={{ margin: '16px auto' }} />
-              <Button variant="secondary" onClick={flow.handleBackToChoice} style={{ marginTop: 12 }}>
+            <div className="tl-sign-wait">
+              <p>Waiting for Nautilus confirmation...</p>
+              <div className="spinner-small" />
+              <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>
                 Back
-              </Button>
+              </button>
             </div>
           )}
 
           {step === 'signing' && flow.signMethod === 'mobile' && flow.qrUrl && (
-            <div style={{ textAlign: 'center', padding: '16px 0' }}>
-              <p style={{ color: 'var(--slate-400)', marginBottom: 12 }}>Scan with ErgoPay wallet</p>
+            <div className="tl-sign-qr">
+              <p>Scan with ErgoPay wallet</p>
               <QRCodeSVG value={flow.qrUrl} size={200} bgColor="transparent" fgColor="#e2e8f0" />
-              <Button variant="secondary" onClick={flow.handleBackToChoice} style={{ marginTop: 12 }}>
+              <button className="btn btn-secondary" onClick={flow.handleBackToChoice}>
                 Back
-              </Button>
+              </button>
             </div>
           )}
 
@@ -736,14 +743,15 @@ function UnlockModal({
           )}
 
           {step === 'error' && (
-            <div style={{ textAlign: 'center', padding: '24px 0' }}>
-              <div className="timelock-error" style={{ marginBottom: 12 }}>{error}</div>
-              <Button variant="secondary" onClick={() => { setStep('confirm'); setError(null) }}>
+            <div className="tl-sign-wait">
+              <div className="tl-error">{error}</div>
+              <button className="btn btn-secondary" onClick={() => { setStep('confirm'); setError(null) }}>
                 Try Again
-              </Button>
+              </button>
             </div>
           )}
-      </>
-    </Modal>
+        </div>
+      </div>
+    </div>
   )
 }

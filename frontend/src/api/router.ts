@@ -36,7 +36,15 @@ export interface Route {
   total_input: number
   total_output: number
   total_price_impact: number
+  /** AMM pool swap fees (input-token units). */
   total_fees: number
+  /** Miner fees for all hops (nanoERG). */
+  total_miner_fees: number
+  /**
+   * Fee-aware output: total_output − total_miner_fees when the route ends in ERG,
+   * otherwise equals total_output.
+   */
+  net_output: number
   effective_rate: number
 }
 
@@ -57,6 +65,8 @@ export interface SplitRoute {
   allocations: SplitAllocation[]
   total_output: number
   total_input: number
+  total_miner_fees: number
+  net_output: number
 }
 
 /** [impact_percent, max_input_amount] */
@@ -100,13 +110,25 @@ export interface SplitRouteDetail {
   allocations: SplitAllocationDetail[]
   total_output: number
   total_input: number
+  total_miner_fees: number
+  net_output: number
+  /** Improvement of split net_output vs best single-route net_output. */
   improvement_pct: number
+}
+
+export interface MaxSwapHint {
+  max_input: number
+  max_output: number
+  /** e.g. "pool_min_erg" */
+  reason: string
 }
 
 export interface RoutesResponse {
   routes: RouteQuote[]
   depth_tiers: DepthTiers[]
   split: SplitRouteDetail | null
+  /** Present when requested size cannot execute but a smaller max can (ERG-out). */
+  max_swap: MaxSwapHint | null
 }
 
 // =============================================================================

@@ -547,6 +547,31 @@ pub async fn get_protocol_activity(
     Ok(all)
 }
 
+/// Keep up to `per_group` newest interactions for each matching group key.
+fn take_per_group(
+    mut items: Vec<ProtocolInteraction>,
+    groups: &[&str],
+    key: impl Fn(&ProtocolInteraction) -> &str,
+    per_group: usize,
+) -> Vec<ProtocolInteraction> {
+    items.sort_by(|a, b| b.height.cmp(&a.height));
+    let mut out = Vec::new();
+    for group in groups {
+        let mut n = 0;
+        for item in &items {
+            if key(item) == *group {
+                out.push(item.clone());
+                n += 1;
+                if n >= per_group {
+                    break;
+                }
+            }
+        }
+    }
+    out.sort_by(|a, b| b.height.cmp(&a.height));
+    out
+}
+
 #[tauri::command]
 pub async fn get_dexy_activity(
     state: State<'_, AppState>,
@@ -560,6 +585,7 @@ pub async fn get_dexy_activity(
     let dexy_gold_ids = DexyIds::for_variant(DexyVariant::Gold, config.network);
     let dexy_usd_ids = DexyIds::for_variant(DexyVariant::Usd, config.network);
 
+    // Per-variant budget so Gold and USE columns both stay populated.
     let count = count as usize;
 
     let dexy_gold_bank_fut = async {
@@ -655,13 +681,22 @@ pub async fn get_dexy_activity(
         dexy_usd_lp_fut
     );
 
+    let mut gold: Vec<ProtocolInteraction> = Vec::new();
+    gold.extend(gold_bank);
+    gold.extend(gold_lp);
+    gold.sort_by(|a, b| b.height.cmp(&a.height));
+    gold.truncate(count);
+
+    let mut usd: Vec<ProtocolInteraction> = Vec::new();
+    usd.extend(usd_bank);
+    usd.extend(usd_lp);
+    usd.sort_by(|a, b| b.height.cmp(&a.height));
+    usd.truncate(count);
+
     let mut all: Vec<ProtocolInteraction> = Vec::new();
-    all.extend(gold_bank);
-    all.extend(usd_bank);
-    all.extend(gold_lp);
-    all.extend(usd_lp);
+    all.extend(gold);
+    all.extend(usd);
     all.sort_by(|a, b| b.height.cmp(&a.height));
-    all.truncate(count);
 
     Ok(all)
 }
@@ -683,23 +718,27 @@ pub async fn get_sigmausd_activity(
         .map_err(|e| format!("Failed to fetch SigmaUSD state: {}", e))?;
 
     let count = count as usize;
+    // Shared bank box: walk farther so SigUSD and SigRSV both get recent hits.
+    let walk = count.saturating_mul(4).max(count);
 
     let token_ids: Vec<(&str, &str)> = vec![
         (&nft_ids.sigusd_token as &str, "SigUSD"),
         (&nft_ids.sigrsv_token as &str, "SigRSV"),
     ];
-    let mut results = trace_bank_nft(
+    let walked = trace_bank_nft(
         &client,
         &sigma_state.bank_box_id,
         &nft_ids.bank_nft,
         "SigmaUSD",
         &token_ids,
-        count,
+        walk,
     )
     .await;
 
-    results.sort_by(|a, b| b.height.cmp(&a.height));
-    results.truncate(count);
-
-    Ok(results)
+    Ok(take_per_group(
+        walked,
+        &["SigUSD", "SigRSV"],
+        |i| i.token.as_str(),
+        count,
+    ))
 }

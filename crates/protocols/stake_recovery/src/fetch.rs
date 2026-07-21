@@ -16,7 +16,6 @@ pub async fn fetch_stake_state(
 ) -> Result<(ErgoBox, StakeStateSnapshot), RecoveryError> {
     for page in 0..STAKE_BOX_MAX_PAGES {
         let boxes = node
-            .inner()
             .unspent_boxes_by_address(
                 &cfg.stake_state_address.to_string(),
                 page * STAKE_BOX_PAGE_SIZE,
@@ -94,7 +93,6 @@ pub async fn fetch_stake_box_by_key(
 ) -> Result<ErgoBox, RecoveryError> {
     for page in 0..STAKE_BOX_MAX_PAGES {
         let boxes = node
-            .inner()
             .unspent_boxes_by_address(
                 &cfg.stake_box_address.to_string(),
                 page * STAKE_BOX_PAGE_SIZE,
@@ -183,7 +181,6 @@ pub async fn discover_recoverable_stakes(
         let mut protocol_hit_limit = true;
         'outer: for page in 0..STAKE_BOX_MAX_PAGES {
             let boxes = node
-                .inner()
                 .unspent_boxes_by_address(
                     &cfg.stake_box_address.to_string(),
                     page * STAKE_BOX_PAGE_SIZE,

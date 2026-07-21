@@ -7,7 +7,7 @@ import { WithdrawModal } from './WithdrawModal'
 import { BorrowModal } from './BorrowModal'
 import { RepayModal } from './RepayModal'
 import { RefundModal } from './RefundModal'
-import { PageHeader, Tabs, EmptyState, Modal, Button, Spinner } from './ui'
+import { Tabs, EmptyState } from './ui'
 import {
   getLendingMarkets,
   getLendingPositions,
@@ -200,10 +200,12 @@ export function LendingTab({
   if (!isConnected) {
     return (
       <div className="lending-tab">
-        <EmptyState
-          title="Node Not Connected"
-          description="Connect to an Ergo node to access lending markets."
-        />
+        <div className="lending-empty-wrap">
+          <EmptyState
+            title="Node not connected"
+            description="Connect to an Ergo node to access lending markets."
+          />
+        </div>
       </div>
     )
   }
@@ -211,8 +213,11 @@ export function LendingTab({
   if (capabilityTier === 'Basic') {
     return (
       <div className="lending-tab">
-        <div className="message error">
-          Lending requires an indexed node with extraIndex enabled.
+        <div className="lending-empty-wrap">
+          <EmptyState
+            title="Indexed node required"
+            description="Lending needs an indexed node with extraIndex enabled."
+          />
         </div>
       </div>
     )
@@ -221,9 +226,11 @@ export function LendingTab({
   if (loading && markets.length === 0) {
     return (
       <div className="lending-tab">
-        <div className="empty-state">
-          <Spinner size={32} />
-          <p>Loading lending markets...</p>
+        <div className="lending-empty-wrap">
+          <div className="lending-positions-loading">
+            <div className="spinner-small" />
+            <span>Loading lending markets…</span>
+          </div>
         </div>
       </div>
     )
@@ -232,43 +239,61 @@ export function LendingTab({
   if (error && markets.length === 0) {
     return (
       <div className="lending-tab">
-        <div className="message error">{error}</div>
+        <div className="lending-empty-wrap">
+          <EmptyState title="Error" description={error} />
+        </div>
       </div>
     )
   }
 
   return (
     <div className="lending-tab">
-      {/* Wallet Connect Modal */}
       {showWalletConnect && (
-        <Modal open={true} onClose={() => setShowWalletConnect(false)} title="Connect Wallet">
-          <WalletConnect
-            onConnected={(address) => {
-              onWalletConnected(address)
-              setShowWalletConnect(false)
-            }}
-            onCancel={() => setShowWalletConnect(false)}
-          />
-        </Modal>
+        <div className="modal-overlay" onClick={() => setShowWalletConnect(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Connect Wallet</h2>
+              <button className="close-btn" onClick={() => setShowWalletConnect(false)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <div className="modal-content">
+              <WalletConnect
+                onConnected={(address) => {
+                  onWalletConnected(address)
+                  setShowWalletConnect(false)
+                }}
+                onCancel={() => setShowWalletConnect(false)}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Protocol Header */}
-      <PageHeader
-        icon={
-          <div className="lending-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
+      <header className="lending-header">
+        <div className="lending-header-left">
+          <div className="lending-icon" aria-hidden>
+            <img src="/icons/quacks.svg" alt="" />
           </div>
-        }
-        title="Lending"
-        subtitle="Duckpools lending protocol"
-        info={[
-          { label: 'Markets', value: String(markets.length) },
-          { label: 'Block', value: blockHeight.toLocaleString() },
-        ]}
-        actions={
+          <div>
+            <h1 className="lending-title">Lending</h1>
+            <p className="lending-subtitle">
+              Duckpools · {markets.length} markets · Block {blockHeight.toLocaleString()}
+            </p>
+          </div>
+        </div>
+        <div className="lending-header-actions">
+          <Tabs
+            tabs={[
+              { id: 'supply', label: 'Supply' },
+              { id: 'borrow', label: 'Borrow' },
+            ]}
+            activeId={mode}
+            onChange={(id) => setMode(id as 'supply' | 'borrow')}
+            size="compact"
+          />
           <button className="link-button" onClick={() => openExternal('https://duckpools.io')}>
             Duckpools
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -277,21 +302,10 @@ export function LendingTab({
               <line x1="10" y1="14" x2="21" y2="3" />
             </svg>
           </button>
-        }
-      />
+        </div>
+      </header>
 
-      {/* Mode Toggle */}
-      <Tabs
-        tabs={[
-          { id: 'supply', label: 'Supply' },
-          { id: 'borrow', label: 'Borrow' },
-        ]}
-        activeId={mode}
-        onChange={(id) => setMode(id as 'supply' | 'borrow')}
-        size="compact"
-      />
-
-      {/* Markets Grid */}
+      <div className="lending-body">
       <div className="lending-markets-grid">
         {markets.map(pool => (
           <MarketCard
@@ -310,34 +324,22 @@ export function LendingTab({
         ))}
       </div>
 
-      {/* Wallet Section */}
       {!walletAddress && (
         <EmptyState
-          icon={
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24">
-              <rect x="2" y="5" width="20" height="14" rx="2" />
-              <path d="M2 10h20" />
-            </svg>
-          }
-          title="Wallet Not Connected"
+          title="Wallet not connected"
           description="Connect your wallet to view positions and interact with lending pools."
           action={
             <button className="connect-btn" onClick={() => setShowWalletConnect(true)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="2" y="5" width="20" height="14" rx="2" />
-                <path d="M2 10h20" />
-              </svg>
               Connect Wallet
             </button>
           }
         />
       )}
 
-      {/* Positions Loading/Error */}
       {walletAddress && positionsLoading && !positions && (
         <div className="lending-positions-loading">
-          <Spinner size={20} />
-          <span>Loading your positions...</span>
+          <div className="spinner-small" />
+          <span>Loading your positions…</span>
         </div>
       )}
 
@@ -347,7 +349,6 @@ export function LendingTab({
         </div>
       )}
 
-      {/* Stuck Proxy Boxes Banner */}
       {stuckBoxes.length > 0 && (
         <div
           className="stuck-boxes-banner"
@@ -356,7 +357,7 @@ export function LendingTab({
           role="button"
           tabIndex={0}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--ds-warning)" strokeWidth="2">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--warning, #f59e0b)" strokeWidth="2">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 8v4" />
             <path d="M12 16h.01" />
@@ -364,18 +365,17 @@ export function LendingTab({
           <span>
             You have <strong>{stuckBoxes.length}</strong> stuck proxy box{stuckBoxes.length !== 1 ? 'es' : ''} that can be recovered.
           </span>
-          <Button size="sm">View Details</Button>
+          <button className="btn btn-secondary btn-sm">View Details</button>
         </div>
       )}
+      </div>
 
-      {/* Recover Stuck Transaction Link */}
       <div className="lending-footer">
         <button className="refund-link" onClick={openRefundModal}>
           Recover Stuck Transaction
         </button>
       </div>
 
-      {/* Lend Modal */}
       {activeModal === 'lend' && selectedPool && walletAddress && (
         <LendModal
           isOpen={true}
@@ -388,7 +388,6 @@ export function LendingTab({
         />
       )}
 
-      {/* Withdraw Modal */}
       {activeModal === 'withdraw' && selectedPool && walletAddress && (
         <WithdrawModal
           isOpen={true}
@@ -402,7 +401,6 @@ export function LendingTab({
         />
       )}
 
-      {/* Borrow Modal */}
       {activeModal === 'borrow' && selectedPool && walletAddress && (
         <BorrowModal
           isOpen={true}
@@ -415,7 +413,6 @@ export function LendingTab({
         />
       )}
 
-      {/* Repay Modal */}
       {activeModal === 'repay' && selectedPool && selectedBorrowPosition && walletAddress && (
         <RepayModal
           isOpen={true}
@@ -429,7 +426,6 @@ export function LendingTab({
         />
       )}
 
-      {/* Refund Modal */}
       {activeModal === 'refund' && (
         <RefundModal
           isOpen={true}

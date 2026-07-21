@@ -1,105 +1,345 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
 /* ============================================================================
-   SigmaFi Bonds Tab
+   SigmaFi Bonds — Viewport-locked protocol page
+   Scoped under .sf-page to win over legacy App.css rules.
    ============================================================================ */
 
-.sigmafi-tab {
-  --protocol-accent: var(--emerald-500); /* protocol accent */
-  --protocol-accent-deep: var(--emerald-600); /* protocol accent */
-  --protocol-accent-bg: color-mix(in srgb, var(--emerald-500) 6%, transparent); /* protocol accent */
-  --protocol-accent-border: color-mix(in srgb, var(--emerald-500) 30%, transparent); /* protocol accent */
+.sf-page {
+  --sf-font: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --sf-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  --sf-surface: rgba(6, 14, 28, 0.72);
+  --sf-surface-soft: rgba(10, 20, 38, 0.55);
+  --sf-border: rgba(148, 163, 184, 0.12);
+  --sf-border-strong: rgba(148, 163, 184, 0.2);
+  --sf-ink: rgb(241 245 249);
+  --sf-muted: #8b9bb0;
+  --sf-faint: #5f7088;
+  --sf-accent: #f472b6;
+  --sf-success: #34d399;
+  --sf-warning: #fbbf24;
+  --sf-danger: #f87171;
+  --sf-radius: clamp(8px, 0.9vh, 12px);
+  --sf-radius-sm: clamp(6px, 0.7vh, 10px);
+  --sf-gap: clamp(0.4rem, 1.1vh, 0.75rem);
+  --sf-pad-y: clamp(0.55rem, 1.2vh, 0.9rem);
+  --sf-pad-x: clamp(0.7rem, 1.1vw, 1.15rem);
+
+  container-type: size;
+  container-name: sf;
+
   flex: 1;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  padding: var(--space-md) var(--space-lg);
-  max-width: 1400px;
-  margin: 0 auto;
-  width: 100%;
-  min-height: 0;
-  overflow-y: auto;
-  animation: sigmafiFadeIn 0.4s ease-out;
-  gap: var(--space-sm);
+  gap: var(--sf-gap);
+  overflow: hidden;
+  padding: var(--sf-pad-y) var(--sf-pad-x);
+  font-family: var(--sf-font);
+  color: var(--sf-ink);
 }
 
-@keyframes sigmafiFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+.sf-page .mono {
+  font-family: var(--sf-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ============================================================================
-   Header — icon only (PageHeader handles the rest)
+   Empty / loading states
    ============================================================================ */
 
-.sigmafi-icon {
-  width: 36px;
-  height: 36px;
+.sf-empty-wrap {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+.sf-page .spinner-small {
+  width: clamp(14px, 1.8vh, 18px);
+  height: clamp(14px, 1.8vh, 18px);
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--protocol-accent), var(--protocol-accent-deep));
+  border: 2px solid rgba(244, 114, 182, 0.18);
+  border-top-color: var(--sf-accent);
+  animation: sf-spin 0.85s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes sf-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   Header
+   ============================================================================ */
+
+.sf-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.sf-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.sf-icon {
+  width: clamp(30px, 3.6vh, 36px);
+  height: clamp(30px, 3.6vh, 36px);
+  border-radius: 50%;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  color: var(--text-strong);
+  background: linear-gradient(135deg, var(--sf-accent), #db2777);
+  color: white;
 }
 
-.sigmafi-icon svg {
-  width: 20px;
-  height: 20px;
+.sf-icon svg {
+  width: clamp(16px, 2vh, 20px);
+  height: clamp(16px, 2vh, 20px);
 }
 
-/* Tab bar now uses <Tabs> component */
-
-.sigmafi-controls-bar {
-  flex-shrink: 0;
+.sf-title {
+  margin: 0;
+  font-size: clamp(1.05rem, 2.2vh, 1.35rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
 }
 
-.sigmafi-controls {
+.sf-subtitle {
+  margin: 0.1rem 0 0;
+  font-size: clamp(0.65rem, 1.2vh, 0.75rem);
+  color: var(--sf-faint);
+}
+
+.sf-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.sf-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--sf-border);
+  background: var(--sf-surface-soft);
+  font-size: clamp(0.62rem, 1.2vh, 0.72rem);
+  font-weight: 500;
+  color: var(--sf-muted);
+}
+
+.sf-create-btn {
+  appearance: none;
+  padding: clamp(0.4rem, 0.9vh, 0.55rem) clamp(0.65rem, 1.2vw, 0.85rem);
+  border-radius: var(--sf-radius-sm);
+  border: 1px solid var(--sf-accent);
+  background: var(--sf-accent);
+  color: #1a0a14;
+  font: inherit;
+  font-size: clamp(0.68rem, 1.3vh, 0.78rem);
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.sf-create-btn:hover {
+  background: #f386ac;
+  border-color: #f386ac;
+  transform: translateY(-1px);
+}
+
+/* ============================================================================
+   Toolbar — tabs + filters
+   ============================================================================ */
+
+.sf-toolbar {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  margin-left: auto;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
-.sigmafi-filter-check {
+.sf-filters {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--text-xs);
-  color: var(--slate-400);
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.sf-filter-check {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: clamp(0.65rem, 1.2vh, 0.74rem);
+  color: var(--sf-muted);
   cursor: pointer;
   user-select: none;
 }
 
-.sigmafi-filter-check input[type="checkbox"] {
-  accent-color: var(--protocol-accent);
+.sf-filter-check input[type="checkbox"] {
+  accent-color: var(--sf-accent);
+}
+
+.sf-refresh-btn {
+  appearance: none;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-surface-soft);
+  color: var(--sf-muted);
+  font: inherit;
+  font-size: clamp(0.62rem, 1.2vh, 0.72rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.sf-refresh-btn:hover:not(:disabled) {
+  border-color: var(--sf-border-strong);
+  color: var(--sf-ink);
+  background: rgba(8, 18, 34, 0.85);
+}
+
+.sf-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ============================================================================
-   Sort Bar
+   Error message
    ============================================================================ */
 
-.sigmafi-sort-bar {
-  /* base from .view-controls */
+.sf-error {
+  padding: clamp(0.45rem, 1vh, 0.6rem) clamp(0.6rem, 1vw, 0.8rem);
+  border-radius: var(--sf-radius-sm);
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  color: var(--sf-danger);
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
   flex-shrink: 0;
 }
 
-.sigmafi-sort-label {
-  font-size: var(--text-xs);
-  color: var(--slate-500);
-  margin-right: var(--space-xs);
+/* ============================================================================
+   Body — scrollable container
+   ============================================================================ */
+
+.sf-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-gap);
 }
 
-.sigmafi-sort-btn {
-  /* base from .view-sort-btn */
+.sf-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sf-body::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 4px;
 }
 
 /* ============================================================================
-   Card Grid
+   Sort bar
+   ============================================================================ */
+
+.sf-sort-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.sf-sort-label {
+  font-size: clamp(0.6rem, 1.1vh, 0.68rem);
+  color: var(--sf-faint);
+  margin-right: 0.1rem;
+}
+
+.sf-sort-btn {
+  appearance: none;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--sf-border);
+  background: var(--sf-surface-soft);
+  color: var(--sf-muted);
+  font: inherit;
+  font-size: clamp(0.62rem, 1.2vh, 0.7rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.sf-sort-btn:hover {
+  color: var(--sf-ink);
+  border-color: var(--sf-border-strong);
+}
+
+.sf-sort-btn.active {
+  background: rgba(244, 114, 182, 0.14);
+  border-color: rgba(244, 114, 182, 0.32);
+  color: var(--sf-accent);
+}
+
+/* ============================================================================
+   Loading state
+   ============================================================================ */
+
+.sf-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: clamp(0.9rem, 3vh, 1.5rem);
+  color: var(--sf-muted);
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
+}
+
+.sf-page .empty-state,
+.sf-page .ds-empty-state {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: clamp(1rem, 3vh, 1.5rem);
+  color: var(--sf-muted);
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
+}
+
+/* ============================================================================
+   Card grid
    ============================================================================ */
 
 .sigmafi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(clamp(280px, 30vw, 360px), 1fr));
-  gap: var(--space-md);
+  grid-template-columns: repeat(auto-fill, minmax(clamp(260px, 28vw, 340px), 1fr));
+  gap: var(--sf-gap);
+  align-content: start;
 }
 
 @media (max-width: 640px) {
@@ -109,81 +349,105 @@
 }
 
 /* ============================================================================
-   Order Card
+   Card
    ============================================================================ */
 
 .sigmafi-card {
-  background: var(--ds-surface-base);
-  backdrop-filter: var(--ds-blur);
-  -webkit-backdrop-filter: var(--ds-blur);
-  border: 1px solid var(--ds-border);
-  border-radius: var(--ds-card-radius);
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: border-color var(--ds-transition-base), transform var(--ds-transition-base);
-  box-shadow: var(--glass-inner-edge);
+  min-width: 0;
+  border-radius: var(--sf-radius);
+  border: 1px solid var(--sf-border);
+  background: var(--sf-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  overflow: hidden;
+  transition: border-color 0.15s ease, transform 0.15s ease;
 }
 
 .sigmafi-card:hover {
-  border-color: var(--ds-border-hover);
+  border-color: var(--sf-border-strong);
   transform: translateY(-2px);
 }
 
 .sigmafi-card.own {
-  border-color: var(--protocol-accent-border);
+  border-color: rgba(52, 211, 153, 0.28);
 }
 
 .sigmafi-card.past-due {
-  border-color: color-mix(in srgb, var(--ds-danger) 40%, transparent);
+  border-color: rgba(248, 113, 113, 0.4);
 }
 
-/* Card Header */
+/* Card header */
 .sigmafi-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-sm) var(--space-md);
-  background: var(--protocol-accent-bg);
-  border-bottom: 1px solid var(--ds-border);
+  gap: 0.5rem;
+  padding: clamp(0.5rem, 1vh, 0.65rem) clamp(0.6rem, 1vw, 0.8rem);
+  background: rgba(244, 114, 182, 0.06);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
 }
 
 .sigmafi-card.past-due .sigmafi-card-header {
-  background: var(--ds-danger-bg);
+  background: rgba(248, 113, 113, 0.08);
 }
 
 .sigmafi-card-header-left {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 0.4rem;
+  min-width: 0;
 }
 
 .sigmafi-token-badge {
-  padding: 2px var(--space-sm);
-  border-radius: var(--ds-radius-sm);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  background: color-mix(in srgb, var(--protocol-accent) 15%, transparent);
-  color: var(--emerald-400);
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  font-size: clamp(0.6rem, 1.15vh, 0.68rem);
+  font-weight: 700;
+  background: rgba(244, 114, 182, 0.14);
+  color: var(--sf-accent);
+  white-space: nowrap;
 }
 
 .sigmafi-own-badge {
-  padding: 2px var(--space-sm);
-  border-radius: var(--ds-radius-sm);
-  font-size: 10px;
-  font-weight: 600;
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  background: color-mix(in srgb, var(--protocol-accent) 12%, transparent);
-  color: var(--emerald-400);
+  background: rgba(52, 211, 153, 0.14);
+  color: var(--sf-success);
+  white-space: nowrap;
 }
 
-/* Card Body */
+/* Retained for SigmaFiConfirmModal, which references these directly */
+.sigmafi-status-badge {
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sigmafi-status-badge.active {
+  background: rgba(52, 211, 153, 0.14);
+  color: var(--sf-success);
+}
+
+.sigmafi-status-badge.danger {
+  background: rgba(248, 113, 113, 0.14);
+  color: var(--sf-danger);
+}
+
+/* Card body */
 .sigmafi-card-body {
-  padding: var(--space-sm) var(--space-md);
+  padding: clamp(0.5rem, 1vh, 0.65rem) clamp(0.6rem, 1vw, 0.8rem);
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0.05rem;
   flex: 1;
 }
 
@@ -191,57 +455,104 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-xs) 0;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
 }
 
 .sigmafi-row-label {
-  font-size: var(--text-xs);
-  color: var(--slate-500);
+  font-size: clamp(0.62rem, 1.15vh, 0.7rem);
+  color: var(--sf-faint);
 }
 
 .sigmafi-row-value {
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--text-strong);
-  font-family: var(--ds-font-mono);
-  font-variant-numeric: var(--ds-numeric);
+  font-family: var(--sf-mono);
+  font-size: clamp(0.7rem, 1.4vh, 0.8rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--sf-ink);
+  text-align: right;
 }
 
 .sigmafi-row-value.highlight {
-  color: var(--emerald-400);
+  color: var(--sf-accent);
 }
 
 .sigmafi-row-value.danger {
-  color: var(--ds-danger);
+  color: var(--sf-danger);
 }
 
 .sigmafi-row-value.mono {
-  font-size: var(--text-xs);
-  color: var(--slate-400);
+  font-size: clamp(0.6rem, 1.1vh, 0.68rem);
+  color: var(--sf-muted);
+  font-weight: 500;
 }
 
-/* Card Actions */
+/* Card actions */
 .sigmafi-card-actions {
   display: flex;
-  gap: var(--space-xs);
-  padding: var(--space-sm) var(--space-md);
-  border-top: 1px solid var(--ds-border);
+  gap: 0.4rem;
+  padding: clamp(0.5rem, 1vh, 0.65rem) clamp(0.6rem, 1vw, 0.8rem);
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
 }
 
-.sigmafi-card-actions .ds-btn {
+.sigmafi-action-btn {
+  appearance: none;
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.4rem, 0.9vh, 0.55rem) 0.5rem;
+  border-radius: var(--sf-radius-sm);
+  font: inherit;
+  font-size: clamp(0.68rem, 1.3vh, 0.78rem);
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.sigmafi-action-btn.primary {
+  background: var(--sf-accent);
+  border-color: var(--sf-accent);
+  color: #1a0a14;
+}
+
+.sigmafi-action-btn.primary:hover:not(:disabled) {
+  background: #f386ac;
+  border-color: #f386ac;
+}
+
+.sigmafi-action-btn.danger {
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--sf-danger);
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.sigmafi-action-btn.danger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.2);
+}
+
+.sigmafi-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ============================================================================
-   Error State
+   Responsive / density
    ============================================================================ */
 
-.sigmafi-error {
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-danger-bg);
-  border: 1px solid color-mix(in srgb, var(--ds-danger) 30%, transparent);
-  color: var(--ds-danger);
-  font-size: var(--text-sm);
-  flex-shrink: 0;
+@container sf (max-height: 700px) {
+  .sf-subtitle {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .sf-header {
+    align-items: flex-start;
+  }
+
+  .sf-toolbar {
+    align-items: flex-start;
+  }
 }

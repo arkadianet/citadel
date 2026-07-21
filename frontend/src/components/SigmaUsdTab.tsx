@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { TransactionModal, type SigmaUsdAction } from './TransactionModal'
 import { getSigmaUsdActivity, type ProtocolInteraction } from '../api/protocolActivity'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
-import { PageHeader, Card, CardBody, EmptyState, Spinner } from './ui'
+import { EmptyState } from './ui'
 import './SigmaUsdTab.css'
 
 interface SigmaUsdState {
@@ -98,6 +98,114 @@ function formatTimeAgo(timestampMs: number): string {
   return new Date(timestampMs).toLocaleDateString()
 }
 
+function formatCompact(n: number): string {
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B'
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M'
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K'
+  return n.toFixed(2)
+}
+
+function renderProtocolRow(
+  item: ProtocolInteraction,
+  idx: number,
+  onOpen: (txId: string) => void,
+) {
+  const isMint = item.operation === 'mint'
+  const ergAbs = Math.abs(item.erg_change_nano) / 1e9
+  const icon = TOKEN_ICONS[item.token]
+  return (
+    <button
+      key={`${item.tx_id}-${idx}`}
+      type="button"
+      className="su-feed-row"
+      onClick={() => onOpen(item.tx_id)}
+    >
+      <div className={`su-feed-icon ${isMint ? 'mint' : 'redeem'}`} aria-hidden>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          {isMint
+            ? <path d="M12 19V5M5 12l7-7 7 7" />
+            : <path d="M12 5v14M5 12l7 7 7-7" />
+          }
+        </svg>
+      </div>
+      <div className="su-feed-info">
+        <div className="su-feed-label">
+          {icon && <img src={icon} alt="" />}
+          <span className="su-feed-op">{isMint ? 'Mint' : 'Redeem'}</span>
+        </div>
+      </div>
+      <div className="su-feed-amounts">
+        {item.token_amount_change > 0 && (() => {
+          const decimals = TOKEN_DECIMALS[item.token] ?? 0
+          const amt = decimals > 0
+            ? (item.token_amount_change / Math.pow(10, decimals)).toLocaleString(undefined, { maximumFractionDigits: decimals })
+            : item.token_amount_change.toLocaleString()
+          return (
+            <span className={`amt ${isMint ? 'positive' : 'negative'}`}>
+              {isMint ? '+' : '-'}{amt}
+            </span>
+          )
+        })()}
+        {ergAbs > 0 && (
+          <span className="amt muted">
+            {ergAbs.toLocaleString(undefined, { maximumFractionDigits: 2 })} ERG
+          </span>
+        )}
+      </div>
+      <span className="su-feed-time">
+        {item.timestamp > 0 ? formatTimeAgo(item.timestamp) : `#${item.height}`}
+      </span>
+    </button>
+  )
+}
+
+function renderUserRow(
+  tx: RecentTx,
+  tokenId: string,
+  onOpen: (txId: string) => void,
+) {
+  const changes = tx.token_changes.filter(tc => tc.token_id === tokenId)
+  const ergChange = tx.erg_change_nano / 1e9
+  const isReceive = tx.erg_change_nano > 0
+  return (
+    <button
+      key={tx.tx_id}
+      type="button"
+      className="su-feed-row"
+      onClick={() => onOpen(tx.tx_id)}
+    >
+      <div className={`su-feed-icon ${isReceive ? 'mint' : 'redeem'}`} aria-hidden>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          {isReceive
+            ? <path d="M12 5v14M5 12l7 7 7-7" />
+            : <path d="M12 19V5M5 12l7-7 7 7" />
+          }
+        </svg>
+      </div>
+      <div className="su-feed-info">
+        <span className="su-feed-op mono">{tx.tx_id.slice(0, 8)}…</span>
+      </div>
+      <div className="su-feed-amounts">
+        {changes.map(tc => {
+          const amt = tc.amount / Math.pow(10, tc.decimals)
+          const isPos = tc.amount > 0
+          return (
+            <span key={tc.token_id} className={`amt ${isPos ? 'positive' : 'negative'}`}>
+              {isPos ? '+' : ''}{amt.toLocaleString(undefined, { maximumFractionDigits: tc.decimals })}
+            </span>
+          )
+        })}
+        <span className="amt muted">
+          {isReceive ? '+' : ''}{ergChange.toLocaleString(undefined, { maximumFractionDigits: 4 })} ERG
+        </span>
+      </div>
+      <span className="su-feed-time">
+        {tx.timestamp > 0 ? formatTimeAgo(tx.timestamp) : `#${tx.inclusion_height}`}
+      </span>
+    </button>
+  )
+}
+
 export function SigmaUsdTab({
   isConnected,
   capabilityTier,
@@ -115,6 +223,7 @@ export function SigmaUsdTab({
   const [activityLoading, setActivityLoading] = useState(false)
   const [userTxs, setUserTxs] = useState<RecentTx[]>([])
   const [userTxsLoading, setUserTxsLoading] = useState(false)
+  const [feedTab, setFeedTab] = useState<'yours' | 'protocol'>('protocol')
 
   const openTxModal = (action: SigmaUsdAction) => {
     setTxAction(action)
@@ -125,7 +234,8 @@ export function SigmaUsdTab({
     if (!isConnected || capabilityTier === 'Basic') return
     setActivityLoading(true)
     try {
-      const data = await getSigmaUsdActivity(10)
+      // count = per-token budget (SigUSD + SigRSV)
+      const data = await getSigmaUsdActivity(8)
       setActivity(data)
     } catch (e) {
       console.error('Failed to fetch SigmaUSD activity:', e)
@@ -142,11 +252,11 @@ export function SigmaUsdTab({
     }
     setUserTxsLoading(true)
     try {
-      const res = await invoke<{ transactions: RecentTx[] }>('get_recent_transactions', { limit: 20 })
+      const res = await invoke<{ transactions: RecentTx[] }>('get_recent_transactions', { limit: 40 })
       const sigmaTxs = res.transactions.filter(tx =>
         tx.token_changes.some(tc => SIGMAUSD_TOKEN_ID_SET.has(tc.token_id))
       )
-      setUserTxs(sigmaTxs.slice(0, 10))
+      setUserTxs(sigmaTxs.slice(0, 20))
     } catch (e) {
       console.error('Failed to fetch user SigmaUSD transactions:', e)
       setUserTxs([])
@@ -155,7 +265,6 @@ export function SigmaUsdTab({
     }
   }, [isConnected, walletBalance])
 
-  // Initial protocol activity fetch
   useEffect(() => {
     let cancelled = false
     if (!isConnected || capabilityTier === 'Basic') {
@@ -163,7 +272,7 @@ export function SigmaUsdTab({
       return
     }
     setActivityLoading(true)
-    getSigmaUsdActivity(10)
+    getSigmaUsdActivity(8)
       .then(data => { if (!cancelled) setActivity(data) })
       .catch(e => {
         console.error('Failed to fetch SigmaUSD activity:', e)
@@ -173,7 +282,6 @@ export function SigmaUsdTab({
     return () => { cancelled = true }
   }, [isConnected, capabilityTier])
 
-  // Initial user tx fetch
   useEffect(() => {
     let cancelled = false
     if (!isConnected || !walletBalance) {
@@ -181,13 +289,13 @@ export function SigmaUsdTab({
       return
     }
     setUserTxsLoading(true)
-    invoke<{ transactions: RecentTx[] }>('get_recent_transactions', { limit: 20 })
+    invoke<{ transactions: RecentTx[] }>('get_recent_transactions', { limit: 40 })
       .then(res => {
         if (cancelled) return
         const sigmaTxs = res.transactions.filter(tx =>
           tx.token_changes.some(tc => SIGMAUSD_TOKEN_ID_SET.has(tc.token_id))
         )
-        setUserTxs(sigmaTxs.slice(0, 10))
+        setUserTxs(sigmaTxs.slice(0, 20))
       })
       .catch(e => {
         console.error('Failed to fetch user SigmaUSD transactions:', e)
@@ -197,19 +305,33 @@ export function SigmaUsdTab({
     return () => { cancelled = true }
   }, [isConnected, walletBalance])
 
+  const sigusdActivity = activity.filter(i => i.token === 'SigUSD')
+  const sigrsvActivity = activity.filter(i => i.token === 'SigRSV')
+  const userSigusdTxs = userTxs.filter(tx =>
+    tx.token_changes.some(tc => tc.token_id === SIGMAUSD_TOKEN_IDS.sigusd)
+  )
+  const userSigrsvTxs = userTxs.filter(tx =>
+    tx.token_changes.some(tc => tc.token_id === SIGMAUSD_TOKEN_IDS.sigrsv)
+  )
+
   if (!isConnected) {
     return (
-      <div className="sigmausd-view">
-        <EmptyState title="Node Not Connected" description="Connect to a node first." />
+      <div className="su-page">
+        <div className="su-empty-wrap">
+          <EmptyState title="Node not connected" description="Connect to a node first." />
+        </div>
       </div>
     )
   }
 
   if (capabilityTier === 'Basic') {
     return (
-      <div className="sigmausd-view">
-        <div className="message error">
-          SigmaUSD requires an indexed node with extraIndex enabled.
+      <div className="su-page">
+        <div className="su-empty-wrap">
+          <EmptyState
+            title="Indexed node required"
+            description="SigmaUSD needs an indexed node with extraIndex enabled."
+          />
         </div>
       </div>
     )
@@ -217,9 +339,12 @@ export function SigmaUsdTab({
 
   if (loading && !state) {
     return (
-      <div className="sigmausd-view">
-        <div className="empty-state">
-          <p>Loading protocol state...</p>
+      <div className="su-page">
+        <div className="su-empty-wrap">
+          <div className="su-feed-state">
+            <div className="spinner-small" />
+            <span>Loading protocol state…</span>
+          </div>
         </div>
       </div>
     )
@@ -227,16 +352,20 @@ export function SigmaUsdTab({
 
   if (error) {
     return (
-      <div className="sigmausd-view">
-        <div className="message error">{error}</div>
+      <div className="su-page">
+        <div className="su-empty-wrap">
+          <EmptyState title="Error" description={error} />
+        </div>
       </div>
     )
   }
 
   if (!state) {
     return (
-      <div className="sigmausd-view">
-        <EmptyState title="Unable to Load" description="Unable to load protocol state." />
+      <div className="su-page">
+        <div className="su-empty-wrap">
+          <EmptyState title="Unable to load" description="Unable to load protocol state." />
+        </div>
       </div>
     )
   }
@@ -246,7 +375,6 @@ export function SigmaUsdTab({
   const canMintSigrsv = walletAddress && state.can_mint_sigrsv
   const canRedeemSigrsv = walletAddress && state.can_redeem_sigrsv
 
-  // Derived values
   const ergUsd = 1e9 / state.oracle_erg_per_usd_nano
   const ergReserves = state.bank_erg_nano / 1e9
   const liabilitiesErg = state.liabilities_nano / 1e9
@@ -256,15 +384,6 @@ export function SigmaUsdTab({
   const sigusdPrice = state.sigusd_price_nano / 1e9
   const sigrsvPrice = state.sigrsv_price_nano / 1e9
 
-  // Format compact numbers
-  const formatCompact = (n: number) => {
-    if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B'
-    if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M'
-    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K'
-    return n.toFixed(2)
-  }
-
-  // Gauge calculations
   const ratio = state.reserve_ratio_pct
   const clampedRatio = Math.min(Math.max(ratio, 0), 1000)
   const percentage = Math.min((clampedRatio / 1000) * 100, 100)
@@ -272,14 +391,13 @@ export function SigmaUsdTab({
   const strokeDashoffset = circumference - (percentage / 100) * circumference
 
   const getGaugeStatus = () => {
-    if (ratio < 100) return { label: 'Critical', cls: 'critical' }
-    if (ratio < 400) return { label: 'Below Minimum', cls: 'danger' }
-    if (ratio > 800) return { label: 'Above Maximum', cls: 'excess' }
-    return { label: 'Healthy', cls: 'healthy' }
+    if (ratio < 100) return { color: '#f87171', label: 'Critical', cls: 'critical' }
+    if (ratio < 400) return { color: '#fbbf24', label: 'Below minimum', cls: 'danger' }
+    if (ratio > 800) return { color: '#60a5fa', label: 'Above maximum', cls: 'excess' }
+    return { color: '#34d399', label: 'Healthy', cls: 'healthy' }
   }
   const gaugeStatus = getGaugeStatus()
 
-  // Wallet values
   const ergBalance = walletBalance ? walletBalance.erg_nano / 1e9 : 0
   const sigusdBalance = walletBalance ? walletBalance.sigusd_amount / 100 : 0
   const sigrsvBalance = walletBalance ? walletBalance.sigrsv_amount : 0
@@ -289,465 +407,343 @@ export function SigmaUsdTab({
   const totalValue = ergValue + sigusdValue + sigrsvValue
 
   return (
-    <div className="sigmausd-view">
-      <div className="sigmausd-content">
-        {/* Protocol Header */}
-        <PageHeader
-          icon={
-            <div className="sigmausd-icon-stack">
-              <span className="icon-sigusd">
-                <img src="/icons/sigmausd.svg" alt="SigUSD" />
-              </span>
-              <span className="icon-sigrsv">
-                <img src="/icons/sigrsv.svg" alt="SigRSV" />
-              </span>
-            </div>
-          }
-          title="SigmaUSD Protocol"
-          subtitle="Algorithmic stablecoin with reserve-backed stability"
-          info={[
-            { label: 'Protocol Fee', value: '2%' },
-            { label: 'Reserve Range', value: '400% – 800%' },
-            { label: 'Bank Box', value: `${state.bank_box_id.slice(0, 8)}...${state.bank_box_id.slice(-4)}` },
-          ]}
-        />
-
-        {/* Two-Column Layout */}
-        <div className="sigmausd-columns">
-          {/* Left Column: Gauge + Bank Stats */}
-          <div className="sigmausd-left">
-            {/* Reserve Ratio Section */}
-            <div className="reserve-section">
-              <div className="reserve-layout">
-                {/* Reserve Gauge */}
-                <div className="reserve-gauge-container">
-                  <div className="gauge-wrapper">
-                    <svg className="gauge-svg" viewBox="0 0 100 100">
-                      <circle className="gauge-bg" cx="50" cy="50" r="40" />
-                      <circle
-                        className={`gauge-progress ${gaugeStatus.cls}`}
-                        cx="50" cy="50" r="40"
-                        strokeDasharray={circumference}
-                        strokeDashoffset={strokeDashoffset}
-                      />
-                    </svg>
-                    <div className="gauge-center">
-                      <span className={`gauge-value ${gaugeStatus.cls}`}>{ratio.toFixed(0)}%</span>
-                      <span className="gauge-label">Reserve Ratio</span>
-                    </div>
-                  </div>
-                  <div className={`gauge-status ${gaugeStatus.cls}`}>{gaugeStatus.label}</div>
-                  <div className="gauge-range">
-                    <span>Min 400%</span>
-                    <span>•</span>
-                    <span>Max 800%</span>
-                  </div>
-                </div>
-
-                {/* Stats Grid */}
-                <div className="stats-grid">
-                  <div className="stat-card">
-                    <div className="stat-header">
-                      <svg className="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M12 6v6l4 2" />
-                      </svg>
-                      <span className="stat-label">ERG/USD</span>
-                    </div>
-                    <div className="stat-value-row">
-                      <span className="stat-value">${ergUsd.toFixed(4)}</span>
-                    </div>
-                    <div className="stat-subtext">Oracle Price</div>
-                  </div>
-
-                  <div className="stat-card">
-                    <div className="stat-header">
-                      <svg className="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                      </svg>
-                      <span className="stat-label">Reserves</span>
-                    </div>
-                    <div className="stat-value-row">
-                      <span className="stat-value">{formatCompact(ergReserves)}</span>
-                      <span className="stat-unit">ERG</span>
-                    </div>
-                    <div className="stat-subtext">${formatCompact(ergReserves * ergUsd)}</div>
-                  </div>
-
-                  <div className="stat-card">
-                    <div className="stat-header">
-                      <svg className="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                      </svg>
-                      <span className="stat-label">Liabilities</span>
-                    </div>
-                    <div className="stat-value-row">
-                      <span className="stat-value">{formatCompact(liabilitiesErg)}</span>
-                      <span className="stat-unit">ERG</span>
-                    </div>
-                    <div className="stat-subtext">${formatCompact(liabilitiesErg * ergUsd)}</div>
-                  </div>
-
-                  <div className="stat-card highlight">
-                    <div className="stat-header">
-                      <svg className="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
-                      </svg>
-                      <span className="stat-label">Equity</span>
-                    </div>
-                    <div className="stat-value-row">
-                      <span className="stat-value">{formatCompact(equityErg)}</span>
-                      <span className="stat-unit">ERG</span>
-                    </div>
-                    <div className="stat-subtext">${formatCompact(equityErg * ergUsd)}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Token Stats Cards */}
-            <div className="token-cards-grid">
-              <div className="token-card emerald">
-                <div className="token-card-header">
-                  <div className="token-header-content">
-                    <div className="token-header-left">
-                      <img src="/icons/sigmausd.svg" alt="SigUSD" className="token-icon" />
-                      <div className="token-info">
-                        <h3>SigUSD</h3>
-                        <p>Algorithmic stablecoin pegged to USD</p>
-                      </div>
-                    </div>
-                    <span className="token-ticker">SIGUSD</span>
-                  </div>
-                </div>
-                <div className="token-card-body">
-                  <div className="token-stats">
-                    <div className="token-stat">
-                      <span className="token-stat-label">Circulating Supply</span>
-                      <span className="token-stat-value">{formatCompact(sigusdSupply)}</span>
-                    </div>
-                    <div className="token-stat">
-                      <span className="token-stat-label">Price (ERG)</span>
-                      <span className="token-stat-value">{sigusdPrice.toFixed(4)}</span>
-                    </div>
-                    <div className="token-stat">
-                      <span className="token-stat-label">Price (USD)</span>
-                      <span className="token-stat-value">${(sigusdPrice * ergUsd).toFixed(4)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="token-card blue">
-                <div className="token-card-header">
-                  <div className="token-header-content">
-                    <div className="token-header-left">
-                      <img src="/icons/sigrsv.svg" alt="SigRSV" className="token-icon" />
-                      <div className="token-info">
-                        <h3>SigRSV</h3>
-                        <p>Reserve token backing SigUSD</p>
-                      </div>
-                    </div>
-                    <span className="token-ticker">SIGRSV</span>
-                  </div>
-                </div>
-                <div className="token-card-body">
-                  <div className="token-stats">
-                    <div className="token-stat">
-                      <span className="token-stat-label">Circulating Supply</span>
-                      <span className="token-stat-value">{formatCompact(sigrsvSupply)}</span>
-                    </div>
-                    <div className="token-stat">
-                      <span className="token-stat-label">Price (ERG)</span>
-                      <span className="token-stat-value">{sigrsvPrice.toFixed(8)}</span>
-                    </div>
-                    <div className="token-stat">
-                      <span className="token-stat-label">Price (USD)</span>
-                      <span className="token-stat-value">${(sigrsvPrice * ergUsd).toFixed(6)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+    <div className="su-page">
+      <header className="su-header">
+        <div className="su-header-left">
+          <div className="su-icon-stack" aria-hidden>
+            <img src="/icons/sigmausd.svg" alt="" className="su-icon-primary" />
+            <img src="/icons/sigrsv.svg" alt="" className="su-icon-secondary" />
           </div>
-
-          {/* Right Column: Actions + Wallet */}
-          <div className="sigmausd-right">
-            {/* Action Grid Card */}
-            <Card className="sigmausd-actions-card" surface="action">
-              <CardBody>
-              <div className="sigmausd-actions-grid">
-                <button
-                  className="sigmausd-action-btn"
-                  disabled={!canMintSigusd}
-                  onClick={() => openTxModal('mint_sigusd')}
-                  title={!walletAddress ? 'Connect wallet to mint' : !state.can_mint_sigusd ? 'Minting unavailable' : 'Mint SigUSD'}
-                >
-                  <div className="action-btn-label">Mint SigUSD</div>
-                  <div className="action-btn-sub">
-                    {state.can_mint_sigusd ? `${sigusdPrice.toFixed(4)} ERG` : 'Unavailable'}
-                  </div>
-                </button>
-                <button
-                  className="sigmausd-action-btn"
-                  disabled={!canRedeemSigusd || sigusdBalance <= 0}
-                  onClick={() => openTxModal('redeem_sigusd')}
-                  title={!walletAddress ? 'Connect wallet to redeem' : !state.can_redeem_sigusd ? 'Redemption unavailable' : sigusdBalance <= 0 ? 'No SigUSD to redeem' : 'Redeem SigUSD'}
-                >
-                  <div className="action-btn-label">Redeem SigUSD</div>
-                  <div className="action-btn-sub">
-                    {state.can_redeem_sigusd ? (sigusdBalance > 0 ? `${sigusdBalance.toFixed(2)} available` : 'No balance') : 'Unavailable'}
-                  </div>
-                </button>
-                <button
-                  className="sigmausd-action-btn"
-                  disabled={!canMintSigrsv}
-                  onClick={() => openTxModal('mint_sigrsv')}
-                  title={!walletAddress ? 'Connect wallet to mint' : !state.can_mint_sigrsv ? 'Minting unavailable' : 'Mint SigRSV'}
-                >
-                  <div className="action-btn-label">Mint SigRSV</div>
-                  <div className="action-btn-sub">
-                    {state.can_mint_sigrsv ? `${sigrsvPrice.toFixed(8)} ERG` : 'Unavailable'}
-                  </div>
-                </button>
-                <button
-                  className="sigmausd-action-btn"
-                  disabled={!canRedeemSigrsv || sigrsvBalance <= 0}
-                  onClick={() => openTxModal('redeem_sigrsv')}
-                  title={!walletAddress ? 'Connect wallet to redeem' : !state.can_redeem_sigrsv ? 'Redemption unavailable' : sigrsvBalance <= 0 ? 'No SigRSV to redeem' : 'Redeem SigRSV'}
-                >
-                  <div className="action-btn-label">Redeem SigRSV</div>
-                  <div className="action-btn-sub">
-                    {state.can_redeem_sigrsv ? (sigrsvBalance > 0 ? `${sigrsvBalance.toLocaleString()} available` : 'No balance') : 'Unavailable'}
-                  </div>
-                </button>
-              </div>
-              </CardBody>
-            </Card>
-
-            {/* Wallet Balances Strip */}
-            {walletAddress ? (
-              <div className="wallet-section">
-                <div className="wallet-tabs">
-                  <button className="wallet-tab active">Your Holdings</button>
-                </div>
-                <div className="wallet-tab-content">
-                  <div className="portfolio-total">
-                    <div className="portfolio-total-label">Total Portfolio Value</div>
-                    <div className="portfolio-total-value">${totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                  </div>
-                  <div className="holdings-grid">
-                    <div className="holding-card orange">
-                      <div className="holding-header">
-                        <div className="holding-icon holding-icon-erg">Σ</div>
-                        <span className="holding-name">ERG</span>
-                      </div>
-                      <div className="holding-amount">{ergBalance.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</div>
-                      <div className="holding-usd">${ergValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                    </div>
-                    <div className="holding-card emerald">
-                      <div className="holding-header">
-                        <img src="/icons/sigmausd.svg" alt="SigUSD" className="holding-icon" />
-                        <span className="holding-name">SigUSD</span>
-                      </div>
-                      <div className="holding-amount">{sigusdBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                      <div className="holding-usd">${sigusdValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                    </div>
-                    <div className="holding-card blue">
-                      <div className="holding-header">
-                        <img src="/icons/sigrsv.svg" alt="SigRSV" className="holding-icon" />
-                        <span className="holding-name">SigRSV</span>
-                      </div>
-                      <div className="holding-amount">{sigrsvBalance.toLocaleString()}</div>
-                      <div className="holding-usd">${sigrsvValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <EmptyState
-                icon={
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24">
-                    <rect x="2" y="5" width="20" height="14" rx="2" />
-                    <path d="M2 10h20" />
-                  </svg>
-                }
-                title="Wallet Not Connected"
-                description="Connect your wallet using the button in the header to mint and redeem tokens."
-              />
-            )}
+          <div>
+            <h1 className="su-title">SigmaUSD</h1>
+            <p className="su-subtitle">AgeUSD stablecoin · 2% fee · RR 400–800%</p>
           </div>
         </div>
-
-        {/* Activity Feeds — side by side */}
-        <div className="sigmausd-activity-grid">
-          {/* Your SigmaUSD Activity */}
-          <div className="sigmausd-activity-section">
-            <h3 className="sigmausd-section-header view-section-label">Your SigmaUSD Activity</h3>
-            <Card className="sigmausd-activity-card" surface="display">
-              <CardBody>
-              {!walletAddress ? (
-                <div className="sigmausd-activity-empty">Connect wallet to see your activity</div>
-              ) : userTxsLoading ? (
-                <div className="sigmausd-activity-loading">
-                  <Spinner size={16} />
-                  <span>Loading...</span>
-                </div>
-              ) : userTxs.length === 0 ? (
-                <div className="sigmausd-activity-empty">No recent SigmaUSD transactions</div>
-              ) : (
-                <div className="sigmausd-activity-list">
-                  {userTxs.map(tx => {
-                    const sigmaChanges = tx.token_changes.filter(tc => SIGMAUSD_TOKEN_ID_SET.has(tc.token_id))
-                    const ergChange = tx.erg_change_nano / 1e9
-                    const isReceive = tx.erg_change_nano > 0
-                    return (
-                      <div
-                        key={tx.tx_id}
-                        className="sigmausd-activity-row view-list-row"
-                        onClick={() => navigateToExplorer({ page: 'transaction', id: tx.tx_id })}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <div className={`activity-op-icon ${isReceive ? 'mint' : 'redeem'}`}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            {isReceive
-                              ? <path d="M12 5v14M5 12l7 7 7-7" />
-                              : <path d="M12 19V5M5 12l7-7 7 7" />
-                            }
-                          </svg>
-                        </div>
-                        <div className="activity-info">
-                          <span className="activity-op">{tx.tx_id.slice(0, 8)}...{tx.tx_id.slice(-6)}</span>
-                        </div>
-                        <div className="activity-amounts">
-                          {sigmaChanges.map(tc => {
-                            const amt = tc.amount / Math.pow(10, tc.decimals)
-                            const isPos = tc.amount > 0
-                            return (
-                              <span key={tc.token_id} className={`activity-token-amt ${isPos ? 'positive' : 'negative'}`}>
-                                {isPos ? '+' : ''}{amt.toLocaleString(undefined, { maximumFractionDigits: tc.decimals })} {tc.name ?? tc.token_id.slice(0, 6)}
-                              </span>
-                            )
-                          })}
-                          <span className="activity-erg-amt">
-                            {isReceive ? '+' : ''}{ergChange.toLocaleString(undefined, { maximumFractionDigits: 4 })} ERG
-                          </span>
-                        </div>
-                        <span className="activity-time">
-                          {tx.timestamp > 0 ? formatTimeAgo(tx.timestamp) : `#${tx.inclusion_height}`}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-              </CardBody>
-            </Card>
-          </div>
-
-          {/* Recent Protocol Activity */}
-          <div className="sigmausd-activity-section">
-            <h3 className="sigmausd-section-header view-section-label">Recent Protocol Activity</h3>
-            <Card className="sigmausd-activity-card" surface="display">
-              <CardBody>
-              {activityLoading ? (
-                <div className="sigmausd-activity-loading">
-                  <Spinner size={16} />
-                  <span>Loading activity...</span>
-                </div>
-              ) : activity.length === 0 ? (
-                <div className="sigmausd-activity-empty">No recent SigmaUSD protocol activity</div>
-              ) : (
-                <div className="sigmausd-activity-list">
-                  {activity.map((item, idx) => {
-                    const isMint = item.operation === 'mint'
-                    const ergAbs = Math.abs(item.erg_change_nano) / 1e9
-                    const icon = TOKEN_ICONS[item.token]
-                    return (
-                      <div
-                        key={`${item.tx_id}-${idx}`}
-                        className="sigmausd-activity-row view-list-row"
-                        onClick={() => navigateToExplorer({ page: 'transaction', id: item.tx_id })}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <div className={`activity-op-icon ${isMint ? 'mint' : 'redeem'}`}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            {isMint
-                              ? <path d="M12 19V5M5 12l7-7 7 7" />
-                              : <path d="M12 5v14M5 12l7 7 7-7" />
-                            }
-                          </svg>
-                        </div>
-                        <div className="activity-info">
-                          <div className="activity-label">
-                            {icon && (
-                              <span className={`sigmausd-token-icon-wrap ${item.token === 'SigUSD' ? 'sigusd' : 'sigrsv'}`}>
-                                <img src={icon} alt="" />
-                              </span>
-                            )}
-                            <span className="activity-op">{isMint ? 'Mint' : 'Redeem'}</span>
-                            <span className="activity-token">{item.token}</span>
-                          </div>
-                          <span className="activity-protocol">{item.protocol}</span>
-                        </div>
-                        <div className="activity-amounts">
-                          {item.token_amount_change > 0 && (() => {
-                            const decimals = TOKEN_DECIMALS[item.token] ?? 0
-                            const amt = decimals > 0
-                              ? (item.token_amount_change / Math.pow(10, decimals)).toLocaleString(undefined, { maximumFractionDigits: decimals })
-                              : item.token_amount_change.toLocaleString()
-                            return (
-                              <span className={`activity-token-amt ${isMint ? 'positive' : 'negative'}`}>
-                                {isMint ? '+' : '-'}{amt} {item.token}
-                              </span>
-                            )
-                          })()}
-                          {ergAbs > 0 && (
-                            <span className="activity-erg-amt">
-                              {ergAbs.toLocaleString(undefined, { maximumFractionDigits: 2 })} ERG
-                            </span>
-                          )}
-                        </div>
-                        <span className="activity-time">
-                          {item.timestamp > 0 ? formatTimeAgo(item.timestamp) : `#${item.height}`}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-              </CardBody>
-            </Card>
-          </div>
+        <div className="su-header-meta">
+          <span className={`su-rr-chip su-rr-chip--${gaugeStatus.cls}`}>
+            RR {ratio.toFixed(0)}% · {gaugeStatus.label}
+          </span>
+          <span className="su-meta-chip mono">ERG ${ergUsd.toFixed(4)}</span>
         </div>
+      </header>
 
-        {/* Transaction Modal */}
-        {txModalOpen && walletAddress && walletBalance && (
-          <TransactionModal
-            isOpen={txModalOpen}
-            onClose={() => setTxModalOpen(false)}
-            action={txAction}
-            walletAddress={walletAddress}
-            ergBalance={walletBalance.erg_nano}
-            tokenBalance={
-              txAction === 'redeem_sigusd' ? walletBalance.sigusd_amount :
-              txAction === 'redeem_sigrsv' ? walletBalance.sigrsv_amount :
-              undefined
-            }
-            explorerUrl={explorerUrl}
-            onSuccess={(txId) => {
-              console.log('Transaction successful:', txId)
-              fetchSigmaUsdActivity()
-              fetchUserSigmaUsdTxs()
-            }}
-            state={state}
-          />
-        )}
+      <div className="su-top">
+        <section className="su-health">
+          <div className="su-gauge">
+            <div className="su-gauge-wrap">
+              <svg className="su-gauge-svg" viewBox="0 0 100 100">
+                <circle className="su-gauge-bg" cx="50" cy="50" r="40" />
+                <circle
+                  className="su-gauge-progress"
+                  cx="50" cy="50" r="40"
+                  stroke={gaugeStatus.color}
+                  strokeDasharray={circumference}
+                  strokeDashoffset={strokeDashoffset}
+                />
+              </svg>
+              <div className="su-gauge-center">
+                <span className={`su-gauge-value ${gaugeStatus.cls}`}>{ratio.toFixed(0)}%</span>
+                <span className="su-gauge-label">Reserve</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="su-metrics">
+            <div className="su-metric">
+              <span className="su-metric-label">Reserves</span>
+              <span className="su-metric-value mono">{formatCompact(ergReserves)} ERG</span>
+              <span className="su-metric-sub">${formatCompact(ergReserves * ergUsd)}</span>
+            </div>
+            <div className="su-metric">
+              <span className="su-metric-label">Liabilities</span>
+              <span className="su-metric-value mono">{formatCompact(liabilitiesErg)} ERG</span>
+              <span className="su-metric-sub">${formatCompact(liabilitiesErg * ergUsd)}</span>
+            </div>
+            <div className="su-metric su-metric--accent">
+              <span className="su-metric-label">Equity</span>
+              <span className="su-metric-value mono">{formatCompact(equityErg)} ERG</span>
+              <span className="su-metric-sub">${formatCompact(equityErg * ergUsd)}</span>
+            </div>
+            <div className="su-metric">
+              <span className="su-metric-label">SigUSD supply</span>
+              <span className="su-metric-value mono">{formatCompact(sigusdSupply)}</span>
+              <span className="su-metric-sub">{sigusdPrice.toFixed(4)} ERG</span>
+            </div>
+            <div className="su-metric">
+              <span className="su-metric-label">SigRSV supply</span>
+              <span className="su-metric-value mono">{formatCompact(sigrsvSupply)}</span>
+              <span className="su-metric-sub">{sigrsvPrice.toFixed(6)} ERG</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="su-ops">
+          <div className="su-actions">
+            <button
+              type="button"
+              className="su-action"
+              disabled={!canMintSigusd}
+              onClick={() => openTxModal('mint_sigusd')}
+              title={!walletAddress ? 'Connect wallet to mint' : !state.can_mint_sigusd ? 'Minting unavailable' : 'Mint SigUSD'}
+            >
+              <img src="/icons/sigusd.svg" alt="" />
+              <span className="su-action-label">Mint SigUSD</span>
+              <span className="su-action-sub">
+                {state.can_mint_sigusd ? `${sigusdPrice.toFixed(4)} ERG` : 'Closed'}
+              </span>
+              <span className={`su-badge ${state.can_mint_sigusd ? 'open' : 'closed'}`}>
+                {state.can_mint_sigusd ? 'Open' : 'Closed'}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="su-action"
+              disabled={!canRedeemSigusd || sigusdBalance <= 0}
+              onClick={() => openTxModal('redeem_sigusd')}
+              title={!walletAddress ? 'Connect wallet to redeem' : !state.can_redeem_sigusd ? 'Redemption unavailable' : sigusdBalance <= 0 ? 'No SigUSD to redeem' : 'Redeem SigUSD'}
+            >
+              <img src="/icons/sigusd.svg" alt="" />
+              <span className="su-action-label">Redeem SigUSD</span>
+              <span className="su-action-sub">
+                {state.can_redeem_sigusd
+                  ? (sigusdBalance > 0 ? `${sigusdBalance.toFixed(2)} available` : 'No balance')
+                  : 'Closed'}
+              </span>
+              <span className={`su-badge ${state.can_redeem_sigusd ? 'open' : 'closed'}`}>
+                {state.can_redeem_sigusd ? 'Open' : 'Closed'}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="su-action"
+              disabled={!canMintSigrsv}
+              onClick={() => openTxModal('mint_sigrsv')}
+              title={!walletAddress ? 'Connect wallet to mint' : !state.can_mint_sigrsv ? 'Minting unavailable' : 'Mint SigRSV'}
+            >
+              <img src="/icons/sigrsv.svg" alt="" />
+              <span className="su-action-label">Mint SigRSV</span>
+              <span className="su-action-sub">
+                {state.can_mint_sigrsv ? `${sigrsvPrice.toFixed(6)} ERG` : 'Closed'}
+              </span>
+              <span className={`su-badge ${state.can_mint_sigrsv ? 'open' : 'closed'}`}>
+                {state.can_mint_sigrsv ? 'Open' : 'Closed'}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="su-action"
+              disabled={!canRedeemSigrsv || sigrsvBalance <= 0}
+              onClick={() => openTxModal('redeem_sigrsv')}
+              title={!walletAddress ? 'Connect wallet to redeem' : !state.can_redeem_sigrsv ? 'Redemption unavailable' : sigrsvBalance <= 0 ? 'No SigRSV to redeem' : 'Redeem SigRSV'}
+            >
+              <img src="/icons/sigrsv.svg" alt="" />
+              <span className="su-action-label">Redeem SigRSV</span>
+              <span className="su-action-sub">
+                {state.can_redeem_sigrsv
+                  ? (sigrsvBalance > 0 ? `${sigrsvBalance.toLocaleString()} available` : 'No balance')
+                  : 'Closed'}
+              </span>
+              <span className={`su-badge ${state.can_redeem_sigrsv ? 'open' : 'closed'}`}>
+                {state.can_redeem_sigrsv ? 'Open' : 'Closed'}
+              </span>
+            </button>
+          </div>
+
+          {walletAddress ? (
+            <div className="su-holdings">
+              <div className="su-holdings-total">
+                <span className="su-holdings-label">Your holdings</span>
+                <span className="su-holdings-value mono">
+                  ${totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="su-holding-chips">
+                <div className="su-holding">
+                  <span className="su-holding-icon su-holding-icon--erg">Σ</span>
+                  <div>
+                    <span className="su-holding-name">ERG</span>
+                    <span className="su-holding-amt mono">
+                      {ergBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                    </span>
+                  </div>
+                </div>
+                <div className="su-holding">
+                  <img src="/icons/sigusd.svg" alt="" className="su-holding-icon" />
+                  <div>
+                    <span className="su-holding-name">SigUSD</span>
+                    <span className="su-holding-amt mono">
+                      {sigusdBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+                <div className="su-holding">
+                  <img src="/icons/sigrsv.svg" alt="" className="su-holding-icon" />
+                  <div>
+                    <span className="su-holding-name">SigRSV</span>
+                    <span className="su-holding-amt mono">{sigrsvBalance.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="su-wallet-prompt">
+              Connect a wallet in the header to mint and redeem.
+            </div>
+          )}
+        </section>
       </div>
+
+      <section className="su-feed-panel">
+        <div className="su-feed-head">
+          <div className="su-feed-tabs" role="tablist" aria-label="Activity">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={feedTab === 'protocol'}
+              className={`su-feed-tab ${feedTab === 'protocol' ? 'active' : ''}`}
+              onClick={() => setFeedTab('protocol')}
+            >
+              Protocol
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={feedTab === 'yours'}
+              className={`su-feed-tab ${feedTab === 'yours' ? 'active' : ''}`}
+              onClick={() => setFeedTab('yours')}
+            >
+              Yours
+            </button>
+          </div>
+          <span className="su-feed-hint mono">
+            Bank {state.bank_box_id.slice(0, 8)}…{state.bank_box_id.slice(-4)}
+          </span>
+        </div>
+
+        <div className="su-feed-scroll">
+          {feedTab === 'protocol' ? (
+            activityLoading ? (
+              <div className="su-feed-state">
+                <div className="spinner-small" />
+                <span>Loading activity…</span>
+              </div>
+            ) : activity.length === 0 ? (
+              <div className="su-feed-state">No recent protocol activity</div>
+            ) : (
+              <div className="su-feed-split">
+                <div className="su-feed-col">
+                  <div className="su-feed-col-head">
+                    <img src="/icons/sigmausd.svg" alt="" />
+                    <span>SigUSD</span>
+                    {sigusdActivity[0] && (
+                      <span className="su-feed-col-age mono">
+                        {sigusdActivity[0].timestamp > 0
+                          ? formatTimeAgo(sigusdActivity[0].timestamp)
+                          : `#${sigusdActivity[0].height}`}
+                      </span>
+                    )}
+                  </div>
+                  {sigusdActivity.length === 0 ? (
+                    <div className="su-feed-col-empty">No recent SigUSD txs</div>
+                  ) : (
+                    <div className="su-feed-list">
+                      {sigusdActivity.map((item, idx) =>
+                        renderProtocolRow(item, idx, (id) => navigateToExplorer({ page: 'transaction', id }))
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="su-feed-col">
+                  <div className="su-feed-col-head">
+                    <img src="/icons/sigrsv.svg" alt="" />
+                    <span>SigRSV</span>
+                    {sigrsvActivity[0] && (
+                      <span className="su-feed-col-age mono">
+                        {sigrsvActivity[0].timestamp > 0
+                          ? formatTimeAgo(sigrsvActivity[0].timestamp)
+                          : `#${sigrsvActivity[0].height}`}
+                      </span>
+                    )}
+                  </div>
+                  {sigrsvActivity.length === 0 ? (
+                    <div className="su-feed-col-empty">No recent SigRSV txs</div>
+                  ) : (
+                    <div className="su-feed-list">
+                      {sigrsvActivity.map((item, idx) =>
+                        renderProtocolRow(item, idx, (id) => navigateToExplorer({ page: 'transaction', id }))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          ) : !walletAddress ? (
+            <div className="su-feed-state">Connect wallet to see your activity</div>
+          ) : userTxsLoading ? (
+            <div className="su-feed-state">
+              <div className="spinner-small" />
+              <span>Loading…</span>
+            </div>
+          ) : userTxs.length === 0 ? (
+            <div className="su-feed-state">No recent SigmaUSD transactions</div>
+          ) : (
+            <div className="su-feed-split">
+              <div className="su-feed-col">
+                <div className="su-feed-col-head">
+                  <img src="/icons/sigmausd.svg" alt="" />
+                  <span>SigUSD</span>
+                </div>
+                {userSigusdTxs.length === 0 ? (
+                  <div className="su-feed-col-empty">No SigUSD activity</div>
+                ) : (
+                  <div className="su-feed-list">
+                    {userSigusdTxs.map(tx =>
+                      renderUserRow(tx, SIGMAUSD_TOKEN_IDS.sigusd, (id) => navigateToExplorer({ page: 'transaction', id }))
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="su-feed-col">
+                <div className="su-feed-col-head">
+                  <img src="/icons/sigrsv.svg" alt="" />
+                  <span>SigRSV</span>
+                </div>
+                {userSigrsvTxs.length === 0 ? (
+                  <div className="su-feed-col-empty">No SigRSV activity</div>
+                ) : (
+                  <div className="su-feed-list">
+                    {userSigrsvTxs.map(tx =>
+                      renderUserRow(tx, SIGMAUSD_TOKEN_IDS.sigrsv, (id) => navigateToExplorer({ page: 'transaction', id }))
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {txModalOpen && walletAddress && walletBalance && (
+        <TransactionModal
+          isOpen={txModalOpen}
+          onClose={() => setTxModalOpen(false)}
+          action={txAction}
+          walletAddress={walletAddress}
+          ergBalance={walletBalance.erg_nano}
+          tokenBalance={
+            txAction === 'redeem_sigusd' ? walletBalance.sigusd_amount :
+            txAction === 'redeem_sigrsv' ? walletBalance.sigrsv_amount :
+            undefined
+          }
+          explorerUrl={explorerUrl}
+          onSuccess={(txId) => {
+            console.log('Transaction successful:', txId)
+            fetchSigmaUsdActivity()
+            fetchUserSigmaUsdTxs()
+          }}
+          state={state}
+        />
+      )}
     </div>
   )
 }

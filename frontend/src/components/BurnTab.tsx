@@ -7,7 +7,7 @@ import type { BurnItemInput, BurnedTokenEntry } from '../api/burn'
 import { getCachedTokenInfo } from '../api/tokenCache'
 import { formatTokenAmount } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
-import { PageHeader, EmptyState, Modal, Button, Input, Spinner } from './ui'
+import { EmptyState } from './ui'
 import './BurnTab.css'
 
 interface BurnTabProps {
@@ -26,6 +26,8 @@ interface BurnTabProps {
     }>
   } | null
   explorerUrl: string
+  /** When nested under Wallet, hide the page header and tighten padding. */
+  embedded?: boolean
 }
 
 type BurnStep = 'select' | 'confirm' | 'building' | 'signing' | 'success' | 'error'
@@ -58,7 +60,7 @@ function avatarColor(tokenId: string): string {
   return colors[Math.abs(hash) % colors.length]
 }
 
-export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl }: BurnTabProps) {
+export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl, embedded = false }: BurnTabProps) {
   const [burnCart, setBurnCart] = useState<Map<string, CartEntry>>(new Map())
   const [search, setSearch] = useState('')
   const [step, setStep] = useState<BurnStep>('select')
@@ -327,24 +329,29 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
   }
 
   const burnPageHeader = (
-    <PageHeader
-      icon={
-        <div className="burn-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+    <header className="burn-header">
+      <div className="burn-header-left">
+        <div className="burn-icon" aria-hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14l-4-4h3V8h2v4h3l-4 4z" />
           </svg>
         </div>
-      }
-      title="Token Burn"
-      subtitle="Permanently destroy tokens by removing them from circulation."
-    />
+        <div>
+          <h1 className="burn-title">Token Burn</h1>
+          <p className="burn-subtitle">Permanently destroy tokens by removing them from circulation</p>
+        </div>
+      </div>
+    </header>
   )
+
+  const rootClass = embedded ? 'burn-tab burn-tab--embedded' : 'burn-tab'
+  const pageHeader = embedded ? null : burnPageHeader
 
   // Empty states
   if (!isConnected || !walletAddress) {
     return (
-      <div className="burn-tab">
-        {burnPageHeader}
+      <div className={rootClass}>
+        {pageHeader}
         <EmptyState
           title={!isConnected ? 'Node Required' : 'Wallet Required'}
           description={!isConnected ? 'Connect to a node to use the burn tool.' : 'Connect your wallet to burn tokens.'}
@@ -356,16 +363,16 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
   // Main select step — token list + basket side by side
   if (step === 'select') {
     return (
-      <div className="burn-tab">
-        {burnPageHeader}
+      <div className={rootClass}>
+        {pageHeader}
 
         <div className="burn-layout">
           {/* Token picker */}
           <div className="burn-token-panel">
             <div className="burn-token-toolbar">
               <div className="burn-toolbar-actions">
-                <Button size="sm" variant="ghost" onClick={selectAll}>Select All</Button>
-                <Button size="sm" variant="ghost" onClick={deselectAll}>Deselect All</Button>
+                <button className="burn-toolbar-btn view-sort-btn" onClick={selectAll}>Select All</button>
+                <button className="burn-toolbar-btn view-sort-btn" onClick={deselectAll}>Deselect All</button>
               </div>
               {burnCart.size > 0 && (
                 <span className="burn-cart-badge">{burnCart.size}</span>
@@ -373,8 +380,7 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
             </div>
 
             <div className="burn-token-search">
-              <Input
-                size="sm"
+              <input
                 type="text"
                 placeholder="Search tokens..."
                 value={search}
@@ -479,13 +485,12 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
                         </div>
                         <div className="burn-basket-amount-row">
                           <div className="burn-basket-amount-wrapper">
-                            <Input
-                              size="sm"
+                            <input
                               type="text"
                               inputMode="decimal"
                               value={entry.amount}
                               onChange={e => updateCartAmount(tokenId, e.target.value)}
-                              invalid={overBalance}
+                              className={overBalance ? 'over-balance' : ''}
                             />
                             <button
                               className="burn-max-btn"
@@ -510,14 +515,13 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
                     <span>{burnCart.size} token{burnCart.size !== 1 ? 's' : ''}</span>
                     <span className="burn-basket-fee">Fee: ~0.0011 ERG</span>
                   </div>
-                  <Button
-                    variant="danger"
+                  <button
                     className="burn-submit-btn"
                     onClick={handleConfirm}
                     disabled={!cartIsValid}
                   >
                     Review Burn
-                  </Button>
+                  </button>
                 </div>
               </>
             )}
@@ -531,67 +535,78 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
   if (step === 'confirm') {
     const cartEntries = Array.from(burnCart.entries())
     return (
-      <div className="burn-tab">
-        <PageHeader
-          icon={<div className="burn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14l-4-4h3V8h2v4h3l-4 4z" /></svg></div>}
-          title="Confirm Token Burn"
-        />
-        <Modal
-          open={true}
-          onClose={() => setStep('select')}
-          title="Confirm Token Burn"
-          size="sm"
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setStep('select')}>Back</Button>
-              <Button variant="danger" onClick={handleBurn} loading={loading}>
-                {loading ? 'Building...' : `Burn ${burnCart.size} Token${burnCart.size !== 1 ? 's' : ''} Forever`}
-              </Button>
-            </>
-          }
-        >
-          <div className="burn-confirm-token-list">
-            {cartEntries.map(([tokenId, entry]) => {
-              const token = tokens.find(t => t.token_id === tokenId)
-              if (!token) return null
-              const name = getTokenName(token)
-              return (
-                <div key={tokenId} className="burn-confirm-row burn-amount-row">
-                  <span className="burn-confirm-token-name">
-                    <div
-                      className="burn-token-avatar burn-confirm-avatar"
-                      style={{ background: avatarColor(tokenId) }}
-                    >
-                      {name.charAt(0).toUpperCase()}
+      <div className={rootClass}>
+        <header className="burn-header">
+          <div className="burn-header-left">
+            <div className="burn-icon" aria-hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14l-4-4h3V8h2v4h3l-4 4z" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="burn-title">Confirm Token Burn</h1>
+            </div>
+          </div>
+        </header>
+        <div className="burn-centered-card">
+          <div className="card">
+            <div className="card-content">
+              <div className="burn-confirm-token-list">
+                {cartEntries.map(([tokenId, entry]) => {
+                  const token = tokens.find(t => t.token_id === tokenId)
+                  if (!token) return null
+                  const name = getTokenName(token)
+                  return (
+                    <div key={tokenId} className="burn-confirm-row burn-amount-row">
+                      <span className="burn-confirm-token-name">
+                        <div
+                          className="burn-token-avatar burn-confirm-avatar"
+                          style={{ background: avatarColor(tokenId) }}
+                        >
+                          {name.charAt(0).toUpperCase()}
+                        </div>
+                        {name}
+                      </span>
+                      <span>{formatTokenAmount(entry.rawAmount, token.decimals)}</span>
                     </div>
-                    {name}
-                  </span>
-                  <span>{formatTokenAmount(entry.rawAmount, token.decimals)}</span>
+                  )
+                })}
+              </div>
+
+              <div className="burn-confirm-summary" style={{ marginTop: 'var(--space-md)' }}>
+                <div className="burn-confirm-row">
+                  <span>Tokens</span>
+                  <span>{burnCart.size}</span>
                 </div>
-              )
-            })}
-          </div>
+                <div className="burn-confirm-row">
+                  <span>Miner Fee</span>
+                  <span>~0.0011 ERG</span>
+                </div>
+              </div>
 
-          <div className="burn-confirm-summary" style={{ marginTop: 'var(--space-md)' }}>
-            <div className="burn-confirm-row">
-              <span>Tokens</span>
-              <span>{burnCart.size}</span>
-            </div>
-            <div className="burn-confirm-row">
-              <span>Miner Fee</span>
-              <span>~0.0011 ERG</span>
-            </div>
-          </div>
+              <div className="burn-danger-box" style={{ marginTop: 'var(--space-md)' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--red-400)" strokeWidth="2">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <p>This action is <strong>IRREVERSIBLE</strong>. These tokens will be permanently destroyed.</p>
+              </div>
 
-          <div className="burn-danger-box" style={{ marginTop: 'var(--space-md)' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ds-danger)" strokeWidth="2">
-              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-            <p>This action is <strong>IRREVERSIBLE</strong>. These tokens will be permanently destroyed.</p>
+              <div className="button-group" style={{ marginTop: 'var(--space-md)' }}>
+                <button className="btn btn-secondary" onClick={() => setStep('select')}>Back</button>
+                <button
+                  className="btn btn-primary"
+                  style={{ background: 'var(--red-500)' }}
+                  onClick={handleBurn}
+                  disabled={loading}
+                >
+                  {loading ? 'Building...' : `Burn ${burnCart.size} Token${burnCart.size !== 1 ? 's' : ''} Forever`}
+                </button>
+              </div>
+            </div>
           </div>
-        </Modal>
+        </div>
       </div>
     )
   }
@@ -599,12 +614,12 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
   // Building step
   if (step === 'building') {
     return (
-      <div className="burn-tab">
+      <div className={rootClass}>
         <div className="burn-centered-card">
           <div className="card">
             <div className="card-content">
               <div className="swap-preview-loading">
-                <Spinner size={20} />
+                <div className="spinner-small" />
                 <span>Building burn transaction...</span>
               </div>
             </div>
@@ -617,7 +632,7 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
   // Signing step — choose method
   if (step === 'signing' && signMethod === 'choose') {
     return (
-      <div className="burn-tab">
+      <div className={rootClass}>
         <div className="burn-centered-card">
           <div className="card">
             <div className="card-content">
@@ -672,7 +687,7 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
   // Signing step — Nautilus waiting
   if (step === 'signing' && signMethod === 'nautilus') {
     return (
-      <div className="burn-tab">
+      <div className={rootClass}>
         <div className="burn-centered-card">
           <div className="card">
             <div className="card-content">
@@ -688,8 +703,8 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
                   <p className="signing-hint">Waiting for Nautilus approval...</p>
                 </div>
                 <div className="button-group">
-                  <Button variant="secondary" onClick={() => setSignMethod('choose')}>Back</Button>
-                  <Button variant="primary" onClick={handleNautilusSign}>Open Nautilus Again</Button>
+                  <button className="btn btn-secondary" onClick={() => setSignMethod('choose')}>Back</button>
+                  <button className="btn btn-primary" onClick={handleNautilusSign}>Open Nautilus Again</button>
                 </div>
               </div>
             </div>
@@ -702,7 +717,7 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
   // Signing step — QR code
   if (step === 'signing' && signMethod === 'mobile' && qrUrl) {
     return (
-      <div className="burn-tab">
+      <div className={rootClass}>
         <div className="burn-centered-card">
           <div className="card">
             <div className="card-content">
@@ -712,7 +727,7 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
                   <QRCodeSVG value={qrUrl} size={200} />
                 </div>
                 <p className="signing-hint">Waiting for signature...</p>
-                <Button variant="secondary" onClick={() => setSignMethod('choose')}>Back</Button>
+                <button className="btn btn-secondary" onClick={() => setSignMethod('choose')}>Back</button>
               </div>
             </div>
           </div>
@@ -725,7 +740,7 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
   if (step === 'success') {
     const count = multiBurnSummary?.burnedTokens.length ?? burnCart.size
     return (
-      <div className="burn-tab">
+      <div className={rootClass}>
         <div className="burn-centered-card">
           <div className="card">
             <div className="card-content">
@@ -752,7 +767,7 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
                   </div>
                 )}
                 {txId && <TxSuccess txId={txId} explorerUrl={explorerUrl} />}
-                <Button variant="primary" onClick={handleReset}>Burn More</Button>
+                <button className="btn btn-primary" onClick={handleReset}>Burn More</button>
               </div>
             </div>
           </div>
@@ -764,7 +779,7 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
   // Error
   if (step === 'error') {
     return (
-      <div className="burn-tab">
+      <div className={rootClass}>
         <div className="burn-centered-card">
           <div className="card">
             <div className="card-content">
@@ -777,10 +792,10 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
                 <h3>Burn Failed</h3>
                 <p className="error-message">{error}</p>
                 <div className="button-group">
-                  <Button variant="secondary" onClick={handleReset}>Start Over</Button>
-                  <Button variant="primary" onClick={() => { setStep('confirm'); setError(null) }}>
+                  <button className="btn btn-secondary" onClick={handleReset}>Start Over</button>
+                  <button className="btn btn-primary" onClick={() => { setStep('confirm'); setError(null) }}>
                     Try Again
-                  </Button>
+                  </button>
                 </div>
               </div>
             </div>

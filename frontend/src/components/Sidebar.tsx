@@ -1,6 +1,6 @@
 import './Sidebar.css'
 
-type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management' | 'stake-recovery'
+type View = 'home' | 'wallet' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'stake-recovery'
 
 interface SidebarProps {
   view: View
@@ -143,6 +143,26 @@ export function Sidebar({ view, onNavigate, isConnected, capabilityTier, collaps
           <span className="sidebar-tooltip">Dashboard</span>
         </button>
 
+        {/* Wallet */}
+        <button
+          className={`sidebar-item ${view === 'wallet' ? 'active' : ''} ${!isConnected ? 'disabled' : ''}`}
+          onClick={isConnected ? () => onNavigate('wallet') : undefined}
+          disabled={!isConnected}
+        >
+          <div className="sidebar-dashboard-icon">
+            <svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" />
+              <path d="M16 3v4M8 3v4" />
+              <circle cx="16" cy="14" r="1.5" fill="currentColor" stroke="none" />
+            </svg>
+          </div>
+          <div className="sidebar-item-text">
+            <span className="sidebar-item-name">Wallet</span>
+            <span className="sidebar-item-desc">Send · UTXOs · Burn</span>
+          </div>
+          <span className="sidebar-tooltip">Wallet</span>
+        </button>
+
         <div className="sidebar-separator" />
         <div className="sidebar-section-label">Protocols</div>
 
@@ -228,45 +248,6 @@ export function Sidebar({ view, onNavigate, isConnected, capabilityTier, collaps
             <span className="sidebar-item-desc">Blockchain</span>
           </div>
           <span className="sidebar-tooltip">Explorer</span>
-        </button>
-
-        {/* Token Burn */}
-        <button
-          className={`sidebar-item ${view === 'burn' ? 'active' : ''} ${!isConnected ? 'disabled' : ''}`}
-          onClick={isConnected ? () => onNavigate('burn') : undefined}
-          disabled={!isConnected}
-        >
-          <div className="sidebar-dashboard-icon">
-            <svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 22c-4.97 0-9-3.58-9-8 0-3.06 2.13-6.27 4-8 .67 2 2.37 3.41 4 4C11.38 7.56 10.74 3 14 1c.67 2.67 3 5.33 4 7 1 1.67 1 3.33 1 5 0 4.42-3.13 9-7 9z" />
-            </svg>
-          </div>
-          <div className="sidebar-item-text">
-            <span className="sidebar-item-name">Burn</span>
-            <span className="sidebar-item-desc">Destroy Tokens</span>
-          </div>
-          <span className="sidebar-tooltip">Token Burn</span>
-        </button>
-
-        {/* UTXO Management */}
-        <button
-          className={`sidebar-item ${view === 'utxo-management' ? 'active' : ''} ${!isConnected ? 'disabled' : ''}`}
-          onClick={isConnected ? () => onNavigate('utxo-management') : undefined}
-          disabled={!isConnected}
-        >
-          <div className="sidebar-dashboard-icon">
-            <svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="7" height="7" rx="1" />
-              <rect x="14" y="3" width="7" height="7" rx="1" />
-              <rect x="3" y="14" width="7" height="7" rx="1" />
-              <rect x="14" y="14" width="7" height="7" rx="1" />
-            </svg>
-          </div>
-          <div className="sidebar-item-text">
-            <span className="sidebar-item-name">UTXOs</span>
-            <span className="sidebar-item-desc">Manage Boxes</span>
-          </div>
-          <span className="sidebar-tooltip">UTXO Management</span>
         </button>
 
         {/* Stake Recovery */}

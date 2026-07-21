@@ -138,6 +138,94 @@ impl NodeClient {
             .await
     }
 
+    /// Unspent boxes at an address (extraIndex). Sends a JSON-quoted address body
+    /// so strict nodes (ergo-rust-node / Axum) accept the request — bare `9f…`
+    /// bodies are accepted by Scala but rejected as `integer 9` elsewhere.
+    pub async fn unspent_boxes_by_address(
+        &self,
+        address: &str,
+        offset: u64,
+        limit: u64,
+    ) -> Result<Vec<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox>> {
+        let endpoint = format!(
+            "/blockchain/box/unspent/byAddress?offset={}&limit={}",
+            offset, limit
+        );
+        let response =
+            timed_request(self.inner.send_post_req(&endpoint, json_quoted(address))).await?;
+        let text = response.text().await.map_err(|e| NodeError::ApiError {
+            message: format!("Failed to read unspent response: {}", e),
+        })?;
+        if text.is_empty() {
+            return Ok(Vec::new());
+        }
+        let value: serde_json::Value =
+            serde_json::from_str(&text).map_err(|e| NodeError::ApiError {
+                message: format!("Failed to parse unspent response: {}", e),
+            })?;
+        let items = json_array_items(value);
+        let mut boxes = Vec::with_capacity(items.len());
+        for item in items {
+            // Skip indexer false-positives that still carry spentTransactionId.
+            if !item["spentTransactionId"].is_null() {
+                continue;
+            }
+            match serde_json::from_value::<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox>(item) {
+                Ok(b) => boxes.push(b),
+                Err(e) => tracing::debug!("Skipping unparseable unspent box: {}", e),
+            }
+        }
+        Ok(boxes)
+    }
+
+    /// Unspent boxes matching an ErgoTree hex (extraIndex). JSON-quotes the body
+    /// for Axum-compatible nodes (same issue as address POSTs).
+    pub async fn unspent_boxes_by_ergo_tree(
+        &self,
+        ergo_tree: &str,
+        offset: u64,
+        limit: u64,
+    ) -> Result<Vec<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox>> {
+        let endpoint = format!(
+            "/blockchain/box/unspent/byErgoTree?offset={}&limit={}",
+            offset, limit
+        );
+        let response =
+            timed_request(self.inner.send_post_req(&endpoint, json_quoted(ergo_tree))).await?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| NodeError::ApiError {
+            message: format!("Failed to read byErgoTree response: {}", e),
+        })?;
+        if status.as_u16() == 404 || text.is_empty() {
+            return Ok(Vec::new());
+        }
+        if !status.is_success() {
+            return Err(NodeError::ApiError {
+                message: format!(
+                    "byErgoTree failed ({}): {}",
+                    status.as_u16(),
+                    text.chars().take(200).collect::<String>()
+                ),
+            });
+        }
+        let value: serde_json::Value =
+            serde_json::from_str(&text).map_err(|e| NodeError::ApiError {
+                message: format!("Failed to parse byErgoTree response: {}", e),
+            })?;
+        let items = json_array_items(value);
+        let mut boxes = Vec::with_capacity(items.len());
+        for item in items {
+            if !item["spentTransactionId"].is_null() {
+                continue;
+            }
+            match serde_json::from_value::<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox>(item) {
+                Ok(b) => boxes.push(b),
+                Err(e) => tracing::debug!("Skipping unparseable byErgoTree box: {}", e),
+            }
+        }
+        Ok(boxes)
+    }
+
     /// Internal: paginated fetch of all unspent boxes at an address, capped by `max_pages`.
     async fn fetch_all_unspent_by_address(
         &self,
@@ -145,15 +233,12 @@ impl NodeClient {
         max_pages: u32,
     ) -> Result<Vec<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox>> {
         const PAGE_SIZE: u64 = 500;
-        let addr = address.to_string();
         let mut all = Vec::new();
         for page in 0..max_pages {
             let offset = (page as u64) * PAGE_SIZE;
-            let boxes = timed_request(
-                self.inner
-                    .unspent_boxes_by_address(&addr, offset, PAGE_SIZE),
-            )
-            .await?;
+            let boxes = self
+                .unspent_boxes_by_address(address, offset, PAGE_SIZE)
+                .await?;
             let len = boxes.len();
             all.extend(boxes);
             if (len as u64) < PAGE_SIZE {
@@ -187,9 +272,10 @@ impl NodeClient {
                 "/blockchain/box/unspent/byAddress?offset={}&limit={}",
                 offset, PAGE_SIZE
             );
-            // POST body is a JSON-quoted address string.
-            let body = format!("\"{}\"", address);
-            let response = timed_request(self.inner.send_post_req(&endpoint, body)).await?;
+            // POST body must be a JSON-quoted address string (Scala also accepts
+            // bare text; ergo-rust-node / Axum require a real JSON string).
+            let response =
+                timed_request(self.inner.send_post_req(&endpoint, json_quoted(address))).await?;
             let text = response.text().await.map_err(|e| NodeError::ApiError {
                 message: format!("Failed to read unspent response: {}", e),
             })?;
@@ -200,18 +286,7 @@ impl NodeClient {
                 serde_json::from_str(&text).map_err(|e| NodeError::ApiError {
                     message: format!("Failed to parse unspent response: {}", e),
                 })?;
-
-            // Two shapes observed across node versions: a bare JSON array, or a
-            // paged object `{items: [...], total: N}`. Handle both.
-            let items: Vec<serde_json::Value> = match value {
-                serde_json::Value::Array(arr) => arr,
-                serde_json::Value::Object(ref map) => map
-                    .get("items")
-                    .and_then(|v| v.as_array())
-                    .cloned()
-                    .unwrap_or_default(),
-                _ => Vec::new(),
-            };
+            let items = json_array_items(value);
 
             let page_len = items.len();
             for item in items {
@@ -253,13 +328,8 @@ impl NodeClient {
         address: &str,
         limit: u64,
     ) -> Result<Vec<serde_json::Value>> {
-        let paged = timed_request(self.inner.transactions_by_address(
-            &address.to_string(),
-            0,
-            limit,
-        ))
-        .await?;
-        Ok(paged.items)
+        let (items, _) = self.get_transactions_by_address(address, 0, limit).await?;
+        Ok(items)
     }
 
     pub async fn get_full_node_info(&self) -> Result<serde_json::Value> {
@@ -335,19 +405,50 @@ impl NodeClient {
     }
 
     /// Returns (items, total_count). Requires extraIndex.
+    /// Uses a JSON-quoted address body for Axum/scala parity (see
+    /// [`Self::unspent_boxes_by_address`]).
     pub async fn get_transactions_by_address(
         &self,
         address: &str,
         offset: u64,
         limit: u64,
     ) -> Result<(Vec<serde_json::Value>, u64)> {
-        let paged = timed_request(self.inner.transactions_by_address(
-            &address.to_string(),
-            offset,
-            limit,
-        ))
-        .await?;
-        Ok((paged.items, paged.total))
+        let endpoint = format!(
+            "/blockchain/transaction/byAddress?offset={}&limit={}",
+            offset, limit
+        );
+        let response =
+            timed_request(self.inner.send_post_req(&endpoint, json_quoted(address))).await?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| NodeError::ApiError {
+            message: format!("Failed to read transactions response: {}", e),
+        })?;
+        if status.as_u16() == 404 {
+            return Ok((Vec::new(), 0));
+        }
+        if text.is_empty() {
+            return Ok((Vec::new(), 0));
+        }
+        let res_json: serde_json::Value =
+            serde_json::from_str(&text).map_err(|e| NodeError::ApiError {
+                message: format!("Failed to parse transactions response: {}", e),
+            })?;
+        if !status.is_success() {
+            let detail = res_json
+                .get("detail")
+                .or_else(|| res_json.get("reason"))
+                .and_then(|d| d.as_str())
+                .unwrap_or(&text);
+            return Err(NodeError::ApiError {
+                message: format!("transactions byAddress failed ({}): {}", status.as_u16(), detail),
+            });
+        }
+        let total = res_json["total"].as_u64().unwrap_or(0);
+        let items = res_json["items"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        Ok((items, total))
     }
 
     pub async fn get_unconfirmed_by_address(
@@ -366,10 +467,8 @@ impl NodeClient {
         ergo_tree_hex: &str,
     ) -> Result<Vec<serde_json::Value>> {
         let endpoint = "/transactions/unconfirmed/byErgoTree?offset=0&limit=100";
-        // Ergo node expects a JSON-quoted string body: "ergoTreeHex"
-        let body = format!("\"{}\"", ergo_tree_hex);
-
-        let response = timed_request(self.inner.send_post_req(endpoint, body)).await?;
+        let response =
+            timed_request(self.inner.send_post_req(endpoint, json_quoted(ergo_tree_hex))).await?;
 
         let text = response.text().await.map_err(|e| NodeError::ApiError {
             message: format!("Failed to read mempool response: {}", e),
@@ -573,6 +672,57 @@ impl NodeClient {
         Ok(effective)
     }
 
+    /// Union of mempool-aware UTXOs across multiple wallet addresses.
+    pub async fn get_effective_utxos_multi(
+        &self,
+        addresses: &[String],
+    ) -> Result<Vec<ergo_tx::Eip12InputBox>> {
+        if addresses.is_empty() {
+            return Ok(Vec::new());
+        }
+        if addresses.len() == 1 {
+            return self.get_effective_utxos(&addresses[0]).await;
+        }
+
+        let mut all = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for addr in addresses {
+            let utxos = self.get_effective_utxos(addr).await?;
+            for u in utxos {
+                if seen.insert(u.box_id.clone()) {
+                    all.push(u);
+                }
+            }
+        }
+        Ok(all)
+    }
+
+    /// Sum confirmed balances across multiple addresses.
+    pub async fn get_addresses_balances(
+        &self,
+        addresses: &[String],
+    ) -> Result<(u64, Vec<(String, u64)>)> {
+        if addresses.is_empty() {
+            return Ok((0, Vec::new()));
+        }
+        if addresses.len() == 1 {
+            return self.get_address_balances(&addresses[0]).await;
+        }
+
+        let mut erg_total = 0u64;
+        let mut token_balances: std::collections::HashMap<String, u64> =
+            std::collections::HashMap::new();
+        for addr in addresses {
+            let (erg, tokens) = self.get_address_balances(addr).await?;
+            erg_total = erg_total.saturating_add(erg);
+            for (tid, amt) in tokens {
+                let entry = token_balances.entry(tid).or_insert(0);
+                *entry = entry.saturating_add(amt);
+            }
+        }
+        Ok((erg_total, token_balances.into_iter().collect()))
+    }
+
     pub async fn get_eip12_box_by_id(&self, box_id: &str) -> Result<ergo_tx::Eip12InputBox> {
         let ergo_box = timed_request(self.inner.box_from_id_with_pool(box_id)).await?;
         let (tx_id, index) = self.get_box_context(box_id).await?;
@@ -643,6 +793,8 @@ impl NodeClient {
 pub struct PeerInfo {
     pub address: String,
     pub name: Option<String>,
+    /// Advertised REST API base URL when the peer publishes one.
+    pub rest_api_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -668,7 +820,12 @@ impl NodeClient {
             .filter_map(|p| {
                 let address = p["address"].as_str()?.to_string();
                 let name = p["name"].as_str().map(|s| s.to_string());
-                Some(PeerInfo { address, name })
+                let rest_api_url = p["restApiUrl"].as_str().map(|s| s.to_string());
+                Some(PeerInfo {
+                    address,
+                    name,
+                    rest_api_url,
+                })
             })
             .collect();
 
@@ -739,7 +896,25 @@ async fn timed_request<T, E: std::fmt::Display>(
         })
 }
 
-fn address_to_ergo_tree(address: &str) -> Option<String> {
+/// JSON-string body for POST endpoints that take a single address / ergoTree.
+fn json_quoted(s: &str) -> String {
+    serde_json::to_string(s).unwrap_or_else(|_| format!("\"{}\"", s))
+}
+
+/// Bare array or `{items: [...]}` — both appear across node versions.
+fn json_array_items(value: serde_json::Value) -> Vec<serde_json::Value> {
+    match value {
+        serde_json::Value::Array(arr) => arr,
+        serde_json::Value::Object(ref map) => map
+            .get("items")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    }
+}
+
+pub fn address_to_ergo_tree(address: &str) -> Option<String> {
     let encoder = AddressEncoder::new(NetworkPrefix::Mainnet);
     let addr = encoder.parse_address_from_str(address).ok()?;
     let tree = addr.script().ok()?;

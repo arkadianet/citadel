@@ -1,48 +1,163 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
 /* ============================================================================
-   HodlCoin Tab
+   HodlCoin — Viewport-locked protocol page
    ============================================================================ */
 
 .hodl-tab {
-  /* HodlCoin violet identity */
-  --protocol-accent: #8b5cf6; /* protocol accent */
-  --protocol-accent-deep: #6d28d9; /* protocol accent */
-  --protocol-accent-light: #a78bfa; /* protocol accent */
-  --protocol-accent-strong: #7c3aed; /* protocol accent */
-  --protocol-accent-bg: color-mix(in srgb, var(--protocol-accent) 8%, transparent);
-  --protocol-accent-border: color-mix(in srgb, var(--protocol-accent) 15%, transparent);
+  --hodl-font: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --hodl-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  --hodl-surface: rgba(6, 14, 28, 0.72);
+  --hodl-surface-soft: rgba(10, 20, 38, 0.55);
+  --hodl-border: rgba(148, 163, 184, 0.12);
+  --hodl-border-strong: rgba(148, 163, 184, 0.2);
+  --hodl-ink: rgb(241 245 249);
+  --hodl-muted: #8b9bb0;
+  --hodl-faint: #5f7088;
+  --hodl-accent: #fb923c;
+  --hodl-green: #34d399;
+  --hodl-radius: clamp(8px, 0.9vh, 12px);
+  --hodl-radius-sm: clamp(6px, 0.7vh, 10px);
+  --hodl-gap: clamp(0.4rem, 1.1vh, 0.75rem);
+  --hodl-pad-y: clamp(0.55rem, 1.2vh, 0.9rem);
+  --hodl-pad-x: clamp(0.7rem, 1.1vw, 1.15rem);
+
+  container-type: size;
+  container-name: hodl;
 
   flex: 1;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  padding: var(--space-md) var(--space-lg);
-  max-width: 1400px;
-  margin: 0 auto;
-  width: 100%;
-  min-height: 0;
-  overflow-y: auto;
-  animation: hodlFadeIn 0.4s ease-out;
-  gap: var(--space-sm);
+  gap: var(--hodl-gap);
+  overflow: hidden;
+  padding: var(--hodl-pad-y) var(--hodl-pad-x);
+  font-family: var(--hodl-font);
+  color: var(--hodl-ink);
 }
 
-@keyframes hodlFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+.hodl-tab .mono {
+  font-family: var(--hodl-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.hodl-empty-wrap {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
 }
 
 /* ============================================================================
-   Header — icon only (PageHeader handles the rest)
+   Header
    ============================================================================ */
 
+.hodl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.hodl-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
 .hodl-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--protocol-accent), var(--protocol-accent-deep));
+  width: clamp(30px, 3.6vh, 36px);
+  height: clamp(30px, 3.6vh, 36px);
+  border-radius: 9px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: rgba(251, 146, 60, 0.12);
+  border: 1px solid rgba(251, 146, 60, 0.22);
+  color: var(--hodl-accent);
+}
+
+.hodl-icon svg {
+  width: clamp(16px, 2vh, 20px);
+  height: clamp(16px, 2vh, 20px);
+}
+
+.hodl-title {
+  margin: 0;
+  font-size: clamp(1.05rem, 2.2vh, 1.35rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.hodl-subtitle {
+  margin: 0.1rem 0 0;
+  font-size: clamp(0.65rem, 1.2vh, 0.75rem);
+  color: var(--hodl-faint);
+}
+
+.hodl-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--hodl-border);
+  background: var(--hodl-surface-soft);
+  font-size: clamp(0.62rem, 1.2vh, 0.72rem);
+  font-weight: 500;
+  color: var(--hodl-muted);
   flex-shrink: 0;
-  color: var(--text-strong);
+}
+
+/* ============================================================================
+   Body — scrolls independently of the locked viewport
+   ============================================================================ */
+
+.hodl-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hodl-gap);
+}
+
+.hodl-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.hodl-body::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 4px;
+}
+
+.hodl-state {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--hodl-faint);
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
+}
+
+.hodl-tab .spinner-small {
+  width: clamp(14px, 1.8vh, 18px);
+  height: clamp(14px, 1.8vh, 18px);
+  border-radius: 50%;
+  border: 2px solid rgba(251, 146, 60, 0.18);
+  border-top-color: var(--hodl-accent);
+  animation: hodl-spin 0.85s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes hodl-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ============================================================================
@@ -51,8 +166,9 @@
 
 .hodl-banks-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: var(--space-md);
+  grid-template-columns: repeat(auto-fill, minmax(clamp(260px, 28vw, 340px), 1fr));
+  gap: var(--hodl-gap);
+  align-content: start;
 }
 
 @media (max-width: 640px) {
@@ -62,33 +178,47 @@
 }
 
 .hodl-bank-card {
-  border-color: color-mix(in srgb, var(--protocol-accent) 20%, transparent);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--hodl-radius);
+  border: 1px solid rgba(251, 146, 60, 0.22);
+  background: var(--hodl-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   overflow: hidden;
 }
 
 .hodl-bank-header {
+  flex-shrink: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: var(--space-sm) var(--space-md);
-  background: var(--protocol-accent-bg);
-  border-bottom: 1px solid var(--protocol-accent-border);
+  gap: 0.5rem;
+  padding: clamp(0.5rem, 1vh, 0.7rem) clamp(0.6rem, 1vw, 0.8rem);
+  background: rgba(251, 146, 60, 0.08);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
 }
 
 .hodl-bank-name {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.hodl-bank-name-text {
+  min-width: 0;
 }
 
 .hodl-bank-avatar {
-  width: 32px;
-  height: 32px;
+  width: clamp(28px, 3vh, 34px);
+  height: clamp(28px, 3vh, 34px);
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--protocol-accent), var(--protocol-accent-deep));
-  color: var(--text-strong);
+  background: linear-gradient(135deg, #fb923c, #c2410c);
+  color: white;
   font-weight: 700;
-  font-size: var(--text-sm);
+  font-size: clamp(0.72rem, 1.4vh, 0.82rem);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -96,67 +226,90 @@
 }
 
 .hodl-bank-avatar-img {
-  width: 32px;
-  height: 32px;
+  width: clamp(28px, 3vh, 34px);
+  height: clamp(28px, 3vh, 34px);
   border-radius: 50%;
   flex-shrink: 0;
   object-fit: cover;
 }
 
-.hodl-bank-name h3 {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--text-strong);
+.hodl-bank-name-text h3 {
   margin: 0;
+  font-size: clamp(0.78rem, 1.5vh, 0.9rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .hodl-bank-id {
-  font-size: 10px;
-  color: var(--slate-500);
-  font-family: var(--ds-font-mono);
-  font-variant-numeric: var(--ds-numeric);
+  font-size: clamp(0.58rem, 1.05vh, 0.64rem);
+  color: var(--hodl-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .hodl-bank-fee {
-  font-size: var(--text-xs);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--protocol-accent) 10%, transparent);
-  color: var(--protocol-accent-light);
-  font-weight: 500;
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 0.16rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(251, 146, 60, 0.14);
+  color: var(--hodl-accent);
 }
 
 /* ============================================================================
-   Bank Stats
+   Bank Body / Stats
    ============================================================================ */
+
+.hodl-bank-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 0;
+  padding: clamp(0.55rem, 1.1vh, 0.75rem) clamp(0.6rem, 1vw, 0.8rem);
+}
 
 .hodl-bank-stats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  padding: var(--space-sm) var(--space-md);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
 }
 
 .hodl-stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: var(--space-xs) 0;
+  gap: 0.15rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 7px;
+  background: rgba(2, 8, 18, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  min-width: 0;
 }
 
 .hodl-stat-label {
-  font-size: 10px;
-  color: var(--slate-500);
+  font-size: clamp(0.56rem, 1.05vh, 0.62rem);
+  color: var(--hodl-faint);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .hodl-stat-value {
-  font-size: var(--text-sm);
+  font-family: var(--hodl-mono);
+  font-size: clamp(0.7rem, 1.4vh, 0.8rem);
   font-weight: 600;
-  color: var(--text-strong);
-  font-family: var(--ds-font-mono);
-  font-variant-numeric: var(--ds-numeric);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ============================================================================
@@ -167,24 +320,24 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0 var(--space-md);
-  padding: var(--space-xs) var(--space-sm);
-  background: var(--protocol-accent-bg);
-  border: 1px solid var(--protocol-accent-border);
-  border-radius: var(--radius-md);
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--hodl-radius-sm);
+  background: rgba(251, 146, 60, 0.08);
+  border: 1px solid rgba(251, 146, 60, 0.18);
 }
 
 .hodl-balance-label {
-  font-size: var(--text-xs);
-  color: var(--slate-400);
+  font-size: clamp(0.6rem, 1.1vh, 0.68rem);
+  color: var(--hodl-muted);
 }
 
 .hodl-balance-value {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--protocol-accent-light);
-  font-family: var(--ds-font-mono);
-  font-variant-numeric: var(--ds-numeric);
+  font-family: var(--hodl-mono);
+  font-size: clamp(0.7rem, 1.4vh, 0.8rem);
+  font-weight: 700;
+  color: var(--hodl-accent);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ============================================================================
@@ -192,15 +345,61 @@
    ============================================================================ */
 
 .hodl-bank-actions {
-  padding: var(--space-sm) var(--space-md);
+  margin-top: auto;
 }
 
 .action-btn.hodl-primary {
-  background: var(--protocol-accent-strong);
-  color: var(--text-strong);
+  appearance: none;
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: clamp(0.4rem, 0.9vh, 0.55rem) 0.5rem;
+  border-radius: var(--hodl-radius-sm);
+  border: 1px solid var(--hodl-accent);
+  background: var(--hodl-accent);
+  color: #1a0f04;
+  font: inherit;
+  font-size: clamp(0.68rem, 1.3vh, 0.78rem);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.action-btn.hodl-primary svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 .action-btn.hodl-primary:hover:not(:disabled) {
-  background: var(--protocol-accent-deep);
+  background: #fda856;
+}
+
+.action-btn.hodl-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.action-btn.hodl-primary:focus-visible {
+  outline: 2px solid var(--hodl-accent);
+  outline-offset: 1px;
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 720px) {
+  .hodl-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@container hodl (max-height: 700px) {
+  .hodl-subtitle {
+    display: none;
+  }
 }

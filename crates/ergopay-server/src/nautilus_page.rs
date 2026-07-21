@@ -225,10 +225,13 @@ pub fn generate_signing_page(
 ///
 /// The page will:
 /// 1. Check if Nautilus is installed
-/// 2. Connect to Nautilus (user approves)
-/// 3. Get wallet address
-/// 4. POST address to /connect/{id}
-/// 5. Show success and close
+/// 2. On load: revoke prior dApp auth via `disconnect()` (ignore errors),
+///    then call `connect()` so the Nautilus popup appears immediately
+///    (no silent reuse of the last wallet — disconnect-first is required)
+/// 3. If auto-connect fails, show a fallback Connect button
+/// 4. Get wallet addresses
+/// 5. POST address(es) to /connect/{id}
+/// 6. Show success and close
 pub fn generate_connect_page(request_id: &str, host: &str, port: u16) -> String {
     format!(
         r#"<!DOCTYPE html>
@@ -270,6 +273,7 @@ pub fn generate_connect_page(request_id: &str, host: &str, port: u16) -> String 
             gap: 8px;
         }}
         .status.loading {{ background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.3); }}
+        .status.ready {{ background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); }}
         .status.success {{ background: rgba(34, 197, 94, 0.2); border: 1px solid rgba(34, 197, 94, 0.3); }}
         .status.error {{ background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.3); }}
         .spinner {{
@@ -292,9 +296,11 @@ pub fn generate_connect_page(request_id: &str, host: &str, port: u16) -> String 
             font-size: 16px; cursor: pointer; transition: background 0.2s;
         }}
         button:hover {{ background: #2563eb; }}
+        button:disabled {{ opacity: 0.6; cursor: not-allowed; }}
         .hidden {{ display: none; }}
         .install-link {{ color: #3b82f6; text-decoration: none; }}
         .install-link:hover {{ text-decoration: underline; }}
+        .hint {{ color: rgba(255,255,255,0.55); font-size: 13px; margin-top: 12px; line-height: 1.4; }}
     </style>
 </head>
 <body>
@@ -307,6 +313,10 @@ pub fn generate_connect_page(request_id: &str, host: &str, port: u16) -> String 
         </div>
         <div id="address-result" class="hidden">
             <div class="address" id="address"></div>
+        </div>
+        <div id="connect-actions" class="hidden">
+            <button id="connect-btn" type="button">Connect with Nautilus</button>
+            <p class="hint">Approve the Nautilus popup to connect. Prior sessions are cleared so you can choose a different wallet.</p>
         </div>
         <div id="actions" class="hidden">
             <button onclick="window.close()">Close Window</button>
@@ -328,6 +338,8 @@ pub fn generate_connect_page(request_id: &str, host: &str, port: u16) -> String 
         const addressResult = document.getElementById('address-result');
         const addressEl = document.getElementById('address');
         const actions = document.getElementById('actions');
+        const connectActions = document.getElementById('connect-actions');
+        const connectBtn = document.getElementById('connect-btn');
         const installPrompt = document.getElementById('install-prompt');
 
         function setStatus(text, type, showSpinner) {{
@@ -336,7 +348,11 @@ pub fn generate_connect_page(request_id: &str, host: &str, port: u16) -> String 
             spinner.style.display = showSpinner ? 'block' : 'none';
         }}
 
-        function showError(text) {{ setStatus(text, 'error', false); }}
+        function showError(text) {{
+            setStatus(text, 'error', false);
+            connectBtn.disabled = false;
+            connectActions.classList.remove('hidden');
+        }}
 
         function showSuccess(text, address) {{
             setStatus(text, 'success', false);
@@ -344,39 +360,89 @@ pub fn generate_connect_page(request_id: &str, host: &str, port: u16) -> String 
                 addressEl.textContent = address;
                 addressResult.classList.remove('hidden');
             }}
+            connectActions.classList.add('hidden');
             actions.classList.remove('hidden');
         }}
 
-        async function connectWallet() {{
+        // Revoke prior dApp auth so connect() cannot silently reuse the last wallet.
+        async function forgetPriorConnection(nautilus) {{
             try {{
-                await new Promise(r => setTimeout(r, 500));
+                if (typeof nautilus.disconnect === 'function') {{
+                    await nautilus.disconnect();
+                }}
+            }} catch (e) {{
+                console.warn('nautilus.disconnect failed', e);
+            }}
+        }}
 
+        async function connectWallet() {{
+            connectBtn.disabled = true;
+            connectActions.classList.add('hidden');
+            try {{
                 if (!window.ergoConnector || !window.ergoConnector.nautilus) {{
                     showError('Nautilus wallet not detected');
                     installPrompt.classList.remove('hidden');
                     return;
                 }}
 
+                const nautilus = window.ergoConnector.nautilus;
+                setStatus('Clearing previous connection...', 'loading', true);
+                await forgetPriorConnection(nautilus);
+
                 setStatus('Please approve connection in Nautilus...', 'loading', true);
-                const connected = await window.ergoConnector.nautilus.connect();
+                const connected = await nautilus.connect();
                 if (!connected) {{ showError('Connection rejected by user'); return; }}
 
-                setStatus('Getting wallet address...', 'loading', true);
-                const addresses = await ergo.get_used_addresses();
-                if (!addresses || addresses.length === 0) {{
+                setStatus('Getting wallet addresses...', 'loading', true);
+
+                // Nautilus does not support EIP-12 pagination args.
+                const used = await ergo.get_used_addresses() || [];
+
+                let unused = [];
+                try {{
+                    unused = await ergo.get_unused_addresses() || [];
+                }} catch (e) {{
+                    console.warn('get_unused_addresses failed', e);
+                }}
+
+                let change = null;
+                try {{
+                    change = await ergo.get_change_address();
+                }} catch (e) {{
+                    console.warn('get_change_address failed', e);
+                }}
+
+                const all = [];
+                const push = (a) => {{
+                    if (a && typeof a === 'string' && !all.includes(a)) all.push(a);
+                }};
+                push(change);
+                used.forEach(push);
+                unused.forEach(push);
+
+                if (all.length === 0) {{
                     showError('No addresses found in wallet');
                     return;
                 }}
-                const address = addresses[0];
 
-                setStatus('Connecting to app...', 'loading', true);
-                const response = await fetch(BASE_URL + '/connect/' + REQUEST_ID + '?address=' + encodeURIComponent(address));
+                const primary = change || used[0] || all[0];
+
+                setStatus('Connecting to app (' + all.length + ' address' + (all.length === 1 ? '' : 'es') + ')...', 'loading', true);
+                const params = new URLSearchParams();
+                params.set('address', primary);
+                if (all.length > 1) {{
+                    params.set('addresses', all.join(','));
+                }}
+                const response = await fetch(BASE_URL + '/connect/' + REQUEST_ID + '?' + params.toString());
                 if (!response.ok) {{
                     showError('Failed to connect: ' + await response.text());
                     return;
                 }}
 
-                showSuccess('Wallet connected successfully!', address);
+                const label = all.length > 1
+                    ? primary.slice(0, 8) + '… (+' + (all.length - 1) + ' more)'
+                    : primary;
+                showSuccess('Wallet connected successfully!', label);
 
                 // Auto-close after 2 seconds (works in --app mode windows)
                 setTimeout(() => {{
@@ -388,7 +454,28 @@ pub fn generate_connect_page(request_id: &str, host: &str, port: u16) -> String 
             }}
         }}
 
-        connectWallet();
+        // Auto-start connect on load so the Nautilus popup appears without an
+        // extra click on this page. Still disconnect-first (inside connectWallet)
+        // so a prior auth is not silently reused. Fallback button if this fails.
+        async function preparePage() {{
+            try {{
+                await new Promise(r => setTimeout(r, 500));
+
+                if (!window.ergoConnector || !window.ergoConnector.nautilus) {{
+                    showError('Nautilus wallet not detected');
+                    installPrompt.classList.remove('hidden');
+                    connectActions.classList.add('hidden');
+                    return;
+                }}
+
+                await connectWallet();
+            }} catch (error) {{
+                showError('Error: ' + (error.message || error.info || 'Unknown error'));
+            }}
+        }}
+
+        connectBtn.addEventListener('click', connectWallet);
+        preparePage();
     </script>
 </body>
 </html>"#,

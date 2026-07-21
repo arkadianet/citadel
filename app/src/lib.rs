@@ -43,6 +43,7 @@ pub fn run() {
             commands::disconnect_wallet,
             commands::get_wallet_balance,
             commands::get_recent_transactions,
+            commands::build_send_tx,
             commands::preview_mint_sigusd,
             commands::build_mint_sigusd,
             commands::start_mint_sign,
@@ -106,6 +107,7 @@ pub fn run() {
             commands::scan_circular_arbs,
             commands::build_arb_chain_tx,
             commands::build_swap_chain_tx,
+            commands::build_split_chains_tx,
             commands::start_arb_leg_sign,
             commands::submit_arb_chain,
             // Explorer

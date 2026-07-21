@@ -13,10 +13,11 @@ interface WalletConnectResponse {
 interface ConnectionStatusResponse {
   status: string
   address: string | null
+  addresses?: string[]
 }
 
 interface WalletConnectProps {
-  onConnected: (address: string) => void
+  onConnected: (address: string, addresses?: string[]) => void
   onCancel?: () => void
   onClose?: () => void
 }
@@ -71,7 +72,7 @@ export function WalletConnect({ onConnected, onCancel, onClose }: WalletConnectP
 
         if (response.status === 'connected' && response.address) {
           setStatus('connected')
-          onConnected(response.address)
+          onConnected(response.address, response.addresses)
         } else if (response.status === 'expired') {
           setError('Connection request expired. Please try again.')
           setStatus('error')
@@ -211,7 +212,7 @@ export function WalletConnect({ onConnected, onCancel, onClose }: WalletConnectP
         <div className="wallet-connect-content">
           <h3>Connect with Nautilus</h3>
           <p className="wallet-connect-subtitle">
-            Approve the connection in your browser
+            Approve the Nautilus popup in your browser to connect
           </p>
 
           <div className="nautilus-waiting">
@@ -224,7 +225,7 @@ export function WalletConnect({ onConnected, onCancel, onClose }: WalletConnectP
             </div>
             <p className="wallet-connect-status">
               <span className="status-dot" />
-              Waiting for Nautilus approval...
+              Waiting for wallet connection...
             </p>
           </div>
 

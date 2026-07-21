@@ -12,8 +12,7 @@ import { DexyTab } from './components/DexyTab'
 import { LendingTab } from './components/LendingTab'
 import { SwapTab } from './components/SwapTab'
 import { ExplorerTab, type ExplorerRoute } from './components/ExplorerTab'
-import { BurnTab } from './components/BurnTab'
-import { UtxoManagementTab } from './components/UtxoManagementTab'
+import { WalletTab } from './components/WalletTab'
 import { HodlCoinTab } from './components/HodlCoinTab'
 import { SigmaFiTab } from './components/SigmaFiTab'
 import { TimelockTab } from './components/TimelockTab'
@@ -64,6 +63,7 @@ interface SigmaUsdState {
 
 interface WalletBalance {
   address: string
+  addresses?: string[]
   erg_nano: number
   erg_formatted: string
   sigusd_amount: number
@@ -72,6 +72,7 @@ interface WalletBalance {
   tokens: Array<{
     token_id: string
     amount: number
+    amount_str?: string
     name: string | null
     decimals: number
     pending_amount: number
@@ -79,7 +80,7 @@ interface WalletBalance {
   pending_erg_nano: number
 }
 
-type View = 'home' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'burn' | 'utxo-management' | 'stake-recovery'
+type View = 'home' | 'wallet' | 'sigmausd' | 'dexy' | 'lending' | 'dex' | 'hodlcoin' | 'bonds' | 'timelocks' | 'router' | 'arb-scanner' | 'explorer' | 'stake-recovery'
 
 function App() {
   const [view, setView] = useState<View>('home')
@@ -94,6 +95,7 @@ function App() {
   const [loadingSigmaUsd, setLoadingSigmaUsd] = useState(false)
   const [oraclePrice, setOraclePrice] = useState<OraclePrice | null>(null)
   const [walletAddress, setWalletAddress] = useState<string | null>(null)
+  const [walletAddressCount, setWalletAddressCount] = useState(0)
   const [walletBalance, setWalletBalance] = useState<WalletBalance | null>(null)
   const [showWalletConnect, setShowWalletConnect] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -126,8 +128,13 @@ function App() {
 
   const fetchWalletStatus = useCallback(async () => {
     try {
-      const status = await invoke<{ connected: boolean; address: string | null }>('get_wallet_status')
+      const status = await invoke<{
+        connected: boolean
+        address: string | null
+        addresses?: string[]
+      }>('get_wallet_status')
       setWalletAddress(status.address)
+      setWalletAddressCount(status.addresses?.length ?? (status.address ? 1 : 0))
     } catch (e) {
       console.error('Failed to fetch wallet status:', e)
     }
@@ -258,7 +265,9 @@ function App() {
   }
 
   const shortenUrl = (url: string) => {
-    return url.replace(/^https?:\/\//, '').replace(/:9053$/, '')
+    return url
+      .replace(/^https?:\/\//, '')
+      .replace(/:(9053|9063)$/, '')
   }
 
   const isConnected = nodeStatus?.connected ?? false
@@ -328,12 +337,20 @@ function App() {
                 onClick={() => {
                   invoke('disconnect_wallet').then(() => {
                     setWalletAddress(null)
+                    setWalletAddressCount(0)
                     setWalletBalance(null)
                   })
                 }}
-                title="Click to disconnect"
+                title={
+                  walletAddressCount > 1
+                    ? `${walletAddressCount} addresses · click to disconnect`
+                    : 'Click to disconnect'
+                }
               >
                 {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                {walletAddressCount > 1 && (
+                  <span className="wallet-addr-count">+{walletAddressCount - 1}</span>
+                )}
               </button>
             </div>
           ) : (
@@ -380,8 +397,9 @@ function App() {
             </div>
             <div className="modal-content">
               <WalletConnect
-                onConnected={(address) => {
+                onConnected={(address, addresses) => {
                   setWalletAddress(address)
+                  setWalletAddressCount(addresses?.length || 1)
                   setShowWalletConnect(false)
                 }}
                 onCancel={() => setShowWalletConnect(false)}
@@ -422,6 +440,18 @@ function App() {
             />
           )}
 
+          {view === 'wallet' && (
+            <WalletTab
+              isConnected={isConnected}
+              walletAddress={walletAddress}
+              walletAddressCount={walletAddressCount}
+              walletBalance={walletBalance}
+              explorerUrl={explorerUrl}
+              onRequestConnect={() => setShowWalletConnect(true)}
+              onBalanceRefresh={fetchWalletBalance}
+            />
+          )}
+
           {view === 'sigmausd' && (
             <SigmaUsdTab
               isConnected={isConnected}
@@ -452,7 +482,10 @@ function App() {
               capabilityTier={nodeStatus?.capability_tier}
               walletAddress={walletAddress}
               walletBalance={walletBalance}
-              onWalletConnected={setWalletAddress}
+              onWalletConnected={(address) => {
+                setWalletAddress(address)
+                fetchWalletStatus()
+              }}
               explorerUrl={explorerUrl}
             />
           )}
@@ -527,24 +560,6 @@ function App() {
             />
           )}
 
-          {view === 'burn' && (
-            <BurnTab
-              isConnected={isConnected}
-              walletAddress={walletAddress}
-              walletBalance={walletBalance}
-              explorerUrl={explorerUrl}
-            />
-          )}
-
-          {view === 'utxo-management' && (
-            <UtxoManagementTab
-              isConnected={isConnected}
-              walletAddress={walletAddress}
-              walletBalance={walletBalance}
-              explorerUrl={explorerUrl}
-            />
-          )}
-
           {view === 'stake-recovery' && (
             <StakeRecoveryTab
               isConnected={isConnected}
@@ -581,7 +596,7 @@ function App() {
                     className="input"
                     value={nodeUrl}
                     onChange={(e) => setNodeUrl(e.target.value)}
-                    placeholder="http://localhost:9053"
+                    placeholder="http://localhost:9053 or :9063"
                   />
                 </div>
 

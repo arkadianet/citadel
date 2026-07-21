@@ -21,9 +21,11 @@ export async function getProtocolActivity(
 }
 
 export async function getDexyActivity(count: number = 10): Promise<ProtocolInteraction[]> {
+  // `count` is a per-variant budget (DexyGold and USE each up to `count`).
   return invoke<ProtocolInteraction[]>('get_dexy_activity', { count })
 }
 
 export async function getSigmaUsdActivity(count: number = 10): Promise<ProtocolInteraction[]> {
+  // `count` is a per-token budget (SigUSD and SigRSV each up to `count`).
   return invoke<ProtocolInteraction[]>('get_sigmausd_activity', { count })
 }

@@ -12,7 +12,7 @@ import { getCachedTokenInfo } from '../api/tokenCache'
 import { TX_FEE_NANO, MIN_BOX_VALUE_NANO } from '../constants'
 import { formatErg, formatTokenAmount } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
-import { PageHeader, Tabs, EmptyState, Button, Spinner, FormField, Input, Select } from './ui'
+import { Tabs, EmptyState } from './ui'
 import './UtxoManagementTab.css'
 
 interface UtxoManagementTabProps {
@@ -23,12 +23,15 @@ interface UtxoManagementTabProps {
     tokens: Array<{ token_id: string; amount: number; name: string | null; decimals: number }>
   } | null
   explorerUrl: string
+  /** When nested under Wallet, hide the page header and tighten padding. */
+  embedded?: boolean
 }
 
 type SubTab = 'consolidate' | 'split'
 type Step = 'select' | 'confirm' | 'building' | 'signing' | 'success' | 'error'
 type SignMethod = 'choose' | 'mobile' | 'nautilus'
 type SplitType = 'erg' | 'token'
+type BoardFilter = 'all' | 'dust' | 'tokens' | 'large'
 
 interface UtxoBox {
   boxId: string
@@ -42,11 +45,38 @@ interface UtxoBox {
   extension: Record<string, string>
 }
 
+const DUST_NANO = 10_000_000 // 0.01 ERG
+const LARGE_NANO = 1_000_000_000 // 1 ERG
+
+function ergNano(box: UtxoBox): number {
+  return parseInt(box.value || '0', 10) || 0
+}
+
+/** Log-scaled visual tier 1–5 for mosaic sizing. */
+function valueTier(nano: number, maxNano: number): 1 | 2 | 3 | 4 | 5 {
+  if (maxNano <= 0) return 1
+  const ratio = Math.log10(Math.max(nano, 1)) / Math.log10(Math.max(maxNano, 10))
+  if (ratio < 0.25) return 1
+  if (ratio < 0.45) return 2
+  if (ratio < 0.65) return 3
+  if (ratio < 0.85) return 4
+  return 5
+}
+
+function boxKind(box: UtxoBox): 'dust' | 'token' | 'erg' | 'large' {
+  const nano = ergNano(box)
+  if (box.assets.length > 0) return 'token'
+  if (nano < DUST_NANO) return 'dust'
+  if (nano >= LARGE_NANO) return 'large'
+  return 'erg'
+}
+
 export function UtxoManagementTab({
   isConnected,
   walletAddress,
   walletBalance,
   explorerUrl,
+  embedded = false,
 }: UtxoManagementTabProps) {
   const [subTab, setSubTab] = useState<SubTab>('consolidate')
   const [step, setStep] = useState<Step>('select')
@@ -58,13 +88,13 @@ export function UtxoManagementTab({
   const [requestId, setRequestId] = useState<string | null>(null)
   const [txId, setTxId] = useState<string | null>(null)
 
-  // Consolidate state
   const [utxos, setUtxos] = useState<UtxoBox[]>([])
   const [loadingUtxos, setLoadingUtxos] = useState(false)
   const [selectedBoxIds, setSelectedBoxIds] = useState<Set<string>>(new Set())
+  const [focusedBoxId, setFocusedBoxId] = useState<string | null>(null)
+  const [boardFilter, setBoardFilter] = useState<BoardFilter>('all')
   const [consolidateSummary, setConsolidateSummary] = useState<ConsolidateBuildResponse | null>(null)
 
-  // Split state
   const [splitType, setSplitType] = useState<SplitType>('erg')
   const [splitAmount, setSplitAmount] = useState('')
   const [splitCount, setSplitCount] = useState('')
@@ -72,12 +102,11 @@ export function UtxoManagementTab({
   const [splitErgPerBox, setSplitErgPerBox] = useState('0.001')
   const [splitSummary, setSplitSummary] = useState<SplitBuildResponse | null>(null)
 
-  // Token name resolution
   const [resolvedNames, setResolvedNames] = useState<Map<string, string>>(new Map())
 
   const tokens = walletBalance?.tokens ?? []
+  const rootClass = embedded ? 'utxo-tab utxo-tab--embedded' : 'utxo-tab'
 
-  // Resolve unknown token names
   useEffect(() => {
     const unknown = tokens.filter(t => !t.name)
     if (unknown.length === 0) return
@@ -105,7 +134,6 @@ export function UtxoManagementTab({
     [resolvedNames],
   )
 
-  // Fetch UTXOs for consolidate tab
   const fetchUtxos = useCallback(async () => {
     if (!walletAddress) return
     setLoadingUtxos(true)
@@ -125,12 +153,10 @@ export function UtxoManagementTab({
     }
   }, [subTab, step, fetchUtxos])
 
-  // Reset on wallet change
   useEffect(() => {
     handleReset()
   }, [walletAddress])
 
-  // Poll for tx status
   useEffect(() => {
     if (step !== 'signing' || !requestId) return
     let isPolling = false
@@ -156,11 +182,31 @@ export function UtxoManagementTab({
     return () => clearInterval(interval)
   }, [step, requestId])
 
-  // -------------------------------------------------------------------------
-  // Consolidate handlers
-  // -------------------------------------------------------------------------
+  const maxNano = useMemo(
+    () => utxos.reduce((m, u) => Math.max(m, ergNano(u)), 0),
+    [utxos],
+  )
+
+  const filteredUtxos = useMemo(() => {
+    return utxos.filter(u => {
+      const kind = boxKind(u)
+      if (boardFilter === 'all') return true
+      if (boardFilter === 'dust') return kind === 'dust'
+      if (boardFilter === 'tokens') return kind === 'token'
+      if (boardFilter === 'large') return kind === 'large' || ergNano(u) >= LARGE_NANO
+      return true
+    })
+  }, [utxos, boardFilter])
+
+  const boardStats = useMemo(() => {
+    const dust = utxos.filter(u => boxKind(u) === 'dust').length
+    const withTokens = utxos.filter(u => u.assets.length > 0).length
+    const totalErg = utxos.reduce((s, u) => s + ergNano(u), 0)
+    return { dust, withTokens, totalErg, count: utxos.length }
+  }, [utxos])
 
   const toggleUtxo = (boxId: string) => {
+    setFocusedBoxId(boxId)
     setSelectedBoxIds(prev => {
       const next = new Set(prev)
       if (next.has(boxId)) next.delete(boxId)
@@ -169,23 +215,33 @@ export function UtxoManagementTab({
     })
   }
 
-  const selectAllUtxos = () => {
-    setSelectedBoxIds(new Set(utxos.map(u => u.boxId)))
+  const selectVisible = () => {
+    setSelectedBoxIds(new Set(filteredUtxos.map(u => u.boxId)))
   }
 
   const deselectAllUtxos = () => {
     setSelectedBoxIds(new Set())
+    setFocusedBoxId(null)
+  }
+
+  const selectDust = () => {
+    setSelectedBoxIds(new Set(utxos.filter(u => boxKind(u) === 'dust').map(u => u.boxId)))
   }
 
   const selectedUtxosSummary = useMemo(() => {
     const selected = utxos.filter(u => selectedBoxIds.has(u.boxId))
-    const totalErg = selected.reduce((sum, u) => sum + parseInt(u.value || '0', 10), 0)
+    const totalErg = selected.reduce((sum, u) => sum + ergNano(u), 0)
     const tokenSet = new Set<string>()
     for (const u of selected) {
       for (const a of u.assets) tokenSet.add(a.tokenId)
     }
     return { count: selected.length, totalErg, tokenCount: tokenSet.size }
   }, [utxos, selectedBoxIds])
+
+  const focusedBox = useMemo(
+    () => (focusedBoxId ? utxos.find(u => u.boxId === focusedBoxId) ?? null : null),
+    [focusedBoxId, utxos],
+  )
 
   const handleConsolidate = async () => {
     setLoading(true)
@@ -220,10 +276,6 @@ export function UtxoManagementTab({
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Split handlers
-  // -------------------------------------------------------------------------
-
   const splitAmountNano = useMemo(() => {
     if (splitType === 'erg') {
       const parsed = parseFloat(splitAmount.replace(/,/g, ''))
@@ -232,9 +284,7 @@ export function UtxoManagementTab({
     return parseInt(splitAmount.replace(/,/g, ''), 10) || 0
   }, [splitType, splitAmount])
 
-  const splitCountNum = useMemo(() => {
-    return parseInt(splitCount, 10) || 0
-  }, [splitCount])
+  const splitCountNum = useMemo(() => parseInt(splitCount, 10) || 0, [splitCount])
 
   const splitErgPerBoxNano = useMemo(() => {
     const parsed = parseFloat(splitErgPerBox.replace(/,/g, ''))
@@ -245,9 +295,8 @@ export function UtxoManagementTab({
     if (splitCountNum < 1 || splitCountNum > 30) return false
     if (splitType === 'erg') {
       return splitAmountNano >= MIN_BOX_VALUE_NANO
-    } else {
-      return splitAmountNano > 0 && splitTokenId !== '' && splitErgPerBoxNano >= MIN_BOX_VALUE_NANO
     }
+    return splitAmountNano > 0 && splitTokenId !== '' && splitErgPerBoxNano >= MIN_BOX_VALUE_NANO
   }, [splitType, splitAmountNano, splitCountNum, splitTokenId, splitErgPerBoxNano])
 
   const splitTotalDisplay = useMemo(() => {
@@ -277,7 +326,6 @@ export function UtxoManagementTab({
       if (splitType === 'erg') {
         amountStr = splitAmountNano.toString()
       } else {
-        // For tokens, compute raw amount based on decimals
         const token = tokens.find(t => t.token_id === splitTokenId)
         const decimals = token?.decimals ?? 0
         const parsed = parseFloat(splitAmount.replace(/,/g, ''))
@@ -313,10 +361,6 @@ export function UtxoManagementTab({
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Common handlers
-  // -------------------------------------------------------------------------
-
   const handleNautilusSign = async () => {
     if (!nautilusUrl) return
     setSignMethod('nautilus')
@@ -338,33 +382,36 @@ export function UtxoManagementTab({
     setConsolidateSummary(null)
     setSplitSummary(null)
     setSelectedBoxIds(new Set())
+    setFocusedBoxId(null)
     setSplitAmount('')
     setSplitCount('')
     setSplitTokenId('')
     setSplitErgPerBox('0.001')
   }
 
-  // -------------------------------------------------------------------------
-  // Empty states
-  // -------------------------------------------------------------------------
+  const pageHeader = embedded ? null : (
+    <header className="utxo-header-main">
+      <div className="utxo-header-left">
+        <div className="utxo-icon" aria-hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+            <rect x="3" y="3" width="7" height="7" />
+            <rect x="14" y="3" width="7" height="7" />
+            <rect x="3" y="14" width="7" height="7" />
+            <rect x="14" y="14" width="7" height="7" />
+          </svg>
+        </div>
+        <div>
+          <h1 className="utxo-title">UTXO Management</h1>
+          <p className="utxo-subtitle">Consolidate or split your boxes for better UTXO hygiene</p>
+        </div>
+      </div>
+    </header>
+  )
 
   if (!isConnected || !walletAddress) {
     return (
-      <div className="utxo-tab">
-        <PageHeader
-          icon={
-            <div className="utxo-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
-                <rect x="3" y="3" width="7" height="7" />
-                <rect x="14" y="3" width="7" height="7" />
-                <rect x="3" y="14" width="7" height="7" />
-                <rect x="14" y="14" width="7" height="7" />
-              </svg>
-            </div>
-          }
-          title="UTXO Management"
-          subtitle="Consolidate or split your boxes for better UTXO hygiene."
-        />
+      <div className={rootClass}>
+        {pageHeader}
         <EmptyState
           title={!isConnected ? 'Node Required' : 'Wallet Required'}
           description={!isConnected ? 'Connect to a node to manage UTXOs.' : 'Connect your wallet to manage UTXOs.'}
@@ -373,18 +420,14 @@ export function UtxoManagementTab({
     )
   }
 
-  // -------------------------------------------------------------------------
-  // Building step
-  // -------------------------------------------------------------------------
-
   if (step === 'building') {
     return (
-      <div className="utxo-tab">
+      <div className={rootClass}>
         <div className="utxo-centered-card">
           <div className="card">
             <div className="card-content">
               <div className="swap-preview-loading">
-                <Spinner size={20} />
+                <div className="spinner-small" />
                 <span>Building transaction...</span>
               </div>
             </div>
@@ -394,13 +437,9 @@ export function UtxoManagementTab({
     )
   }
 
-  // -------------------------------------------------------------------------
-  // Signing — choose method
-  // -------------------------------------------------------------------------
-
   if (step === 'signing' && signMethod === 'choose') {
     return (
-      <div className="utxo-tab">
+      <div className={rootClass}>
         <div className="utxo-centered-card">
           <div className="card">
             <div className="card-content">
@@ -464,10 +503,9 @@ export function UtxoManagementTab({
     )
   }
 
-  // Signing — Nautilus waiting
   if (step === 'signing' && signMethod === 'nautilus') {
     return (
-      <div className="utxo-tab">
+      <div className={rootClass}>
         <div className="utxo-centered-card">
           <div className="card">
             <div className="card-content">
@@ -483,8 +521,8 @@ export function UtxoManagementTab({
                   <p className="signing-hint">Waiting for Nautilus approval...</p>
                 </div>
                 <div className="button-group">
-                  <Button variant="secondary" onClick={() => setSignMethod('choose')}>Back</Button>
-                  <Button variant="primary" onClick={handleNautilusSign}>Open Nautilus Again</Button>
+                  <button className="btn btn-secondary" onClick={() => setSignMethod('choose')}>Back</button>
+                  <button className="btn btn-primary" onClick={handleNautilusSign}>Open Nautilus Again</button>
                 </div>
               </div>
             </div>
@@ -494,10 +532,9 @@ export function UtxoManagementTab({
     )
   }
 
-  // Signing — QR code
   if (step === 'signing' && signMethod === 'mobile' && qrUrl) {
     return (
-      <div className="utxo-tab">
+      <div className={rootClass}>
         <div className="utxo-centered-card">
           <div className="card">
             <div className="card-content">
@@ -507,7 +544,7 @@ export function UtxoManagementTab({
                   <QRCodeSVG value={qrUrl} size={200} />
                 </div>
                 <p className="signing-hint">Waiting for signature...</p>
-                <Button variant="secondary" onClick={() => setSignMethod('choose')}>Back</Button>
+                <button className="btn btn-secondary" onClick={() => setSignMethod('choose')}>Back</button>
               </div>
             </div>
           </div>
@@ -516,11 +553,10 @@ export function UtxoManagementTab({
     )
   }
 
-  // Success
   if (step === 'success') {
     const action = subTab === 'consolidate' ? 'Consolidated' : 'Split'
     return (
-      <div className="utxo-tab">
+      <div className={rootClass}>
         <div className="utxo-centered-card">
           <div className="card">
             <div className="card-content">
@@ -532,7 +568,7 @@ export function UtxoManagementTab({
                 </div>
                 <h3>UTXOs {action}!</h3>
                 {txId && <TxSuccess txId={txId} explorerUrl={explorerUrl} />}
-                <Button variant="primary" onClick={handleReset}>Done</Button>
+                <button className="btn btn-primary" onClick={handleReset}>Done</button>
               </div>
             </div>
           </div>
@@ -541,10 +577,9 @@ export function UtxoManagementTab({
     )
   }
 
-  // Error
   if (step === 'error') {
     return (
-      <div className="utxo-tab">
+      <div className={rootClass}>
         <div className="utxo-centered-card">
           <div className="card">
             <div className="card-content">
@@ -557,10 +592,10 @@ export function UtxoManagementTab({
                 <h3>Transaction Failed</h3>
                 <p className="error-message">{error}</p>
                 <div className="button-group">
-                  <Button variant="secondary" onClick={handleReset}>Start Over</Button>
-                  <Button variant="primary" onClick={() => { setStep('select'); setError(null) }}>
+                  <button className="btn btn-secondary" onClick={handleReset}>Start Over</button>
+                  <button className="btn btn-primary" onClick={() => { setStep('select'); setError(null) }}>
                     Try Again
-                  </Button>
+                  </button>
                 </div>
               </div>
             </div>
@@ -570,14 +605,10 @@ export function UtxoManagementTab({
     )
   }
 
-  // -------------------------------------------------------------------------
-  // Confirm step (consolidate or split)
-  // -------------------------------------------------------------------------
-
   if (step === 'confirm') {
     if (subTab === 'consolidate') {
       return (
-        <div className="utxo-tab">
+        <div className={rootClass}>
           <div className="utxo-header">
             <h2>Confirm Consolidation</h2>
           </div>
@@ -619,10 +650,10 @@ export function UtxoManagementTab({
                 </div>
 
                 <div className="button-group" style={{ marginTop: 'var(--space-md)' }}>
-                  <Button variant="secondary" onClick={() => setStep('select')}>Back</Button>
-                  <Button variant="primary" onClick={handleConsolidate} disabled={loading}>
+                  <button className="btn btn-secondary" onClick={() => setStep('select')}>Back</button>
+                  <button className="btn btn-primary utxo-action-btn" onClick={handleConsolidate} disabled={loading}>
                     {loading ? 'Building...' : 'Consolidate'}
-                  </Button>
+                  </button>
                 </div>
               </div>
             </div>
@@ -631,9 +662,8 @@ export function UtxoManagementTab({
       )
     }
 
-    // Split confirm
     return (
-      <div className="utxo-tab">
+      <div className={rootClass}>
         <div className="utxo-header">
           <h2>Confirm Split</h2>
         </div>
@@ -671,10 +701,10 @@ export function UtxoManagementTab({
               </div>
 
               <div className="button-group" style={{ marginTop: 'var(--space-md)' }}>
-                <Button variant="secondary" onClick={() => setStep('select')}>Back</Button>
-                <Button variant="primary" onClick={handleSplit} disabled={loading}>
+                <button className="btn btn-secondary" onClick={() => setStep('select')}>Back</button>
+                <button className="btn btn-primary utxo-action-btn" onClick={handleSplit} disabled={loading}>
                   {loading ? 'Building...' : 'Split'}
-                </Button>
+                </button>
               </div>
             </div>
           </div>
@@ -683,28 +713,10 @@ export function UtxoManagementTab({
     )
   }
 
-  // -------------------------------------------------------------------------
-  // Main select step
-  // -------------------------------------------------------------------------
-
   return (
-    <div className="utxo-tab">
-      <PageHeader
-        icon={
-          <div className="utxo-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
-              <rect x="3" y="3" width="7" height="7" />
-              <rect x="14" y="3" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" />
-              <rect x="14" y="14" width="7" height="7" />
-            </svg>
-          </div>
-        }
-        title="UTXO Management"
-        subtitle="Consolidate or split your boxes for better UTXO hygiene."
-      />
+    <div className={rootClass}>
+      {pageHeader}
 
-      {/* Sub-tab toggle */}
       <Tabs
         tabs={[
           { id: 'consolidate', label: 'Consolidate' },
@@ -715,237 +727,303 @@ export function UtxoManagementTab({
         size="compact"
       />
 
-      {/* ================================================================= */}
-      {/* Consolidate sub-tab                                               */}
-      {/* ================================================================= */}
       {subTab === 'consolidate' && (
-        <div className="utxo-layout">
-          {/* UTXO list panel */}
-          <div className="utxo-list-panel">
-            <div className="utxo-list-toolbar">
-              <div className="utxo-toolbar-actions">
-                <Button size="sm" variant="ghost" onClick={selectAllUtxos}>Select All</Button>
-                <Button size="sm" variant="ghost" onClick={deselectAllUtxos}>Deselect All</Button>
-              </div>
-              {selectedBoxIds.size > 0 && (
-                <span className="utxo-select-badge">{selectedBoxIds.size}</span>
-              )}
+        <div className="utxo-board-stage">
+          <div className="utxo-board-toolbar">
+            <div className="utxo-board-filters" role="group" aria-label="Filter boxes">
+              {([
+                ['all', 'All'],
+                ['dust', 'Dust'],
+                ['tokens', 'Tokens'],
+                ['large', 'Large'],
+              ] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`utxo-filter-chip${boardFilter === id ? ' active' : ''}`}
+                  onClick={() => setBoardFilter(id)}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
+            <div className="utxo-toolbar-actions">
+              <button type="button" className="utxo-toolbar-btn" onClick={selectVisible}>Select visible</button>
+              <button type="button" className="utxo-toolbar-btn" onClick={selectDust} disabled={boardStats.dust === 0}>
+                Select dust
+              </button>
+              <button type="button" className="utxo-toolbar-btn" onClick={deselectAllUtxos}>Clear</button>
+              <button type="button" className="utxo-toolbar-btn" onClick={fetchUtxos} disabled={loadingUtxos}>
+                Refresh
+              </button>
+            </div>
+          </div>
 
-            <div className="utxo-list">
-              {loadingUtxos ? (
-                <div className="utxo-list-empty">
-                  <Spinner size={20} />
-                  <span>Loading UTXOs...</span>
-                </div>
-              ) : utxos.length === 0 ? (
-                <div className="utxo-list-empty">
-                  <span>No UTXOs found</span>
-                </div>
-              ) : (
-                utxos.map(u => {
+          <div className="utxo-board-legend" aria-hidden>
+            <span><i className="utxo-swatch dust" /> Dust</span>
+            <span><i className="utxo-swatch erg" /> ERG</span>
+            <span><i className="utxo-swatch token" /> Tokens</span>
+            <span><i className="utxo-swatch large" /> Large</span>
+            <span className="utxo-board-stat mono">{boardStats.count} boxes · {formatErg(boardStats.totalErg)} ERG</span>
+          </div>
+
+          <div className="utxo-board-canvas" role="listbox" aria-multiselectable aria-label="UTXO boxes">
+            {loadingUtxos ? (
+              <div className="utxo-board-empty">
+                <div className="spinner-small" />
+                <span>Loading UTXOs…</span>
+              </div>
+            ) : filteredUtxos.length === 0 ? (
+              <div className="utxo-board-empty">
+                <span>{utxos.length === 0 ? 'No UTXOs found' : 'No boxes match this filter'}</span>
+              </div>
+            ) : (
+              <div className="utxo-mosaic">
+                {filteredUtxos.map((u, i) => {
+                  const nano = ergNano(u)
+                  const tier = valueTier(nano, maxNano)
+                  const kind = boxKind(u)
                   const selected = selectedBoxIds.has(u.boxId)
-                  const ergValue = parseInt(u.value || '0', 10)
+                  const focused = focusedBoxId === u.boxId
                   return (
                     <button
                       key={u.boxId}
-                      className={`utxo-list-item${selected ? ' selected' : ''}`}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      className={`utxo-tile tier-${tier} kind-${kind}${selected ? ' selected' : ''}${focused ? ' focused' : ''}`}
+                      style={{ animationDelay: `${Math.min(i, 24) * 18}ms` }}
                       onClick={() => toggleUtxo(u.boxId)}
+                      title={`${u.boxId}\n${formatErg(nano)} ERG${u.assets.length ? ` · ${u.assets.length} token(s)` : ''}`}
                     >
-                      <div className="utxo-item-check">
-                        {selected ? (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-400)" strokeWidth="3">
+                      <span className="utxo-tile-erg mono">{formatErg(nano, 0, nano < DUST_NANO ? 4 : 2)}</span>
+                      {u.assets.length > 0 && (
+                        <span className="utxo-tile-tokens">{u.assets.length}</span>
+                      )}
+                      {selected && (
+                        <span className="utxo-tile-check" aria-hidden>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                             <polyline points="20 6 9 17 4 12" />
                           </svg>
-                        ) : (
-                          <div className="utxo-item-checkbox" />
-                        )}
-                      </div>
-                      <div className="utxo-item-info">
-                        <span className="utxo-item-id">{u.boxId.slice(0, 12)}...{u.boxId.slice(-6)}</span>
-                        <span className="utxo-item-meta">
-                          {u.assets.length > 0 && (
-                            <span className="utxo-item-token-badge">{u.assets.length} token{u.assets.length !== 1 ? 's' : ''}</span>
-                          )}
                         </span>
-                      </div>
-                      <span className="utxo-item-erg">{formatErg(ergValue)} ERG</span>
+                      )}
                     </button>
                   )
-                })
-              )}
-            </div>
-
-            {utxos.length > 0 && (
-              <div className="utxo-list-count">
-                {utxos.length} box{utxos.length !== 1 ? 'es' : ''}
+                })}
               </div>
             )}
           </div>
 
-          {/* Summary panel */}
-          <div className="utxo-summary-panel">
-            {selectedBoxIds.size === 0 ? (
-              <div className="utxo-summary-empty">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="3" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="3" width="7" height="7" rx="1" />
-                  <rect x="3" y="14" width="7" height="7" rx="1" />
-                  <path d="M14 17h7M17.5 14v7" />
-                </svg>
-                <span>Select boxes to consolidate</span>
-                <span className="utxo-summary-hint">Pick 2 or more UTXOs to merge into one</span>
+          <div className="utxo-board-dock">
+            {focusedBox && (
+              <div className="utxo-focus-card">
+                <code className="mono utxo-focus-id">
+                  {focusedBox.boxId.slice(0, 10)}…{focusedBox.boxId.slice(-8)}
+                </code>
+                <span className="mono">{formatErg(ergNano(focusedBox))} ERG</span>
+                {focusedBox.assets.length > 0 && (
+                  <span className="utxo-focus-tokens">{focusedBox.assets.length} token type{focusedBox.assets.length !== 1 ? 's' : ''}</span>
+                )}
               </div>
-            ) : (
-              <>
-                <div className="utxo-confirm-summary">
+            )}
+            <div className="utxo-dock-main">
+              <div className="utxo-dock-stats">
+                {selectedBoxIds.size === 0 ? (
+                  <span className="utxo-dock-hint">Click boxes to select · size ≈ ERG value</span>
+                ) : (
+                  <>
+                    <span className="utxo-select-badge">{selectedUtxosSummary.count}</span>
+                    <span className="mono">{formatErg(selectedUtxosSummary.totalErg)} ERG</span>
+                    {selectedUtxosSummary.tokenCount > 0 && (
+                      <span>{selectedUtxosSummary.tokenCount} token type{selectedUtxosSummary.tokenCount !== 1 ? 's' : ''}</span>
+                    )}
+                    <span className="utxo-dock-out mono">
+                      → {formatErg(Math.max(0, selectedUtxosSummary.totalErg - TX_FEE_NANO))} ERG
+                    </span>
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                className="utxo-submit-btn utxo-dock-action"
+                onClick={() => setStep('confirm')}
+                disabled={selectedBoxIds.size < 2}
+              >
+                {selectedBoxIds.size < 2 ? 'Select ≥2 boxes' : 'Review consolidation'}
+              </button>
+            </div>
+            {error && <div className="message error">{error}</div>}
+          </div>
+        </div>
+      )}
+
+      {subTab === 'split' && (
+        <div className="utxo-split-layout">
+          <div className="utxo-split-panel">
+            <div className="utxo-split-type-toggle">
+              <button
+                className={`utxo-split-type-btn ${splitType === 'erg' ? 'active' : ''}`}
+                onClick={() => { setSplitType('erg'); setSplitAmount(''); setSplitCount('') }}
+              >
+                Split ERG
+              </button>
+              <button
+                className={`utxo-split-type-btn ${splitType === 'token' ? 'active' : ''}`}
+                onClick={() => { setSplitType('token'); setSplitAmount(''); setSplitCount('') }}
+              >
+                Split Token
+              </button>
+            </div>
+
+            <div className="utxo-split-form">
+              {splitType === 'token' && (
+                <div className="utxo-split-field">
+                  <label>Token</label>
+                  <select
+                    value={splitTokenId}
+                    onChange={e => setSplitTokenId(e.target.value)}
+                    className="utxo-split-select"
+                  >
+                    <option value="">Select token...</option>
+                    {tokens.map(t => (
+                      <option key={t.token_id} value={t.token_id}>
+                        {getTokenName(t.token_id, t.name)} ({formatTokenAmount(t.amount, t.decimals)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="utxo-split-field">
+                <label>{splitType === 'erg' ? 'ERG per box' : 'Tokens per box'}</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={splitAmount}
+                  onChange={e => setSplitAmount(e.target.value)}
+                  placeholder={splitType === 'erg' ? '1.0' : '100'}
+                  className="utxo-split-input"
+                />
+              </div>
+
+              <div className="utxo-split-field">
+                <label>Number of boxes (1–30)</label>
+                <div className="utxo-split-alloc">
+                  <input
+                    type="range"
+                    min={1}
+                    max={30}
+                    value={Math.min(30, Math.max(1, splitCountNum || 1))}
+                    onChange={e => setSplitCount(e.target.value)}
+                    className="utxo-split-range"
+                    aria-label="Split box count"
+                  />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={splitCount}
+                    onChange={e => setSplitCount(e.target.value.replace(/\D/g, ''))}
+                    placeholder="5"
+                    className="utxo-split-input utxo-split-count"
+                  />
+                </div>
+              </div>
+
+              {splitType === 'token' && (
+                <div className="utxo-split-field">
+                  <label>ERG per box</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={splitErgPerBox}
+                    onChange={e => setSplitErgPerBox(e.target.value)}
+                    placeholder="0.001"
+                    className="utxo-split-input"
+                  />
+                </div>
+              )}
+
+              {splitCountNum > 0 && splitAmountNano > 0 && (
+                <div className="utxo-confirm-summary" style={{ marginTop: 'var(--space-sm)' }}>
                   <div className="utxo-confirm-row">
-                    <span>Selected</span>
-                    <span>{selectedUtxosSummary.count} boxes</span>
+                    <span>Total</span>
+                    <span>{splitTotalDisplay}</span>
                   </div>
-                  <div className="utxo-confirm-row">
-                    <span>Total ERG</span>
-                    <span>{formatErg(selectedUtxosSummary.totalErg)} ERG</span>
-                  </div>
-                  {selectedUtxosSummary.tokenCount > 0 && (
+                  {splitType === 'token' && (
                     <div className="utxo-confirm-row">
-                      <span>Token types</span>
-                      <span>{selectedUtxosSummary.tokenCount}</span>
+                      <span>ERG locked</span>
+                      <span>{formatErg(splitErgPerBoxNano * splitCountNum)} ERG</span>
                     </div>
                   )}
                   <div className="utxo-confirm-row">
                     <span>Miner Fee</span>
                     <span>~0.0011 ERG</span>
                   </div>
-                  <div className="utxo-confirm-row utxo-highlight-row">
-                    <span>Output</span>
-                    <span>{formatErg(selectedUtxosSummary.totalErg - TX_FEE_NANO)} ERG</span>
-                  </div>
                 </div>
+              )}
 
-                {error && <div className="message error">{error}</div>}
+              {error && <div className="message error" style={{ marginTop: 'var(--space-sm)' }}>{error}</div>}
 
-                <div className="utxo-summary-footer">
-                  <Button
-                    variant="primary"
-                    className="utxo-submit-btn"
-                    onClick={() => setStep('confirm')}
-                    disabled={selectedBoxIds.size < 2}
-                  >
-                    {selectedBoxIds.size < 2 ? 'Select at least 2 boxes' : 'Review Consolidation'}
-                  </Button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ================================================================= */}
-      {/* Split sub-tab                                                     */}
-      {/* ================================================================= */}
-      {subTab === 'split' && (
-        <div className="utxo-split-panel">
-          {/* Split type toggle */}
-          <div className="utxo-split-type-toggle">
-            <button
-              className={`utxo-split-type-btn ${splitType === 'erg' ? 'active' : ''}`}
-              onClick={() => { setSplitType('erg'); setSplitAmount(''); setSplitCount('') }}
-            >
-              Split ERG
-            </button>
-            <button
-              className={`utxo-split-type-btn ${splitType === 'token' ? 'active' : ''}`}
-              onClick={() => { setSplitType('token'); setSplitAmount(''); setSplitCount('') }}
-            >
-              Split Token
-            </button>
+              <button
+                className="utxo-submit-btn"
+                style={{ marginTop: 'var(--space-md)' }}
+                onClick={() => setStep('confirm')}
+                disabled={!splitIsValid}
+              >
+                Review Split
+              </button>
+            </div>
           </div>
 
-          <div className="utxo-split-form">
-            {splitType === 'token' && (
-              <FormField label="Token">
-                <Select
-                  value={splitTokenId}
-                  onChange={e => setSplitTokenId(e.target.value)}
-                  className="utxo-split-select"
-                >
-                  <option value="">Select token...</option>
-                  {tokens.map(t => (
-                    <option key={t.token_id} value={t.token_id}>
-                      {getTokenName(t.token_id, t.name)} ({formatTokenAmount(t.amount, t.decimals)})
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-            )}
-
-            <FormField label={splitType === 'erg' ? 'ERG per box' : 'Tokens per box'}>
-              <Input
-                type="text"
-                inputMode="decimal"
-                value={splitAmount}
-                onChange={e => setSplitAmount(e.target.value)}
-                placeholder={splitType === 'erg' ? '1.0' : '100'}
-                className="utxo-split-input"
-              />
-            </FormField>
-
-            <FormField label="Number of boxes (1-30)">
-              <Input
-                type="text"
-                inputMode="numeric"
-                value={splitCount}
-                onChange={e => setSplitCount(e.target.value.replace(/\D/g, ''))}
-                placeholder="5"
-                className="utxo-split-input"
-              />
-            </FormField>
-
-            {splitType === 'token' && (
-              <FormField label="ERG per box">
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  value={splitErgPerBox}
-                  onChange={e => setSplitErgPerBox(e.target.value)}
-                  placeholder="0.001"
-                  className="utxo-split-input"
-                />
-              </FormField>
-            )}
-
-            {/* Live preview */}
-            {splitCountNum > 0 && splitAmountNano > 0 && (
-              <div className="utxo-confirm-summary" style={{ marginTop: 'var(--space-sm)' }}>
-                <div className="utxo-confirm-row">
-                  <span>Total</span>
-                  <span>{splitTotalDisplay}</span>
-                </div>
-                {splitType === 'token' && (
-                  <div className="utxo-confirm-row">
-                    <span>ERG locked</span>
-                    <span>{formatErg(splitErgPerBoxNano * splitCountNum)} ERG</span>
+          <div className="utxo-split-preview">
+            <div className="utxo-split-flow">
+              <div className="utxo-split-stage">
+                <div className="utxo-split-preview-label">Before</div>
+                {splitAmountNano > 0 && splitCountNum > 0 ? (
+                  <div className="utxo-ghost-tile utxo-ghost-source kind-large">
+                    <span className="utxo-ghost-caption">source</span>
+                    <span className="mono utxo-ghost-value">
+                      {splitType === 'erg'
+                        ? formatErg(splitAmountNano * splitCountNum, 0, 2)
+                        : splitTotalDisplay}
+                    </span>
+                    <span className="utxo-ghost-sub">
+                      {splitCountNum}× →
+                    </span>
                   </div>
+                ) : (
+                  <p className="utxo-split-preview-hint">Set amount &amp; count</p>
                 )}
-                <div className="utxo-confirm-row">
-                  <span>Miner Fee</span>
-                  <span>~0.0011 ERG</span>
-                </div>
               </div>
-            )}
 
-            {error && <div className="message error" style={{ marginTop: 'var(--space-sm)' }}>{error}</div>}
+              <div className="utxo-split-arrow" aria-hidden>→</div>
 
-            <Button
-              variant="primary"
-              className="utxo-submit-btn"
-              style={{ marginTop: 'var(--space-md)' }}
-              onClick={() => setStep('confirm')}
-              disabled={!splitIsValid}
-            >
-              Review Split
-            </Button>
+              <div className="utxo-split-stage utxo-split-stage-after">
+                <div className="utxo-split-preview-label">After · {splitCountNum || 0} boxes</div>
+                {splitCountNum > 0 && splitIsValid ? (
+                  <div className="utxo-split-ghosts">
+                    {Array.from({ length: Math.min(splitCountNum, 30) }, (_, i) => (
+                      <div
+                        key={i}
+                        className={`utxo-ghost-tile${splitType === 'token' ? ' token' : ''}`}
+                        style={{ animationDelay: `${i * 30}ms` }}
+                      >
+                        <span className="mono">
+                          {splitType === 'erg' ? formatErg(splitAmountNano, 0, 2) : splitAmount}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="utxo-split-preview-hint">Adjust allocation to preview resulting boxes</p>
+                )}
+              </div>
+            </div>
+            <div className="utxo-board-legend utxo-split-legend" aria-hidden>
+              <span><i className="utxo-swatch large" /> Source total</span>
+              <span><i className="utxo-swatch erg" /> Output boxes</span>
+              {splitType === 'token' && <span><i className="utxo-swatch token" /> Token split</span>}
+            </div>
           </div>
         </div>
       )}

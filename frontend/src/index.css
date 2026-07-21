@@ -6,15 +6,21 @@
 
 :root {
   /* Glass panel tiers — opaque enough for strong content separation */
-  --glass-display: rgba(2, 8, 18, 0.6);
-  --glass-action: rgba(2, 8, 18, 0.78);
-  --glass-chrome: rgba(2, 8, 18, 0.7);
-  --glass-blur: blur(24px) saturate(1.2);
-  --glass-border: rgba(148, 163, 184, 0.12);
-  --glass-border-hover: rgba(148, 163, 184, 0.22);
-  --glass-border-strong: rgba(148, 163, 184, 0.15);
-  --glass-glow: 0 0 20px rgba(16, 185, 129, 0.15);
+  --glass-display: rgba(2, 8, 18, 0.72);
+  --glass-action: rgba(1, 5, 12, 0.88);
+  --glass-chrome: rgba(1, 6, 14, 0.82);
+  --glass-blur: blur(28px) saturate(1.15);
+  --glass-border: rgba(148, 163, 184, 0.11);
+  --glass-border-hover: rgba(148, 163, 184, 0.2);
+  --glass-border-strong: rgba(148, 163, 184, 0.14);
+  --glass-glow: 0 0 20px rgba(16, 185, 129, 0.12);
   --glass-inner-edge: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+
+  /* Atmosphere */
+  --void: #01040a;
+  --void-deep: #000208;
+  --aurora: rgba(16, 185, 129, 0.07);
+  --aurora-cool: rgba(56, 120, 180, 0.06);
 }
 
 * {
@@ -25,7 +31,7 @@
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #020812;
+  background: var(--void-deep);
   color: rgb(241 245 249);
   line-height: 1.6;
   min-height: 100vh;
@@ -33,34 +39,50 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Wallpaper layer — desaturated + darkened so it doesn't compete with UI */
+/*
+  Atmosphere stack (no photo): deep void + faint emerald/steel aurora +
+  soft architectural grid + vignette. Dark enough that glass panels read clearly.
+*/
 body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background: url('/citadel-bg.png') center center / cover no-repeat;
-  filter: saturate(0.5) brightness(0.55);
   z-index: 0;
   pointer-events: none;
+  background:
+    /* Soft emerald bloom — upper left, like distant ward-light */
+    radial-gradient(ellipse 70% 55% at 12% 8%, rgba(16, 185, 129, 0.11), transparent 58%),
+    /* Cool steel bloom — upper right */
+    radial-gradient(ellipse 55% 45% at 88% 12%, rgba(59, 130, 246, 0.07), transparent 55%),
+    /* Low horizon mist */
+    radial-gradient(ellipse 90% 40% at 50% 108%, rgba(8, 28, 42, 0.55), transparent 55%),
+    /* Center void keeps content zone dark */
+    radial-gradient(ellipse 80% 70% at 50% 45%, transparent 20%, rgba(0, 2, 8, 0.55) 100%),
+    /* Base */
+    linear-gradient(165deg, #02070f 0%, var(--void) 42%, #000105 100%);
 }
 
-/* Scrim + vignette — pushes the art further back, darkens edges */
 body::after {
   content: '';
   position: fixed;
   inset: 0;
-  background:
-    /* Uniform navy scrim at ~40% */
-    rgba(2, 8, 18, 0.4),
-    /* Vignette — darker at edges */
-    radial-gradient(
-      ellipse at 50% 50%,
-      transparent 30%,
-      rgba(2, 8, 18, 0.5) 70%,
-      rgba(2, 8, 18, 0.8) 100%
-    );
   z-index: 0;
   pointer-events: none;
+  opacity: 0.45;
+  background-image:
+    /* Fine fort/circuit grid */
+    linear-gradient(rgba(148, 163, 184, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.035) 1px, transparent 1px),
+    /* Sparse larger cells */
+    linear-gradient(rgba(52, 211, 153, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(52, 211, 153, 0.025) 1px, transparent 1px);
+  background-size:
+    48px 48px,
+    48px 48px,
+    192px 192px,
+    192px 192px;
+  mask-image: radial-gradient(ellipse 75% 65% at 50% 40%, black 15%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 75% 65% at 50% 40%, black 15%, transparent 75%);
 }
 
 #root {

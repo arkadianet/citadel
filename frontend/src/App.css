@@ -3,10 +3,10 @@
    ============================================================================ */
 
 :root {
-  --bg: 8 12 21;
-  --card: 13 18 30;
-  --card-hover: 22 30 46;
-  --border: 38 50 70;
+  --bg: 1 4 10;
+  --card: 6 12 22;
+  --card-hover: 14 22 36;
+  --border: 32 44 62;
   --text: 241 245 249;
   --text-secondary: 180 195 210;
   --muted: 140 155 175;
@@ -453,6 +453,11 @@ html, body, #root {
   border: 1px solid color-mix(in srgb, var(--emerald-500) 30%, transparent);
   background: color-mix(in srgb, var(--emerald-500) 10%, transparent);
   color: var(--emerald-400);
+}
+
+.wallet-addr-count {
+  opacity: 0.75;
+  font-size: 0.9em;
 }
 
 .wallet-indicator:hover {

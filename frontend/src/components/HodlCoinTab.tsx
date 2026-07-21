@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getHodlCoinBanks, type HodlBankState } from '../api/hodlcoin'
 import { formatErg } from '../utils/format'
 import { HodlCoinModal } from './HodlCoinModal'
-import { PageHeader, Card, CardHeader, CardBody, CardFooter, EmptyState, Skeleton } from './ui'
+import { EmptyState } from './ui'
 import './HodlCoinTab.css'
 
 const HODL_ICON_MAP: Record<string, string> = {
@@ -91,123 +91,143 @@ export function HodlCoinTab({
     }
   }
 
-  if (!isConnected || capabilityTier === 'Basic') {
+  if (!isConnected) {
     return (
       <div className="hodl-tab">
-        <PageHeader
-          icon={
-            <div className="hodl-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-              </svg>
-            </div>
-          }
-          title="HodlCoin"
-          subtitle="Phoenix Hold Coin Protocol"
-        />
-        <EmptyState title="Node Required" description="Connect to an indexed node to use HodlCoin." />
+        <div className="hodl-empty-wrap">
+          <EmptyState title="Node not connected" description="Connect to a node first." />
+        </div>
+      </div>
+    )
+  }
+
+  if (capabilityTier === 'Basic') {
+    return (
+      <div className="hodl-tab">
+        <div className="hodl-empty-wrap">
+          <EmptyState
+            title="Indexed node required"
+            description="HodlCoin needs an indexed node with extraIndex enabled."
+          />
+        </div>
       </div>
     )
   }
 
   return (
     <div className="hodl-tab">
-      <PageHeader
-        icon={
-          <div className="hodl-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+      <header className="hodl-header">
+        <div className="hodl-header-left">
+          <div className="hodl-icon" aria-hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 2L2 7l10 5 10-5-10-5z" />
               <path d="M2 17l10 5 10-5" />
               <path d="M2 12l10 5 10-5" />
             </svg>
           </div>
-        }
-        title="HodlCoin"
-        subtitle="Deposit ERG to mint hodlTokens. The price can only go up over time."
-      />
-
-      {loading && banks.length === 0 && (
-        <div className="hodl-banks-grid view-grid">
-          {[0, 1, 2].map(i => (
-            <Skeleton key={i} height="240px" />
-          ))}
+          <div>
+            <h1 className="hodl-title">HodlCoin</h1>
+            <p className="hodl-subtitle">Deposit ERG to mint hodlTokens · price can only go up</p>
+          </div>
         </div>
-      )}
+        {banks.length > 0 && (
+          <span className="hodl-meta-chip mono">{banks.length} bank{banks.length !== 1 ? 's' : ''}</span>
+        )}
+      </header>
 
-      {error && <div className="message error">{error}</div>}
+      <div className="hodl-body">
+        {loading && banks.length === 0 && (
+          <div className="hodl-empty-wrap">
+            <div className="hodl-state">
+              <div className="spinner-small" />
+              <span>Discovering banks…</span>
+            </div>
+          </div>
+        )}
 
-      {!loading && banks.length === 0 && !error && (
-        <div className="message warning">No HodlCoin banks found on the network.</div>
-      )}
+        {!loading && error && (
+          <div className="hodl-empty-wrap">
+            <EmptyState title="Error" description={error} />
+          </div>
+        )}
 
-      <div className="hodl-banks-grid view-grid">
-        {banks.map(bank => {
-          const userBalance = getUserHodlBalance(bank)
-          const name = bank.hodlTokenName || `hodl...${bank.hodlTokenId.slice(-6)}`
+        {!loading && !error && banks.length === 0 && (
+          <div className="hodl-empty-wrap">
+            <EmptyState title="No banks found" description="No HodlCoin banks were found on the network." />
+          </div>
+        )}
 
-          return (
-            <Card key={bank.singletonTokenId} className="hodl-bank-card" surface="display">
-              <CardHeader className="hodl-bank-header">
-                <div className="hodl-bank-name">
-                  <BankAvatar name={name} />
-                  <div>
-                    <h3>{name}</h3>
-                    <span className="hodl-bank-id">{bank.singletonTokenId.slice(0, 12)}...</span>
+        {banks.length > 0 && (
+          <div className="hodl-banks-grid">
+            {banks.map(bank => {
+              const userBalance = getUserHodlBalance(bank)
+              const name = bank.hodlTokenName || `hodl...${bank.hodlTokenId.slice(-6)}`
+
+              return (
+                <div key={bank.singletonTokenId} className="hodl-bank-card">
+                  <div className="hodl-bank-header">
+                    <div className="hodl-bank-name">
+                      <BankAvatar name={name} />
+                      <div className="hodl-bank-name-text">
+                        <h3>{name}</h3>
+                        <span className="hodl-bank-id mono">{bank.singletonTokenId.slice(0, 12)}…</span>
+                      </div>
+                    </div>
+                    <span className="hodl-bank-fee">{bank.totalFeePct.toFixed(1)}% fee</span>
+                  </div>
+
+                  <div className="hodl-bank-body">
+                    <div className="hodl-bank-stats">
+                      <div className="hodl-stat">
+                        <span className="hodl-stat-label">Price</span>
+                        <span className="hodl-stat-value">{formatErg(bank.priceNanoPerHodl * 1e9)} ERG</span>
+                      </div>
+                      <div className="hodl-stat">
+                        <span className="hodl-stat-label">TVL</span>
+                        <span className="hodl-stat-value">{formatErg(bank.tvlNanoErg)} ERG</span>
+                      </div>
+                      <div className="hodl-stat">
+                        <span className="hodl-stat-label">Circulating</span>
+                        <span className="hodl-stat-value">
+                          {(bank.circulatingSupply / bank.precisionFactor).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                        </span>
+                      </div>
+                      <div className="hodl-stat">
+                        <span className="hodl-stat-label">Bank Fee</span>
+                        <span className="hodl-stat-value">{bank.bankFeePct.toFixed(1)}%</span>
+                      </div>
+                      <div className="hodl-stat">
+                        <span className="hodl-stat-label">Dev Fee</span>
+                        <span className="hodl-stat-value">{bank.devFeePct.toFixed(1)}%</span>
+                      </div>
+                    </div>
+
+                    {walletAddress && userBalance.raw > 0 && (
+                      <div className="hodl-balance-box">
+                        <span className="hodl-balance-label">Your Balance</span>
+                        <span className="hodl-balance-value">{userBalance.formatted} {name}</span>
+                      </div>
+                    )}
+
+                    <div className="hodl-bank-actions">
+                      <button
+                        className="action-btn primary hodl-primary"
+                        disabled={!walletAddress}
+                        onClick={() => openModal(bank)}
+                        title={!walletAddress ? 'Connect wallet first' : `Mint / Redeem ${name}`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
+                        </svg>
+                        Mint / Redeem
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <span className="hodl-bank-fee">{bank.totalFeePct.toFixed(1)}% fee</span>
-              </CardHeader>
-
-              <CardBody>
-                <div className="hodl-bank-stats">
-                  <div className="hodl-stat">
-                    <span className="hodl-stat-label">Price</span>
-                    <span className="hodl-stat-value">{formatErg(bank.priceNanoPerHodl * 1e9)} ERG</span>
-                  </div>
-                  <div className="hodl-stat">
-                    <span className="hodl-stat-label">TVL</span>
-                    <span className="hodl-stat-value">{formatErg(bank.tvlNanoErg)} ERG</span>
-                  </div>
-                  <div className="hodl-stat">
-                    <span className="hodl-stat-label">Circulating</span>
-                    <span className="hodl-stat-value">{(bank.circulatingSupply / bank.precisionFactor).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
-                  </div>
-                  <div className="hodl-stat">
-                    <span className="hodl-stat-label">Bank Fee</span>
-                    <span className="hodl-stat-value">{bank.bankFeePct.toFixed(1)}%</span>
-                  </div>
-                  <div className="hodl-stat">
-                    <span className="hodl-stat-label">Dev Fee</span>
-                    <span className="hodl-stat-value">{bank.devFeePct.toFixed(1)}%</span>
-                  </div>
-                </div>
-
-                {walletAddress && userBalance.raw > 0 && (
-                  <div className="hodl-balance-box">
-                    <span className="hodl-balance-label">Your Balance</span>
-                    <span className="hodl-balance-value">{userBalance.formatted} {name}</span>
-                  </div>
-                )}
-              </CardBody>
-
-              <CardFooter className="hodl-bank-actions">
-                <button
-                  className="action-btn primary hodl-primary"
-                  disabled={!walletAddress}
-                  onClick={() => openModal(bank)}
-                  title={!walletAddress ? 'Connect wallet first' : `Mint / Redeem ${name}`}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
-                  </svg>
-                  Mint / Redeem
-                </button>
-              </CardFooter>
-            </Card>
-          )
-        })}
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {modalOpen && selectedBank && walletAddress && walletBalance && (

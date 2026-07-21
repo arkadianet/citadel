@@ -164,7 +164,6 @@ pub async fn discover_n2t_pools(
     node: &ergo_node_client::NodeClient,
 ) -> Result<Vec<AmmPool>, AmmError> {
     let boxes = node
-        .inner()
         .unspent_boxes_by_ergo_tree(pool_templates::N2T_POOL_TEMPLATE, 0, 1000)
         .await
         .map_err(|e| AmmError::NodeError(e.to_string()))?;
@@ -190,7 +189,6 @@ pub async fn discover_t2t_pools(
     node: &ergo_node_client::NodeClient,
 ) -> Result<Vec<AmmPool>, AmmError> {
     let boxes = node
-        .inner()
         .unspent_boxes_by_ergo_tree(pool_templates::T2T_POOL_TEMPLATE, 0, 1000)
         .await
         .map_err(|e| AmmError::NodeError(e.to_string()))?;

@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { scanCircularArbs } from '../api/arb'
 import type { CircularArbSnapshot, CircularArb } from '../api/arb'
 import type { RouteHop } from '../api/router'
-import { PageHeader, Button, Skeleton } from './ui'
 import { ArbExecuteModal } from './ArbExecuteModal'
 import './ArbScannerTab.css'
 
@@ -67,72 +66,77 @@ export function ArbScannerTab({ walletAddress, onBalanceRefresh }: ArbScannerTab
 
   return (
     <div className="arb-scanner-tab">
-      <PageHeader
-        icon={
-          <div className="arb-scanner-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+      <header className="arb-scanner-header">
+        <div className="arb-scanner-header-left">
+          <div className="arb-scanner-icon" aria-hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
               <circle cx="11" cy="11" r="8" />
               <path d="M21 21l-4.35-4.35" />
             </svg>
           </div>
-        }
-        title="Arb Scanner"
-        subtitle="Scan for circular arbitrage opportunities across all DEX pools"
-        actions={
-          <Button size="sm" onClick={doScan} disabled={loading}>
-            {loading ? 'Scanning...' : 'Refresh'}
-          </Button>
-        }
-      />
-
-      {error && <div className="message error">{error}</div>}
-
-      {loading && !snapshot && (
-        <div className="arb-scanner-cards">
-          <Skeleton height="40px" />
-          <Skeleton height="180px" />
-          <Skeleton height="180px" />
+          <div>
+            <h1 className="arb-scanner-title">Arb Scanner</h1>
+            <p className="arb-scanner-subtitle">Circular arbitrage opportunities across all DEX pools</p>
+          </div>
         </div>
-      )}
+        <button
+          className="arb-scanner-refresh"
+          onClick={doScan}
+          disabled={loading}
+        >
+          {loading ? 'Scanning...' : 'Refresh'}
+        </button>
+      </header>
 
-      {snapshot && (
-        <>
-          {snapshot.windows.length > 0 ? (
-            <>
-              <div className="arb-scanner-summary view-info-bar">
-                <span className="arb-scanner-count">
-                  {snapshot.windows.length} opportunit{snapshot.windows.length === 1 ? 'y' : 'ies'} found
-                </span>
-                <span className="arb-scanner-total">
-                  Total net profit: {formatErgSigned(snapshot.total_net_profit_nano)} ERG
-                </span>
-                <span className="arb-scanner-time">
-                  Scanned in {snapshot.scan_time_ms}ms
-                </span>
-              </div>
+      <div className="arb-scanner-body">
+        {error && <div className="message error">{error}</div>}
 
-              <div className="arb-scanner-cards">
-                {snapshot.windows.map((arb, idx) => (
-                  <ArbCard
-                    key={idx}
-                    arb={arb}
-                    canExecute={!!walletAddress}
-                    onExecute={() => setExecuting(arb)}
-                  />
-                ))}
+        {loading && !snapshot && (
+          <div className="empty-state">
+            <div className="spinner" />
+            <p>Scanning pools for arb opportunities...</p>
+          </div>
+        )}
+
+        {snapshot && (
+          <>
+            {snapshot.windows.length > 0 ? (
+              <>
+                <div className="arb-scanner-summary">
+                  <span className="arb-scanner-count">
+                    {snapshot.windows.length} opportunit{snapshot.windows.length === 1 ? 'y' : 'ies'} found
+                  </span>
+                  <span className="arb-scanner-total">
+                    Total net profit: {formatErgSigned(snapshot.total_net_profit_nano)} ERG
+                  </span>
+                  <span className="arb-scanner-time">
+                    Scanned in {snapshot.scan_time_ms}ms
+                  </span>
+                </div>
+
+                <div className="arb-scanner-cards">
+                  {snapshot.windows.map((arb, idx) => (
+                    <ArbCard
+                      key={idx}
+                      arb={arb}
+                      canExecute={!!walletAddress}
+                      onExecute={() => setExecuting(arb)}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="arb-scanner-empty">
+                <p>No profitable arbs found.</p>
+                <p className="arb-scanner-empty-hint">
+                  Circular arbs appear when pool prices diverge from each other.
+                  Check back after large trades move prices.
+                </p>
               </div>
-            </>
-          ) : (
-            <div className="arb-scanner-empty">
-              <p>No profitable arbs found.</p>
-              <p className="arb-scanner-empty-hint">
-                Circular arbs appear when pool prices diverge from each other.
-                Check back after large trades move prices.
-              </p>
-            </div>
-          )}
-        </>
-      )}
+            )}
+          </>
+        )}
+      </div>
 
       {executing && (
         <ArbExecuteModal
@@ -163,16 +167,14 @@ function ArbCard({ arb, canExecute, onExecute }: {
         <span className="arb-card-profit-badge">
           {arb.profit_pct >= 0 ? '+' : ''}{arb.profit_pct.toFixed(2)}%
         </span>
-        <Button
-          variant="primary"
-          size="sm"
-          className="arb-card-execute"
+        <button
+          className="arb-card-execute btn btn-primary"
           disabled={!canExecute}
           title={canExecute ? 'Pre-build and sign all legs' : 'Connect a wallet to execute'}
           onClick={onExecute}
         >
           Execute
-        </Button>
+        </button>
       </div>
 
       <div className="arb-card-amounts">

@@ -1,7 +1,7 @@
 use citadel_api::dto::{AmmPoolDto, AmmPoolsResponse, SwapQuoteResponse};
 use citadel_api::AppState;
 use ergo_node_client::NodeClient;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use super::StrErr;
@@ -59,11 +59,42 @@ pub async fn get_amm_quote(
 
     let pool = find_pool(&client, &pool_id).await?;
 
-    let input = parse_swap_input(&input_type, amount, token_id)?;
+    let input = parse_swap_input(&input_type, amount, token_id.clone())?;
 
-    let quote = amm::quote_swap(&pool, &input).ok_or("Cannot calculate quote for this swap")?;
-
-    Ok(quote.into())
+    match amm::quote_swap(&pool, &input) {
+        Some(quote) => Ok(quote.into()),
+        None => {
+            // Token → ERG that would drain below min box: surface the max size.
+            if matches!(pool.pool_type, amm::PoolType::N2T) && input_type == "token" {
+                if let Some(erg) = pool.erg_reserves {
+                    if let Some(max_in) = amm::max_token_in_for_erg_out(
+                        pool.token_y.amount,
+                        erg,
+                        pool.fee_num,
+                        pool.fee_denom,
+                    ) {
+                        if max_in > 0 && max_in < amount {
+                            let max_out = amm::calculate_token_to_erg_output(
+                                pool.token_y.amount,
+                                erg,
+                                max_in,
+                                pool.fee_num,
+                                pool.fee_denom,
+                            );
+                            return Err(format!(
+                                "Amount too large for pool (would leave below min ERG). \
+                                 Max swap: {} {} → {} nanoERG",
+                                max_in,
+                                pool.token_y.name.as_deref().unwrap_or("token"),
+                                max_out
+                            ));
+                        }
+                    }
+                }
+            }
+            Err("Cannot calculate quote for this swap".to_string())
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -449,19 +480,22 @@ pub async fn get_pending_orders(
     let client = state.require_node_client().await?;
     let wallet = state.wallet().await.ok_or("Wallet not connected")?;
 
-    let utxos = client
-        .get_address_utxos(&wallet.address)
-        .await
-        .str_err()?;
-
-    let user_ergo_tree = utxos
-        .first()
-        .map(|u| u.ergo_tree.clone())
-        .ok_or("No UTXOs found for wallet")?;
-
-    let orders = amm::find_pending_orders(&client, &wallet.address, &user_ergo_tree, 50)
-        .await
-        .str_err()?;
+    // Scan recent history per wallet address (orders may live under any index).
+    let mut orders = Vec::new();
+    let mut seen_box = std::collections::HashSet::new();
+    for addr in &wallet.addresses {
+        let Some(tree) = ergo_node_client::address_to_ergo_tree(addr) else {
+            continue;
+        };
+        let batch = amm::find_pending_orders(&client, addr, &tree, 50)
+            .await
+            .str_err()?;
+        for o in batch {
+            if seen_box.insert(o.box_id.clone()) {
+                orders.push(o);
+            }
+        }
+    }
 
     let mut dtos: Vec<PendingOrderDto> = orders.iter().map(PendingOrderDto::from_order).collect();
 
@@ -503,19 +537,21 @@ pub async fn get_mempool_swaps(state: State<'_, AppState>) -> Result<Vec<Mempool
     let client = state.require_node_client().await?;
     let wallet = state.wallet().await.ok_or("Wallet not connected")?;
 
-    let utxos = client
-        .get_address_utxos(&wallet.address)
-        .await
-        .str_err()?;
-
-    let user_ergo_tree = utxos
-        .first()
-        .map(|u| u.ergo_tree.clone())
-        .ok_or("No UTXOs found for wallet")?;
-
-    let swaps = amm::find_mempool_swaps(&client, &wallet.address, &user_ergo_tree)
-        .await
-        .str_err()?;
+    let mut swaps = Vec::new();
+    let mut seen_tx = std::collections::HashSet::new();
+    for addr in &wallet.addresses {
+        let Some(tree) = ergo_node_client::address_to_ergo_tree(addr) else {
+            continue;
+        };
+        let batch = amm::find_mempool_swaps(&client, addr, &tree)
+            .await
+            .str_err()?;
+        for s in batch {
+            if seen_tx.insert(s.tx_id.clone()) {
+                swaps.push(s);
+            }
+        }
+    }
 
     let mut dtos: Vec<MempoolSwapDto> = swaps.iter().map(MempoolSwapDto::from_swap).collect();
 
@@ -1107,10 +1143,19 @@ pub async fn find_swap_routes(
         min_rate_filter,
     );
 
+    let max_swap = amm::max_swap_hint_if_needed(
+        &graph,
+        &source_token,
+        &target_token,
+        input_amount,
+        max_hops,
+    );
+
     let response = serde_json::json!({
         "routes": route_quotes,
         "depth_tiers": depth_tiers,
         "split": split,
+        "max_swap": max_swap,
     });
 
     Ok(response)
@@ -1546,5 +1591,115 @@ pub async fn build_swap_chain_tx(
         legs,
         final_token: build.final_token,
         final_output: build.final_output,
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SplitAllocationInput {
+    pub pool_ids: Vec<String>,
+    pub source_token: Option<String>,
+    pub input_amount: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SplitAllocationSummaryDto {
+    pub input_amount: u64,
+    pub output_amount: u64,
+    pub final_token: Option<String>,
+    pub leg_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SplitChainBuildResponse {
+    pub legs: Vec<ArbChainLegDto>,
+    pub allocations: Vec<SplitAllocationSummaryDto>,
+    pub total_output: u64,
+    pub final_token: Option<String>,
+}
+
+/// Pre-build a split as a flat list of 0-conf chained legs across allocations.
+/// Allocations must use disjoint pools; UTXOs are threaded between them.
+#[tauri::command]
+pub async fn build_split_chains_tx(
+    state: State<'_, AppState>,
+    allocations: Vec<SplitAllocationInput>,
+    user_utxos: Vec<serde_json::Value>,
+    current_height: i32,
+    min_total_output: Option<u64>,
+) -> Result<SplitChainBuildResponse, String> {
+    let client = state.require_node_client().await?;
+
+    let all_pools = amm::discover_pools(&client).await.str_err()?;
+    let mut specs: Vec<amm::SplitChainSpec> = Vec::with_capacity(allocations.len());
+
+    for alloc in &allocations {
+        let mut pools: Vec<(amm::AmmPool, ergo_tx::Eip12InputBox)> =
+            Vec::with_capacity(alloc.pool_ids.len());
+        for pool_id in &alloc.pool_ids {
+            let pool = all_pools
+                .iter()
+                .find(|p| &p.pool_id == pool_id)
+                .cloned()
+                .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
+            let pool_box = client
+                .get_eip12_box_by_id(&pool.box_id)
+                .await
+                .map_err(|e| format!("Failed to fetch pool box: {}", e))?;
+            pools.push((pool, pool_box));
+        }
+        let source = alloc
+            .source_token
+            .clone()
+            .filter(|t| t != "ERG");
+        specs.push(amm::SplitChainSpec {
+            pools,
+            source_token: source,
+            input_amount: alloc.input_amount,
+        });
+    }
+
+    let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
+    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
+
+    let build = amm::build_split_chains(
+        &specs,
+        &parsed_utxos,
+        &user_ergo_tree,
+        current_height,
+        min_total_output,
+    )
+    .str_err()?;
+
+    let legs = build
+        .legs
+        .into_iter()
+        .map(|leg| {
+            Ok(ArbChainLegDto {
+                pool_id: leg.pool_id,
+                tx_id: leg.tx_id,
+                unsigned_tx: serde_json::to_value(&leg.unsigned_tx)
+                    .map_err(|e| format!("Failed to serialize leg tx: {}", e))?,
+                summary: leg.summary,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    Ok(SplitChainBuildResponse {
+        legs,
+        allocations: build
+            .allocations
+            .into_iter()
+            .map(|a| SplitAllocationSummaryDto {
+                input_amount: a.input_amount,
+                output_amount: a.output_amount,
+                final_token: a.final_token,
+                leg_count: a.leg_count,
+            })
+            .collect(),
+        total_output: build.total_output,
+        final_token: build.final_token,
     })
 }
