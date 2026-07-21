@@ -8,7 +8,7 @@ import {
 import { formatAmount, formatPercent, blocksToTime, truncateAddress } from '../utils/format'
 import { SigmaFiConfirmModal, type ConfirmMode } from './SigmaFiConfirmModal'
 import { CreateOrderModal } from './CreateOrderModal'
-import { PageHeader, Tabs, Badge, EmptyState, Button, Skeleton } from './ui'
+import { Tabs, Badge, EmptyState } from './ui'
 import './SigmaFiTab.css'
 
 interface WalletBalance {
@@ -33,6 +33,17 @@ interface SigmaFiTabProps {
 
 type SortKey = 'newest' | 'principal' | 'interest' | 'apr' | 'term'
 type SubTab = 'orders' | 'bonds'
+
+const SORT_KEYS: SortKey[] = ['newest', 'principal', 'interest', 'apr', 'term']
+
+function BondIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.42 4.58a5.4 5.4 0 00-7.65 0l-.77.78-.77-.78a5.4 5.4 0 00-7.65 0C1.46 6.7 1.33 10.28 4 13l8 8 8-8c2.67-2.72 2.54-6.3.42-8.42z" />
+      <path d="M12 5.36V21" />
+    </svg>
+  )
+}
 
 export function SigmaFiTab({
   isConnected,
@@ -112,69 +123,69 @@ export function SigmaFiTab({
   const sortedOrders = market ? sortOrders(market.orders, sortKey, showOwnOnly, hideUndercollateralized) : []
   const filteredBonds = market ? filterBonds(market.bonds, showOwnOnly) : []
 
-  if (!isConnected || capabilityTier === 'Basic') {
+  if (!isConnected) {
     return (
-      <div className="sigmafi-tab">
-        <PageHeader
-          icon={
-            <div className="sigmafi-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20.42 4.58a5.4 5.4 0 00-7.65 0l-.77.78-.77-.78a5.4 5.4 0 00-7.65 0C1.46 6.7 1.33 10.28 4 13l8 8 8-8c2.67-2.72 2.54-6.3.42-8.42z" />
-                <path d="M12 5.36V21" />
-              </svg>
-            </div>
-          }
-          title="SigmaFi Bonds"
-          subtitle="P2P lending with collateralized bonds"
-        />
-        <EmptyState title="Node Required" description="Connect to a full node to use SigmaFi bonds." />
+      <div className="sf-page">
+        <div className="sf-empty-wrap">
+          <EmptyState title="Node not connected" description="Connect to a node first." />
+        </div>
+      </div>
+    )
+  }
+
+  if (capabilityTier === 'Basic') {
+    return (
+      <div className="sf-page">
+        <div className="sf-empty-wrap">
+          <EmptyState
+            title="Indexed node required"
+            description="SigmaFi bonds need an indexed node with extraIndex enabled."
+          />
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="sigmafi-tab">
-      {/* Header */}
-      <PageHeader
-        icon={
-          <div className="sigmafi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20.42 4.58a5.4 5.4 0 00-7.65 0l-.77.78-.77-.78a5.4 5.4 0 00-7.65 0C1.46 6.7 1.33 10.28 4 13l8 8 8-8c2.67-2.72 2.54-6.3.42-8.42z" />
-              <path d="M12 5.36V21" />
-            </svg>
+    <div className="sf-page">
+      <header className="sf-header">
+        <div className="sf-header-left">
+          <div className="sf-icon" aria-hidden>
+            <BondIcon />
           </div>
-        }
-        title="SigmaFi Bonds"
-        subtitle="P2P lending on Ergo"
-        info={market ? [
-          { label: 'Open Orders', value: String(market.orders.length) },
-          { label: 'Active Bonds', value: String(market.bonds.length) },
-          { label: 'Block Height', value: market.blockHeight.toLocaleString() },
-        ] : undefined}
-        actions={walletAddress ? (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setCreateModalOpen(true)}
-          >
-            + Create Loan Request
-          </Button>
-        ) : undefined}
-      />
+          <div>
+            <h1 className="sf-title">SigmaFi Bonds</h1>
+            <p className="sf-subtitle">P2P lending &middot; collateralized bonds</p>
+          </div>
+        </div>
+        <div className="sf-header-meta">
+          {market && (
+            <>
+              <span className="sf-meta-chip mono">{market.orders.length} orders</span>
+              <span className="sf-meta-chip mono">{market.bonds.length} bonds</span>
+              <span className="sf-meta-chip mono">Block {market.blockHeight.toLocaleString()}</span>
+            </>
+          )}
+          {walletAddress && (
+            <button className="sf-create-btn" onClick={() => setCreateModalOpen(true)}>
+              + Create Loan Request
+            </button>
+          )}
+        </div>
+      </header>
 
-      {/* Tab Bar + Controls */}
-      <Tabs
-        tabs={[
-          { id: 'orders', label: `Loan Requests (${market?.orders.length ?? 0})` },
-          { id: 'bonds', label: `Active Bonds (${market?.bonds.length ?? 0})` },
-        ]}
-        activeId={subTab}
-        onChange={(id) => setSubTab(id as SubTab)}
-        size="compact"
-      />
-      <div className="sigmafi-controls-bar">
-        <div className="sigmafi-controls">
-          <label className="sigmafi-filter-check">
+      <div className="sf-toolbar">
+        <Tabs
+          tabs={[
+            { id: 'orders', label: `Loan Requests (${market?.orders.length ?? 0})` },
+            { id: 'bonds', label: `Active Bonds (${market?.bonds.length ?? 0})` },
+          ]}
+          activeId={subTab}
+          onChange={(id) => setSubTab(id as SubTab)}
+          size="compact"
+        />
+        <div className="sf-filters">
+          <label className="sf-filter-check">
             <input
               type="checkbox"
               checked={showOwnOnly}
@@ -183,7 +194,7 @@ export function SigmaFiTab({
             My positions
           </label>
           {subTab === 'orders' && (
-            <label className="sigmafi-filter-check">
+            <label className="sf-filter-check">
               <input
                 type="checkbox"
                 checked={hideUndercollateralized}
@@ -192,78 +203,76 @@ export function SigmaFiTab({
               Hide undercollateralized
             </label>
           )}
-          <Button variant="ghost" size="sm" onClick={fetchMarket} disabled={loading}>
-            {loading ? 'Loading...' : 'Refresh'}
-          </Button>
+          <button className="sf-refresh-btn" onClick={fetchMarket} disabled={loading}>
+            {loading ? 'Loading…' : 'Refresh'}
+          </button>
         </div>
       </div>
 
-      {error && <div className="sigmafi-error">{error}</div>}
+      {error && <div className="sf-error">{error}</div>}
 
-      {/* Orders Sub-tab */}
-      {subTab === 'orders' && (
-        <>
-          <div className="sigmafi-sort-bar view-controls">
-            <span className="sigmafi-sort-label">Sort:</span>
-            {(['newest', 'principal', 'interest', 'apr', 'term'] as SortKey[]).map(key => (
-              <button
-                key={key}
-                className={`sigmafi-sort-btn view-sort-btn ${sortKey === key ? 'active' : ''}`}
-                onClick={() => setSortKey(key)}
-              >
-                {key.charAt(0).toUpperCase() + key.slice(1)}
-              </button>
-            ))}
-          </div>
-          {loading && !market && (
-            <div className="sigmafi-grid view-grid">
-              <Skeleton height="240px" />
-              <Skeleton height="240px" />
-              <Skeleton height="240px" />
+      <div className="sf-body">
+        {subTab === 'orders' && (
+          <>
+            <div className="sf-sort-bar">
+              <span className="sf-sort-label">Sort</span>
+              {SORT_KEYS.map(key => (
+                <button
+                  key={key}
+                  className={`sf-sort-btn ${sortKey === key ? 'active' : ''}`}
+                  onClick={() => setSortKey(key)}
+                >
+                  {key.charAt(0).toUpperCase() + key.slice(1)}
+                </button>
+              ))}
             </div>
-          )}
-          <div className="sigmafi-grid view-grid">
-            {sortedOrders.length === 0 && !loading && (
-              <EmptyState title="No Loan Requests" description="No loan requests found." />
+            {loading && !market ? (
+              <div className="sf-loading">
+                <span className="spinner-small" />
+                Loading bond market…
+              </div>
+            ) : sortedOrders.length === 0 ? (
+              <EmptyState title="No loan requests" description="No loan requests found." />
+            ) : (
+              <div className="sigmafi-grid">
+                {sortedOrders.map(order => (
+                  <OrderCard
+                    key={order.boxId}
+                    order={order}
+                    walletAddress={walletAddress}
+                    onCancel={handleCancelOrder}
+                    onLend={handleLendOrder}
+                  />
+                ))}
+              </div>
             )}
-            {sortedOrders.map(order => (
-              <OrderCard
-                key={order.boxId}
-                order={order}
-                walletAddress={walletAddress}
-                onCancel={handleCancelOrder}
-                onLend={handleLendOrder}
-              />
-            ))}
-          </div>
-        </>
-      )}
+          </>
+        )}
 
-      {/* Bonds Sub-tab */}
-      {subTab === 'bonds' && (
-        <>
-          {loading && !market && (
-            <div className="sigmafi-grid view-grid">
-              <Skeleton height="240px" />
-              <Skeleton height="240px" />
-              <Skeleton height="240px" />
-            </div>
-          )}
-          <div className="sigmafi-grid view-grid">
-            {filteredBonds.length === 0 && !loading && (
-              <EmptyState title="No Active Bonds" description="No active bonds found." />
+        {subTab === 'bonds' && (
+          <>
+            {loading && !market ? (
+              <div className="sf-loading">
+                <span className="spinner-small" />
+                Loading active bonds…
+              </div>
+            ) : filteredBonds.length === 0 ? (
+              <EmptyState title="No active bonds" description="No active bonds found." />
+            ) : (
+              <div className="sigmafi-grid">
+                {filteredBonds.map(bond => (
+                  <BondCard
+                    key={bond.boxId}
+                    bond={bond}
+                    onRepay={handleRepayBond}
+                    onLiquidate={handleLiquidateBond}
+                  />
+                ))}
+              </div>
             )}
-            {filteredBonds.map(bond => (
-              <BondCard
-                key={bond.boxId}
-                bond={bond}
-                onRepay={handleRepayBond}
-                onLiquidate={handleLiquidateBond}
-              />
-            ))}
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
 
       {/* Modals */}
       {walletAddress && (
@@ -348,19 +357,19 @@ function OrderCard({ order, walletAddress, onCancel, onLend }: OrderCardProps) {
       {hasWallet && (
         <div className="sigmafi-card-actions">
           {order.isOwn ? (
-            <Button
-              variant="danger"
+            <button
+              className="sigmafi-action-btn danger"
               onClick={() => onCancel(order)}
             >
               Cancel
-            </Button>
+            </button>
           ) : (
-            <Button
-              variant="primary"
+            <button
+              className="sigmafi-action-btn primary"
               onClick={() => onLend(order)}
             >
               Lend
-            </Button>
+            </button>
           )}
         </div>
       )}
@@ -421,20 +430,20 @@ function BondCard({ bond, onRepay, onLiquidate }: BondCardProps) {
       {(bond.isRepayable || bond.isLiquidable) && (
         <div className="sigmafi-card-actions">
           {bond.isRepayable && (
-            <Button
-              variant="primary"
+            <button
+              className="sigmafi-action-btn primary"
               onClick={() => onRepay(bond)}
             >
               Repay
-            </Button>
+            </button>
           )}
           {bond.isLiquidable && (
-            <Button
-              variant="danger"
+            <button
+              className="sigmafi-action-btn danger"
               onClick={() => onLiquidate(bond)}
             >
               Liquidate
-            </Button>
+            </button>
           )}
         </div>
       )}

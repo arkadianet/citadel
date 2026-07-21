@@ -1,0 +1,756 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+/* ============================================================================
+   Swap / DEX — Viewport-locked protocol page
+   Every rule is scoped under .swap-tab so it always wins over the legacy
+   .swap-* / .pool-* rules still defined in App.css, regardless of CSS load
+   order.
+   ============================================================================ */
+
+.swap-tab {
+  --swap-font: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --swap-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  --swap-surface: rgba(6, 14, 28, 0.72);
+  --swap-surface-soft: rgba(10, 20, 38, 0.55);
+  --swap-border: rgba(148, 163, 184, 0.12);
+  --swap-border-strong: rgba(148, 163, 184, 0.2);
+  --swap-ink: rgb(241 245 249);
+  --swap-muted: #8b9bb0;
+  --swap-faint: #5f7088;
+  --swap-accent: #34d399;
+  --swap-radius: clamp(8px, 0.9vh, 12px);
+  --swap-radius-sm: clamp(6px, 0.7vh, 10px);
+  --swap-gap: clamp(0.4rem, 1.1vh, 0.75rem);
+  --swap-pad-y: clamp(0.55rem, 1.2vh, 0.9rem);
+  --swap-pad-x: clamp(0.7rem, 1.1vw, 1.15rem);
+
+  container-type: size;
+  container-name: swap;
+
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--swap-gap);
+  overflow: hidden;
+  padding: var(--swap-pad-y) var(--swap-pad-x);
+  font-family: var(--swap-font);
+  color: var(--swap-ink);
+}
+
+.swap-tab .mono {
+  font-family: var(--swap-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.swap-tab .swap-empty-wrap {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* ============================================================================
+   Header
+   ============================================================================ */
+
+.swap-tab .swap-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.swap-tab .swap-page-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.swap-tab .swap-page-icon {
+  width: clamp(30px, 3.6vh, 36px);
+  height: clamp(30px, 3.6vh, 36px);
+  border-radius: 9px;
+  flex-shrink: 0;
+  object-fit: cover;
+  background: rgba(52, 211, 153, 0.1);
+  padding: 4px;
+}
+
+.swap-tab .swap-page-title {
+  margin: 0;
+  font-size: clamp(1.05rem, 2.2vh, 1.35rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.swap-tab .swap-page-subtitle {
+  margin: 0.1rem 0 0;
+  font-size: clamp(0.65rem, 1.2vh, 0.75rem);
+  color: var(--swap-faint);
+}
+
+/* ============================================================================
+   Layout — pool list + form, side by side
+   ============================================================================ */
+
+.swap-tab .swap-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: var(--swap-gap);
+  overflow: hidden;
+}
+
+/* ============================================================================
+   Pool List Panel
+   ============================================================================ */
+
+.swap-tab .pool-list-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: var(--swap-radius);
+  border: 1px solid var(--swap-border);
+  background: var(--swap-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  overflow: hidden;
+}
+
+.swap-tab .pool-search {
+  flex-shrink: 0;
+  padding: clamp(0.45rem, 1vh, 0.6rem);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.swap-tab .pool-search-input {
+  width: 100%;
+  padding: clamp(0.35rem, 0.8vh, 0.5rem) clamp(0.5rem, 1vw, 0.65rem);
+  border-radius: var(--swap-radius-sm);
+  border: 1px solid var(--swap-border);
+  background: rgba(2, 8, 18, 0.4);
+  color: var(--swap-ink);
+  font: inherit;
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.swap-tab .pool-search-input:focus {
+  border-color: var(--swap-accent);
+}
+
+.swap-tab .pool-search-input::placeholder {
+  color: var(--swap-faint);
+}
+
+.swap-tab .pool-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.swap-tab .pool-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.swap-tab .pool-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.swap-tab .pool-list::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 4px;
+}
+
+.swap-tab .pool-list-item {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  padding: clamp(0.45rem, 1vh, 0.6rem) clamp(0.55rem, 1vw, 0.7rem);
+  border: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.07);
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.swap-tab .pool-list-item:last-child {
+  border-bottom: none;
+}
+
+.swap-tab .pool-list-item:hover {
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.swap-tab .pool-list-item.selected {
+  background: rgba(52, 211, 153, 0.08);
+  border-left-color: var(--swap-accent);
+}
+
+.swap-tab .pool-list-item:focus-visible {
+  outline: 2px solid var(--swap-accent);
+  outline-offset: -2px;
+}
+
+.swap-tab .pool-item-info {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.swap-tab .wallet-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--swap-accent);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18);
+  flex-shrink: 0;
+}
+
+.swap-tab .pool-name {
+  flex: 1;
+  min-width: 0;
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
+  font-weight: 600;
+  color: var(--swap-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.swap-tab .pool-type-badge {
+  flex-shrink: 0;
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  font-size: clamp(0.55rem, 1vh, 0.62rem);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(167, 139, 250, 0.14);
+  color: #a78bfa;
+}
+
+.swap-tab .pool-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.swap-tab .pool-fee {
+  font-family: var(--swap-mono);
+  font-size: clamp(0.6rem, 1.1vh, 0.68rem);
+  color: var(--swap-faint);
+}
+
+.swap-tab .pool-list-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  color: var(--swap-faint);
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
+  text-align: center;
+}
+
+/* ============================================================================
+   Swap Form Panel — fills remaining width, scrolls internally
+   ============================================================================ */
+
+.swap-tab .swap-form-panel {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 1vh, 0.7rem);
+  min-height: 0;
+  padding: clamp(0.6rem, 1.2vh, 0.85rem);
+  border-radius: var(--swap-radius);
+  border: 1px solid var(--swap-border);
+  background: var(--swap-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.swap-tab .swap-form-panel::-webkit-scrollbar {
+  width: 5px;
+}
+
+.swap-tab .swap-form-panel::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 4px;
+}
+
+.swap-tab .swap-form-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.swap-tab .swap-form-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.swap-tab .swap-form-header-left .pool-pair-icons .token-icon,
+.swap-tab .swap-form-header-left .pool-pair-icons .token-icon-fallback {
+  width: 22px !important;
+  height: 22px !important;
+}
+
+.swap-tab .swap-form-header h3 {
+  margin: 0;
+  font-size: clamp(0.85rem, 1.6vh, 0.98rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.swap-tab .swap-form-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--swap-faint);
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
+}
+
+/* ---- Pool reserves ---- */
+
+.swap-tab .swap-reserves {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.swap-tab .reserve-item {
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--swap-radius-sm);
+  background: rgba(2, 8, 18, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.swap-tab .reserve-label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: clamp(0.58rem, 1.1vh, 0.66rem);
+  color: var(--swap-faint);
+  margin-bottom: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.swap-tab .reserve-value {
+  display: block;
+  font-family: var(--swap-mono);
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--swap-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ============================================================================
+   Swap Input Field
+   ============================================================================ */
+
+.swap-tab .swap-input-section {
+  flex-shrink: 0;
+}
+
+.swap-tab .swap-field {
+  width: 100%;
+  padding: clamp(0.55rem, 1.1vh, 0.75rem);
+  border-radius: var(--swap-radius-sm);
+  border: 1px solid var(--swap-border);
+  background: rgba(2, 8, 18, 0.35);
+}
+
+.swap-tab .swap-field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.swap-tab .swap-field-label {
+  font-size: clamp(0.68rem, 1.3vh, 0.78rem);
+  color: var(--swap-muted);
+}
+
+.swap-tab .swap-field-balance {
+  font-family: var(--swap-mono);
+  font-size: clamp(0.6rem, 1.15vh, 0.7rem);
+  color: var(--swap-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.swap-tab .swap-field-cap-hint {
+  color: #fbbf24;
+}
+
+.swap-tab .swap-field-input {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.swap-tab .swap-field-input input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--swap-ink);
+  font-family: var(--swap-mono);
+  font-size: clamp(1.1rem, 2.4vh, 1.4rem);
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.swap-tab .swap-field-input input::placeholder {
+  color: var(--swap-faint);
+}
+
+.swap-tab .swap-field-input input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.swap-tab .swap-field-input input[type='number']::-webkit-inner-spin-button,
+.swap-tab .swap-field-input input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.swap-tab .swap-field-input input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+.swap-tab .swap-field-token {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
+  font-weight: 600;
+  color: var(--swap-ink);
+  white-space: nowrap;
+}
+
+.swap-tab .max-btn {
+  flex-shrink: 0;
+  appearance: none;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  border-radius: 999px;
+  background: rgba(52, 211, 153, 0.14);
+  color: var(--swap-accent);
+  font: inherit;
+  font-size: clamp(0.6rem, 1.1vh, 0.68rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.swap-tab .max-btn:hover:not(:disabled) {
+  background: rgba(52, 211, 153, 0.24);
+}
+
+.swap-tab .max-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Flip Button
+   ============================================================================ */
+
+.swap-tab .swap-flip-row {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  margin: -0.35rem 0;
+  position: relative;
+  z-index: 1;
+}
+
+.swap-tab .flip-btn {
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid rgba(2, 8, 18, 0.85);
+  background: var(--swap-surface-soft);
+  color: var(--swap-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.swap-tab .flip-btn:hover {
+  border-color: rgba(52, 211, 153, 0.4);
+  background: rgba(52, 211, 153, 0.14);
+  color: var(--swap-accent);
+  transform: rotate(180deg);
+}
+
+.swap-tab .flip-btn:focus-visible {
+  outline: 2px solid var(--swap-accent);
+  outline-offset: 1px;
+}
+
+/* ============================================================================
+   Output Display
+   ============================================================================ */
+
+.swap-tab .output-display {
+  flex-shrink: 0;
+  padding: clamp(0.5rem, 1vh, 0.7rem) clamp(0.55rem, 1.1vh, 0.75rem);
+  border-radius: var(--swap-radius-sm);
+  background: rgba(52, 211, 153, 0.06);
+  border: 1px solid rgba(52, 211, 153, 0.16);
+}
+
+.swap-tab .output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.swap-tab .output-amount {
+  font-family: var(--swap-mono);
+  font-size: clamp(1.15rem, 2.6vh, 1.5rem);
+  font-weight: 700;
+  color: var(--swap-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.swap-tab .quote-loading {
+  font-family: var(--swap-font);
+  font-size: clamp(0.78rem, 1.5vh, 0.9rem);
+  font-weight: 500;
+  color: var(--swap-faint);
+}
+
+.swap-tab .quote-placeholder {
+  font-size: clamp(1rem, 2.2vh, 1.3rem);
+  color: var(--swap-faint);
+}
+
+/* ============================================================================
+   Quote Details
+   ============================================================================ */
+
+.swap-tab .quote-details {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: clamp(0.4rem, 0.9vh, 0.55rem) clamp(0.55rem, 1.1vh, 0.7rem);
+  border-radius: var(--swap-radius-sm);
+  background: rgba(2, 8, 18, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.swap-tab .quote-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: clamp(0.68rem, 1.3vh, 0.78rem);
+}
+
+.swap-tab .quote-row span:first-child {
+  color: var(--swap-faint);
+}
+
+.swap-tab .quote-row span:last-child {
+  font-family: var(--swap-mono);
+  font-size: clamp(0.62rem, 1.15vh, 0.7rem);
+  color: var(--swap-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.swap-tab .quote-row .text-danger {
+  color: #f87171;
+}
+
+.swap-tab .quote-row .text-warning {
+  color: #fbbf24;
+}
+
+/* ============================================================================
+   Slippage / Mode / Nitro rows
+   ============================================================================ */
+
+.swap-tab .slippage-row {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.swap-tab .slippage-label {
+  font-size: clamp(0.68rem, 1.3vh, 0.78rem);
+  color: var(--swap-muted);
+}
+
+.swap-tab .slippage-options {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.swap-tab .slippage-btn {
+  appearance: none;
+  padding: 0.25rem 0.55rem;
+  border-radius: var(--swap-radius-sm);
+  border: 1px solid var(--swap-border);
+  background: var(--swap-surface-soft);
+  color: var(--swap-muted);
+  font: inherit;
+  font-size: clamp(0.64rem, 1.2vh, 0.72rem);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.swap-tab .slippage-btn:hover {
+  border-color: var(--swap-border-strong);
+  color: var(--swap-ink);
+}
+
+.swap-tab .slippage-btn.active {
+  border-color: rgba(52, 211, 153, 0.4);
+  background: rgba(52, 211, 153, 0.14);
+  color: var(--swap-accent);
+}
+
+.swap-tab .nitro-fee-display {
+  font-family: var(--swap-mono);
+  font-size: clamp(0.6rem, 1.1vh, 0.68rem);
+  color: var(--swap-faint);
+  white-space: nowrap;
+}
+
+/* ============================================================================
+   Swap Confirm Button
+   ============================================================================ */
+
+.swap-tab .btn.btn-primary.swap-confirm-btn,
+.swap-tab .swap-confirm-btn {
+  flex-shrink: 0;
+  width: 100%;
+  padding: clamp(0.55rem, 1.1vh, 0.75rem);
+  border: 1px solid var(--swap-accent);
+  border-radius: var(--swap-radius-sm);
+  background: var(--swap-accent);
+  background-image: none;
+  color: #06170f;
+  font-family: var(--swap-font);
+  font-size: clamp(0.8rem, 1.5vh, 0.92rem);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  box-shadow: none;
+}
+
+.swap-tab .btn.btn-primary.swap-confirm-btn:hover:not(:disabled),
+.swap-tab .swap-confirm-btn:hover:not(:disabled) {
+  background: #22c993;
+  transform: none;
+  box-shadow: none;
+}
+
+.swap-tab .btn.btn-primary.swap-confirm-btn:disabled,
+.swap-tab .swap-confirm-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Misc scoped utilities
+   ============================================================================ */
+
+.swap-tab .pending-indicator {
+  font-size: 0.85em;
+  opacity: 0.8;
+  cursor: help;
+}
+
+.swap-tab .spinner-small {
+  border-top-color: var(--swap-accent);
+}
+
+/* ============================================================================
+   Responsive / density
+   ============================================================================ */
+
+@container swap (max-width: 900px) {
+  .swap-tab .swap-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 0.55fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .swap-tab .swap-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 0.55fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .swap-tab .swap-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .swap-tab .swap-reserves {
+    grid-template-columns: 1fr;
+  }
+}
+
+@container swap (max-height: 680px) {
+  .swap-tab .swap-page-subtitle {
+    display: none;
+  }
+}

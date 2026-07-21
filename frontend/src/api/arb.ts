@@ -105,6 +105,41 @@ export async function buildSwapChain(
   })
 }
 
+export interface SplitAllocationInput {
+  poolIds: string[]
+  sourceToken: string | null
+  inputAmount: number
+}
+
+export interface SplitAllocationSummary {
+  inputAmount: number
+  outputAmount: number
+  finalToken: string | null
+  legCount: number
+}
+
+export interface SplitChainBuild {
+  legs: ArbChainLeg[]
+  allocations: SplitAllocationSummary[]
+  totalOutput: number
+  finalToken: string | null
+}
+
+/** Pre-build a split across allocations as one flat 0-conf leg list. */
+export async function buildSplitChains(
+  allocations: SplitAllocationInput[],
+  userUtxos: object[],
+  currentHeight: number,
+  minTotalOutput?: number,
+): Promise<SplitChainBuild> {
+  return await invoke<SplitChainBuild>('build_split_chains_tx', {
+    allocations,
+    userUtxos,
+    currentHeight,
+    minTotalOutput,
+  })
+}
+
 export interface ArbLegSignResponse {
   requestId: string
   nautilusUrl: string

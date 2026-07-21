@@ -97,8 +97,10 @@ export function ExplorerTab({ isConnected, explorerUrl, pendingRoute, onPendingR
 
   return (
     <div className="explorer-tab">
-      {/* Top bar: nav tabs + search + remote link */}
+      {/* Top bar: title + nav tabs + search + remote link */}
       <div className="explorer-toolbar">
+        <h1 className="explorer-title">Explorer</h1>
+
         <div className="explorer-nav">
           {history.length > 0 && (
             <button className="explorer-back-btn" onClick={goBack} title="Go back">

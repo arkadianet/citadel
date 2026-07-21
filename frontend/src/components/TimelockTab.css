@@ -1,105 +1,323 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
 /* ============================================================================
-   MewLock Timelocks Tab
+   MewLock Timelocks — Viewport-locked protocol page
+   Scoped under .timelock-tab to win over legacy App.css rules.
    ============================================================================ */
 
 .timelock-tab {
-  --protocol-accent: #6366f1; /* protocol accent */
-  --protocol-accent-deep: #8b5cf6; /* protocol accent */
-  --protocol-accent-soft: #818cf8; /* protocol accent */
+  --tl-font: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --tl-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  --tl-surface: rgba(6, 14, 28, 0.72);
+  --tl-surface-soft: rgba(10, 20, 38, 0.55);
+  --tl-border: rgba(148, 163, 184, 0.12);
+  --tl-border-strong: rgba(148, 163, 184, 0.2);
+  --tl-ink: rgb(241 245 249);
+  --tl-muted: #8b9bb0;
+  --tl-faint: #5f7088;
+  --tl-accent: #34d399;
+  --tl-indigo: #818cf8;
+  --tl-gold: #fbbf24;
+  --tl-red: #f87171;
+  --tl-radius: clamp(8px, 0.9vh, 12px);
+  --tl-radius-sm: clamp(6px, 0.7vh, 10px);
+  --tl-gap: clamp(0.4rem, 1.1vh, 0.75rem);
+  --tl-pad-y: clamp(0.55rem, 1.2vh, 0.9rem);
+  --tl-pad-x: clamp(0.7rem, 1.1vw, 1.15rem);
+
+  container-type: size;
+  container-name: tl;
+
   flex: 1;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  padding: var(--space-md) var(--space-lg);
-  max-width: 1400px;
-  margin: 0 auto;
-  width: 100%;
-  min-height: 0;
-  overflow-y: auto;
-  animation: timelockFadeIn 0.4s ease-out;
-  gap: var(--space-sm);
+  gap: var(--tl-gap);
+  overflow: hidden;
+  padding: var(--tl-pad-y) var(--tl-pad-x);
+  font-family: var(--tl-font);
+  color: var(--tl-ink);
 }
 
-@keyframes timelockFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+.timelock-tab .mono {
+  font-family: var(--tl-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-empty-wrap {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
 }
 
 /* ============================================================================
-   Header — icon only (PageHeader handles the rest)
+   Header
    ============================================================================ */
 
-.timelock-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--protocol-accent), var(--protocol-accent-deep));
+.tl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.tl-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.tl-icon {
+  width: clamp(30px, 3.6vh, 36px);
+  height: clamp(30px, 3.6vh, 36px);
+  border-radius: 9px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  color: var(--text-strong);
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.18);
+  overflow: hidden;
 }
 
-.timelock-icon svg {
-  width: 20px;
-  height: 20px;
+.tl-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-.timelock-create-btn {
-  margin-left: auto;
-  padding: var(--space-xs) var(--space-md);
-  border: none;
-  border-radius: var(--ds-radius-md);
-  background: linear-gradient(135deg, var(--protocol-accent), var(--protocol-accent-deep));
-  color: var(--text-strong);
-  font: var(--ds-text-card-title);
+.tl-title {
+  margin: 0;
+  font-size: clamp(1.05rem, 2.2vh, 1.35rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.tl-subtitle {
+  margin: 0.1rem 0 0;
+  font-size: clamp(0.65rem, 1.2vh, 0.75rem);
+  color: var(--tl-faint);
+}
+
+.tl-header-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.tl-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--tl-border);
+  background: var(--tl-surface-soft);
+  font-size: clamp(0.62rem, 1.2vh, 0.72rem);
+  font-weight: 500;
+  color: var(--tl-muted);
+}
+
+.tl-meta-chip strong {
+  color: var(--tl-ink);
+  font-weight: 600;
+}
+
+.tl-create-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: clamp(0.4rem, 0.9vh, 0.55rem) clamp(0.65rem, 1.2vw, 0.85rem);
+  border-radius: var(--tl-radius-sm);
+  border: 1px solid var(--tl-accent);
+  background: var(--tl-accent);
+  color: #06170f;
+  font: inherit;
+  font-size: clamp(0.68rem, 1.3vh, 0.78rem);
+  font-weight: 700;
   cursor: pointer;
-  transition: all var(--ds-transition-fast);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.timelock-create-btn:hover:not(:disabled) {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
+.tl-create-btn:hover:not(:disabled) {
+  background: #22c993;
+  border-color: #22c993;
 }
 
-.timelock-create-btn:disabled {
-  opacity: 0.5;
+.tl-create-btn:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
-/* Info bar and filter tabs now handled by PageHeader + Tabs components */
-
 /* ============================================================================
-   Sort Bar
+   Filter + Sort controls
    ============================================================================ */
 
-.timelock-sort-bar {
-  /* base from .view-controls */
+.tl-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.tl-filter-tabs {
+  display: flex;
+  gap: 0.2rem;
+  padding: 0.15rem;
+  border-radius: 8px;
+  background: rgba(2, 8, 18, 0.35);
+}
+
+.tl-filter-tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--tl-muted);
+  font: inherit;
+  font-size: clamp(0.68rem, 1.3vh, 0.78rem);
+  font-weight: 600;
+  padding: 0.28rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.tl-filter-tab:hover {
+  color: var(--tl-ink);
+}
+
+.tl-filter-tab.active {
+  background: rgba(52, 211, 153, 0.14);
+  color: var(--tl-accent);
+}
+
+.tl-sort-group {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.tl-sort-label {
+  font-size: clamp(0.6rem, 1.1vh, 0.68rem);
+  color: var(--tl-faint);
+  margin-right: 0.1rem;
+}
+
+.tl-sort-btn {
+  appearance: none;
+  border: 1px solid var(--tl-border);
+  background: var(--tl-surface-soft);
+  color: var(--tl-muted);
+  font: inherit;
+  font-size: clamp(0.62rem, 1.2vh, 0.7rem);
+  font-weight: 600;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.tl-sort-btn:hover {
+  color: var(--tl-ink);
+  border-color: var(--tl-border-strong);
+}
+
+.tl-sort-btn.active {
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.1);
+  color: var(--tl-accent);
+}
+
+/* ============================================================================
+   Error banner
+   ============================================================================ */
+
+.tl-error {
+  padding: clamp(0.45rem, 1vh, 0.6rem) clamp(0.6rem, 1vw, 0.8rem);
+  border-radius: var(--tl-radius-sm);
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  color: var(--tl-red);
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
   flex-shrink: 0;
 }
 
-.timelock-sort-label {
-  font-size: var(--text-xs);
-  color: var(--slate-500);
-  margin-right: var(--space-xs);
+/* ============================================================================
+   Body — fills remaining height, only this scrolls
+   ============================================================================ */
+
+.tl-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 
-.timelock-sort-btn {
-  /* base from .view-sort-btn — now uses emerald active state */
+.tl-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.tl-body::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 4px;
+}
+
+.tl-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 100%;
+  padding: 1rem;
+  color: var(--tl-faint);
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
+}
+
+.timelock-tab .spinner-small {
+  width: clamp(14px, 1.8vh, 18px);
+  height: clamp(14px, 1.8vh, 18px);
+  border-radius: 50%;
+  border: 2px solid rgba(52, 211, 153, 0.15);
+  border-top-color: var(--tl-accent);
+  animation: tl-spin 0.85s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes tl-spin {
+  to { transform: rotate(360deg); }
+}
+
+.timelock-tab .empty-state,
+.timelock-tab .ds-empty-state {
+  min-height: 100%;
 }
 
 /* ============================================================================
    Card Grid
    ============================================================================ */
 
-.timelock-grid {
+.tl-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(clamp(280px, 30vw, 360px), 1fr));
-  gap: var(--space-md);
+  grid-template-columns: repeat(auto-fill, minmax(clamp(260px, 28vw, 340px), 1fr));
+  gap: var(--tl-gap);
+  align-content: start;
 }
 
 @media (max-width: 640px) {
-  .timelock-grid {
+  .tl-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -108,158 +326,461 @@
    Lock Card
    ============================================================================ */
 
-.timelock-card {
+.tl-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--tl-radius);
+  border: 1px solid var(--tl-border);
+  background: var(--tl-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   overflow: hidden;
 }
 
-.timelock-card.own {
-  border-color: color-mix(in srgb, var(--protocol-accent) 30%, transparent);
+.tl-card.own {
+  border-color: rgba(129, 140, 248, 0.28);
 }
 
-.timelock-card.unlockable {
-  border-color: color-mix(in srgb, var(--emerald-500) 40%, transparent);
+.tl-card.unlockable {
+  border-color: rgba(52, 211, 153, 0.32);
 }
 
-/* Card Header */
-.timelock-card-header {
+.tl-card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-sm) var(--space-md);
-  background: color-mix(in srgb, var(--protocol-accent) 6%, transparent);
-  border-bottom: 1px solid var(--ds-border);
+  gap: 0.5rem;
+  padding: clamp(0.5rem, 1vh, 0.7rem) clamp(0.6rem, 1vw, 0.8rem);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  background: rgba(129, 140, 248, 0.06);
 }
 
-.timelock-card.unlockable .timelock-card-header {
-  background: color-mix(in srgb, var(--emerald-500) 6%, transparent);
+.tl-card.unlockable .tl-card-head {
+  background: rgba(52, 211, 153, 0.08);
 }
 
-.timelock-card-header-left {
+.tl-card-head-left {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 0.4rem;
   min-width: 0;
 }
 
-.timelock-lock-name {
-  font: var(--ds-text-card-title);
-  color: var(--text-strong);
+.tl-lock-name {
+  font-size: clamp(0.78rem, 1.5vh, 0.9rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Card Body */
-.timelock-card-body {
-  padding: var(--space-sm) var(--space-md);
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex: 1;
+.tl-chip {
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
 }
 
-.timelock-row {
+.tl-chip--own {
+  background: rgba(129, 140, 248, 0.14);
+  color: var(--tl-indigo);
+}
+
+.tl-status {
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+}
+
+.tl-status.locked {
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--tl-gold);
+}
+
+.tl-status.unlockable {
+  background: rgba(52, 211, 153, 0.14);
+  color: var(--tl-accent);
+}
+
+.tl-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-height: 0;
+  padding: clamp(0.5rem, 1vh, 0.7rem) clamp(0.6rem, 1vw, 0.8rem);
+}
+
+.tl-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-xs) 0;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
 }
 
-.timelock-row-label {
-  font-size: var(--text-xs);
-  color: var(--slate-500);
+.tl-row-label {
+  font-size: clamp(0.62rem, 1.15vh, 0.7rem);
+  color: var(--tl-faint);
+  flex-shrink: 0;
 }
 
-.timelock-row-value {
-  font: var(--ds-text-metric-sm);
-  color: var(--text-strong);
-  font-variant-numeric: var(--ds-numeric);
+.tl-row-value {
+  font-size: clamp(0.68rem, 1.3vh, 0.78rem);
+  font-weight: 600;
+  color: var(--tl-ink);
+  text-align: right;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.timelock-row-value.highlight {
-  color: var(--protocol-accent-soft);
+.tl-row-value--accent {
+  color: var(--tl-indigo);
 }
 
-.timelock-row-value.success {
-  color: var(--ds-success);
+.tl-row-value--success {
+  color: var(--tl-accent);
 }
 
-.timelock-row-value.mono {
-  font-size: var(--text-xs);
-  color: var(--slate-400);
+.tl-row-value--danger {
+  color: var(--tl-red);
 }
 
-/* Card Actions */
-.timelock-card-actions {
+.tl-row-value--faint {
+  font-size: clamp(0.6rem, 1.1vh, 0.66rem);
+  font-weight: 500;
+  color: var(--tl-faint);
+}
+
+.tl-card-actions {
   display: flex;
-  gap: var(--space-xs);
-  padding: var(--space-sm) var(--space-md);
-  border-top: 1px solid var(--ds-border);
+  gap: 0.4rem;
+  padding: clamp(0.5rem, 1vh, 0.7rem) clamp(0.6rem, 1vw, 0.8rem);
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  flex-shrink: 0;
+}
+
+.tl-action-btn {
+  flex: 1;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.4rem, 0.9vh, 0.55rem) 0.5rem;
+  border-radius: var(--tl-radius-sm);
+  font: inherit;
+  font-size: clamp(0.68rem, 1.3vh, 0.78rem);
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.tl-action-btn.primary {
+  background: var(--tl-accent);
+  border-color: var(--tl-accent);
+  color: #06170f;
+}
+
+.tl-action-btn.primary:hover:not(:disabled) {
+  background: #22c993;
+  border-color: #22c993;
+}
+
+.tl-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ============================================================================
-   Create Lock Modal
+   Modal overlay — shared by Create Lock + Unlock
    ============================================================================ */
 
-.timelock-modal-form {
+.timelock-tab .modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 8, 18, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: var(--tl-gap);
+}
+
+.timelock-tab .modal-card {
+  width: 100%;
+  max-width: min(480px, 92vw);
+  max-height: 90vh;
+  border-radius: var(--tl-radius);
+  background: var(--tl-surface);
+  border: 1px solid var(--tl-border);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: tl-slide-up 0.25s ease-out;
 }
 
-.timelock-duration-grid {
+@keyframes tl-slide-up {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.timelock-tab .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: clamp(0.55rem, 1.1vh, 0.75rem) clamp(0.65rem, 1.1vw, 0.85rem);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  flex-shrink: 0;
+}
+
+.timelock-tab .modal-header h2 {
+  margin: 0;
+  font-size: clamp(0.85rem, 1.6vh, 0.95rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.timelock-tab .modal-close {
+  appearance: none;
+  width: clamp(28px, 2.8vh, 32px);
+  height: clamp(28px, 2.8vh, 32px);
+  border-radius: var(--tl-radius-sm);
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tl-muted);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.timelock-tab .modal-close:hover {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--tl-ink);
+  border-color: var(--tl-border-strong);
+}
+
+.timelock-tab .modal-body {
+  padding: clamp(0.55rem, 1.1vh, 0.75rem) clamp(0.65rem, 1.1vw, 0.85rem);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  scrollbar-gutter: stable;
+}
+
+/* ============================================================================
+   Forms (Create Lock)
+   ============================================================================ */
+
+.tl-modal-form,
+.tl-confirm-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tl-gap);
+}
+
+.timelock-tab .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.timelock-tab .form-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: clamp(0.68rem, 1.3vh, 0.76rem);
+  font-weight: 600;
+  color: var(--tl-muted);
+}
+
+.tl-balance-hint {
+  font-size: clamp(0.6rem, 1.1vh, 0.66rem);
+  font-weight: 400;
+  color: var(--tl-faint);
+}
+
+.timelock-tab .input {
+  width: 100%;
+  padding: clamp(0.4rem, 0.9vh, 0.55rem) clamp(0.55rem, 1vw, 0.7rem);
+  border-radius: var(--tl-radius-sm);
+  background: var(--tl-surface-soft);
+  border: 1px solid var(--tl-border);
+  color: var(--tl-ink);
+  font-family: var(--tl-mono);
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.15s ease;
+}
+
+.timelock-tab .input:focus {
+  outline: none;
+  border-color: var(--tl-accent);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.15);
+}
+
+.timelock-tab .input::placeholder {
+  color: var(--tl-faint);
+}
+
+.tl-duration-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-xs);
+  gap: 0.35rem;
 }
 
-.timelock-duration-btn {
-  padding: var(--space-sm);
-  border: 1px solid var(--slate-700);
-  border-radius: var(--ds-radius-md);
-  background: transparent;
-  color: var(--slate-400);
-  font-size: var(--text-sm);
+.tl-duration-btn {
+  appearance: none;
+  padding: clamp(0.4rem, 0.9vh, 0.55rem);
+  border: 1px solid var(--tl-border);
+  border-radius: var(--tl-radius-sm);
+  background: var(--tl-surface-soft);
+  color: var(--tl-muted);
+  font: inherit;
+  font-size: clamp(0.68rem, 1.3vh, 0.78rem);
   cursor: pointer;
-  transition: all var(--ds-transition-fast);
+  text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.tl-duration-btn:hover {
+  border-color: var(--tl-border-strong);
+  color: var(--tl-ink);
+}
+
+.tl-duration-btn.active {
+  border-color: var(--tl-accent);
+  background: rgba(52, 211, 153, 0.1);
+  color: var(--tl-accent);
+}
+
+.tl-fee-preview {
+  padding: clamp(0.4rem, 0.9vh, 0.55rem) clamp(0.55rem, 1vw, 0.7rem);
+  border-radius: var(--tl-radius-sm);
+  background: rgba(2, 8, 18, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  font-size: clamp(0.66rem, 1.25vh, 0.75rem);
+  color: var(--tl-faint);
+}
+
+.tl-fee-preview span {
+  color: var(--tl-ink);
+  font-weight: 600;
+  font-family: var(--tl-mono);
+}
+
+.tl-submit-btn {
+  width: 100%;
+}
+
+.tl-divider {
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  margin: 0.2rem 0;
+}
+
+/* ============================================================================
+   Signing steps
+   ============================================================================ */
+
+.tl-sign-choice,
+.tl-sign-wait,
+.tl-sign-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  padding: clamp(0.75rem, 1.5vh, 1.25rem) 0;
   text-align: center;
 }
 
-.timelock-duration-btn:hover {
-  border-color: var(--slate-500);
-  color: var(--slate-200);
+.tl-sign-choice button,
+.tl-sign-wait button,
+.tl-sign-qr button {
+  width: 100%;
 }
 
-.timelock-duration-btn.active {
-  border-color: var(--protocol-accent);
-  background: color-mix(in srgb, var(--protocol-accent) 10%, transparent);
-  color: var(--protocol-accent-soft);
-}
-
-.timelock-fee-preview {
-  padding: var(--space-sm);
-  border-radius: var(--ds-radius-md);
-  background: color-mix(in srgb, var(--slate-800) 50%, transparent);
-  border: 1px solid color-mix(in srgb, var(--slate-700) 50%, transparent);
-  font-size: var(--text-xs);
-  color: var(--slate-400);
-}
-
-.timelock-fee-preview span {
-  color: var(--text-strong);
-  font-weight: 500;
+.tl-sign-choice p,
+.tl-sign-wait p,
+.tl-sign-qr p {
+  margin: 0;
+  color: var(--tl-muted);
+  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
 }
 
 /* ============================================================================
-   Error State
+   Buttons (modals)
    ============================================================================ */
 
-.timelock-error {
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-danger-bg);
-  border: 1px solid color-mix(in srgb, var(--red-500) 30%, transparent);
-  color: var(--red-400);
-  font-size: var(--text-sm);
-  flex-shrink: 0;
+.timelock-tab .btn {
+  appearance: none;
+  padding: clamp(0.4rem, 0.9vh, 0.55rem) clamp(0.65rem, 1.2vw, 0.85rem);
+  border-radius: var(--tl-radius-sm);
+  font: inherit;
+  font-size: clamp(0.68rem, 1.3vh, 0.78rem);
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.timelock-tab .btn-primary {
+  background: var(--tl-accent);
+  border-color: var(--tl-accent);
+  color: #06170f;
+}
+
+.timelock-tab .btn-primary:hover:not(:disabled) {
+  background: #22c993;
+  border-color: #22c993;
+}
+
+.timelock-tab .btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.timelock-tab .btn-secondary {
+  background: var(--tl-surface-soft);
+  border-color: var(--tl-border);
+  color: var(--tl-ink);
+}
+
+.timelock-tab .btn-secondary:hover:not(:disabled) {
+  border-color: var(--tl-border-strong);
+  background: rgba(8, 18, 34, 0.85);
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 720px) {
+  .tl-header {
+    align-items: flex-start;
+  }
+}
+
+@container tl (max-height: 680px) {
+  .tl-subtitle {
+    display: none;
+  }
 }

@@ -5,13 +5,14 @@ import {
   type RoutesResponse,
   type RouteQuote,
   type SplitRouteDetail,
+  type MaxSwapHint,
 } from '../api/router'
 import { TokenSelector, type TokenEntry } from './TokenSelector'
 import { RouteList } from './RouteList'
 import { SmartSwapModal } from './SmartSwapModal'
 import { SwapChainModal } from './SwapChainModal'
+import { SplitExecuteModal } from './SplitExecuteModal'
 import { formatTokenAmount } from '../utils/format'
-import { Button, Spinner } from './ui'
 import './SmartSwap.css'
 
 // =============================================================================
@@ -183,6 +184,7 @@ export function SmartSwapView({
   // Route state
   const [routes, setRoutes] = useState<RouteQuote[]>([])
   const [split, setSplit] = useState<SplitRouteDetail | null>(null)
+  const [maxSwap, setMaxSwap] = useState<MaxSwapHint | null>(null)
   const [selectedRouteIndex, setSelectedRouteIndex] = useState<number>(0)
   const [useSplit, setUseSplit] = useState<boolean>(false)
   const [routeLoading, setRouteLoading] = useState<boolean>(false)
@@ -265,6 +267,7 @@ export function SmartSwapView({
       const result: RoutesResponse = await Promise.race([routePromise, timeoutPromise])
       setRoutes(result.routes)
       setSplit(result.split)
+      setMaxSwap(result.max_swap ?? null)
       setSelectedRouteIndex(0)
       setUseSplit(false)
       setRouteStale(false)
@@ -272,6 +275,7 @@ export function SmartSwapView({
       setRouteError(err instanceof Error ? err.message : String(err))
       setRoutes([])
       setSplit(null)
+      setMaxSwap(null)
       setRouteStale(false)
     } finally {
       setRouteLoading(false)
@@ -306,6 +310,7 @@ export function SmartSwapView({
     if (!sourceToken || !targetToken) {
       setRoutes([])
       setSplit(null)
+      setMaxSwap(null)
     }
   }, [sourceToken, targetToken])
 
@@ -319,8 +324,21 @@ export function SmartSwapView({
     if (sourceToken.token_id === ERG_TOKEN_ID) {
       maxRaw = Math.max(0, sourceBalance - ERG_RESERVE_NANO)
     }
+    // Cap to pool-executable max when selling into a thin ERG pool.
+    if (maxSwap && maxSwap.max_input > 0 && targetToken?.token_id === ERG_TOKEN_ID) {
+      maxRaw = Math.min(maxRaw, maxSwap.max_input)
+    }
     const displayVal = maxRaw / Math.pow(10, sourceToken.decimals)
     setInputAmount(displayVal.toString())
+  }
+
+  function applyMaxSwap() {
+    if (!sourceToken || !maxSwap) return
+    let maxRaw = maxSwap.max_input
+    if (sourceBalance !== undefined) {
+      maxRaw = Math.min(maxRaw, sourceBalance)
+    }
+    setInputAmount((maxRaw / Math.pow(10, sourceToken.decimals)).toString())
   }
 
   // =============================================================================
@@ -329,18 +347,50 @@ export function SmartSwapView({
 
   const selectedRoute = useSplit ? null : (routes[selectedRouteIndex] ?? null)
 
+  const splitExecutable =
+    useSplit &&
+    split !== null &&
+    split.allocations.length >= 2 &&
+    (() => {
+      const seen = new Set<string>()
+      for (const a of split.allocations) {
+        for (const h of a.route.hops) {
+          if (seen.has(h.pool_id)) return false
+          seen.add(h.pool_id)
+        }
+      }
+      return true
+    })()
+
   const canExecute =
-    selectedRoute !== null &&
     walletAddress !== null &&
-    !insufficientBalance
+    !insufficientBalance &&
+    (useSplit ? splitExecutable : selectedRoute !== null)
 
   const isMultiHop = (selectedRoute?.route.hops.length ?? 0) > 1
 
   const executionBlockReason: string | null = (() => {
-    if (!selectedRoute) return useSplit ? 'Split execution not yet supported' : null
+    if (useSplit) {
+      if (!split) return 'No split available'
+      if (!splitExecutable) return 'Split shares a pool (unsafe)'
+      if (!walletAddress) return 'Connect wallet'
+      if (insufficientBalance) return 'Insufficient balance'
+      return null
+    }
+    if (!selectedRoute) return null
     if (!walletAddress) return 'Connect wallet'
     if (insufficientBalance) return 'Insufficient balance'
     return null
+  })()
+
+  const confirmLabel = (() => {
+    if (executionBlockReason) return executionBlockReason
+    if (useSplit && split) {
+      const legs = split.allocations.reduce((n, a) => n + a.route.hops.length, 0)
+      return `Execute Split (${split.allocations.length} paths, ${legs} legs)`
+    }
+    if (isMultiHop) return `Swap (${selectedRoute?.route.hops.length} hops, Nautilus)`
+    return 'Swap'
   })()
 
   // =============================================================================
@@ -372,6 +422,7 @@ export function SmartSwapView({
     setInputAmount('')
     setRoutes([])
     setSplit(null)
+    setMaxSwap(null)
     setRouteError(null)
     setRouteStale(false)
   }
@@ -380,6 +431,7 @@ export function SmartSwapView({
     setTargetToken(token)
     setRoutes([])
     setSplit(null)
+    setMaxSwap(null)
     setRouteError(null)
     setRouteStale(false)
   }
@@ -508,8 +560,8 @@ export function SmartSwapView({
       {/* Routes section */}
       <div className={`smart-swap-routes${routeStale && routeLoading ? ' stale' : ''}`}>
         {routeLoading && routes.length === 0 && (
-          <div className="smart-swap-loading">
-            <Spinner size={16} /> Finding routes…
+          <div className="smart-swap-spinner">
+            <span className="smart-swap-spinner-icon">⟳</span> Finding routes…
           </div>
         )}
 
@@ -520,19 +572,37 @@ export function SmartSwapView({
         {routeError && !routeLoading && (
           <div className="smart-swap-error">
             <span>{routeError}</span>
-            <Button
+            <button
               type="button"
-              size="sm"
-              variant="danger"
+              className="smart-swap-retry-btn"
               onClick={() => findRoutes()}
             >
               Retry
-            </Button>
+            </button>
           </div>
         )}
 
         {!routeLoading && !routeError && routes.length === 0 && sourceToken && targetToken && rawInput > 0 && (
-          <div className="smart-swap-no-routes">No routes found for this pair</div>
+          maxSwap && maxSwap.max_input > 0 ? (
+            <div className="smart-swap-max-hint">
+              <p>
+                Amount exceeds what this pool can sell while keeping min ERG dust.
+                Max swap:{' '}
+                <strong>
+                  {formatTokenAmount(maxSwap.max_input, sourceToken.decimals)} {sourceToken.name || sourceToken.token_id.slice(0, 6)}
+                </strong>
+                {' → '}
+                <strong>
+                  {formatTokenAmount(maxSwap.max_output, 9)} ERG
+                </strong>
+              </p>
+              <button type="button" className="smart-swap-retry-btn" onClick={applyMaxSwap}>
+                Use max
+              </button>
+            </div>
+          ) : (
+            <div className="smart-swap-no-routes">No routes found for this pair</div>
+          )
         )}
 
         {routes.length > 0 && (
@@ -548,18 +618,29 @@ export function SmartSwapView({
       </div>
 
       {/* Confirm button */}
-      <Button
+      <button
         type="button"
-        variant="primary"
         className="smart-swap-confirm-btn"
         disabled={!canExecute}
         onClick={() => setShowSwapModal(true)}
         title={executionBlockReason ?? undefined}
       >
-        {executionBlockReason ?? (isMultiHop ? `Swap (${selectedRoute?.route.hops.length} hops, Nautilus)` : 'Swap')}
-      </Button>
+        {confirmLabel}
+      </button>
 
-      {showSwapModal && selectedRoute && walletAddress && !isMultiHop && (
+      {showSwapModal && useSplit && split && walletAddress && (
+        <SplitExecuteModal
+          isOpen={showSwapModal}
+          onClose={() => setShowSwapModal(false)}
+          split={split}
+          onSuccess={() => {
+            setShowSwapModal(false)
+            findRoutes()
+          }}
+        />
+      )}
+
+      {showSwapModal && !useSplit && selectedRoute && walletAddress && !isMultiHop && (
         <SmartSwapModal
           isOpen={showSwapModal}
           onClose={() => setShowSwapModal(false)}
@@ -572,7 +653,7 @@ export function SmartSwapView({
         />
       )}
 
-      {showSwapModal && selectedRoute && walletAddress && isMultiHop && (
+      {showSwapModal && !useSplit && selectedRoute && walletAddress && isMultiHop && (
         <SwapChainModal
           isOpen={showSwapModal}
           onClose={() => setShowSwapModal(false)}

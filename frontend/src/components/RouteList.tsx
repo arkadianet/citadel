@@ -76,7 +76,7 @@ export function RouteList({
           <div className="smart-split-header">
             <div className="smart-split-label">
               Split across {split.allocations.length} routes for{' '}
-              <strong>+{split.improvement_pct.toFixed(2)}% better output</strong>
+              <strong>+{split.improvement_pct.toFixed(2)}% better net output</strong>
             </div>
             <button
               className={`smart-split-toggle${useSplit ? ' active' : ''}`}
@@ -104,12 +104,32 @@ export function RouteList({
                       {pathTokens.join(' → ')}
                     </span>
                     <span className="smart-split-alloc-output">
-                      {formatTokenAmount(alloc.output_amount, lastHop?.token_out_decimals ?? 0)}{' '}
+                      {formatTokenAmount(alloc.route.net_output, lastHop?.token_out_decimals ?? 0)}{' '}
                       {lastHop?.token_out_name ?? ''}
                     </span>
                   </div>
                 )
               })}
+              <div className="smart-split-alloc smart-split-fees">
+                <span className="smart-split-alloc-pct" />
+                <span className="smart-split-alloc-path">
+                  Tx fees ({split.allocations.reduce((n, a) => n + a.route.hops.length, 0)} hops)
+                </span>
+                <span className="smart-split-alloc-output">
+                  −{formatTokenAmount(split.total_miner_fees, 9)} ERG
+                </span>
+              </div>
+              <div className="smart-split-alloc">
+                <span className="smart-split-alloc-pct" />
+                <span className="smart-split-alloc-path">Net total</span>
+                <span className="smart-split-alloc-output">
+                  {formatTokenAmount(
+                    split.net_output,
+                    split.allocations[0]?.route.hops.slice(-1)[0]?.token_out_decimals ?? 0,
+                  )}{' '}
+                  {split.allocations[0]?.route.hops.slice(-1)[0]?.token_out_name ?? ''}
+                </span>
+              </div>
             </div>
           )}
         </div>

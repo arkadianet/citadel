@@ -97,7 +97,7 @@ export function RouteCard({ routeQuote, isBest, isSelected, onSelect, compact = 
       >
         <span className="smart-route-compact-path">{pathLabel}</span>
         <span className="smart-route-compact-output">
-          {formatTokenAmount(route.total_output, lastHop?.token_out_decimals ?? 0)} {lastHop?.token_out_name ?? ''}
+          {formatTokenAmount(route.net_output, lastHop?.token_out_decimals ?? 0)} {lastHop?.token_out_name ?? ''}
         </span>
         <span className={`smart-route-compact-impact ${impactClass(route.total_price_impact)}`}>
           {route.total_price_impact.toFixed(2)}%
@@ -132,13 +132,18 @@ export function RouteCard({ routeQuote, isBest, isSelected, onSelect, compact = 
         ))}
       </div>
 
-      {/* Output amount */}
+      {/* Output amount — show fee-aware net when ending in ERG */}
       <div className="smart-route-output">
         <span className="smart-route-output-amount">
-          {formatTokenAmount(route.total_output, lastHop?.token_out_decimals ?? 0)}
+          {formatTokenAmount(route.net_output, lastHop?.token_out_decimals ?? 0)}
           {' '}
           {lastHop?.token_out_name ?? ''}
         </span>
+        {route.net_output !== route.total_output && (
+          <span className="smart-route-output-gross">
+            gross {formatTokenAmount(route.total_output, lastHop?.token_out_decimals ?? 0)}
+          </span>
+        )}
       </div>
 
       {/* Metrics row */}
@@ -148,7 +153,10 @@ export function RouteCard({ routeQuote, isBest, isSelected, onSelect, compact = 
           Impact: {route.total_price_impact.toFixed(2)}%
         </span>
         <span>
-          Fees: {formatTokenAmount(route.total_fees, hops[0]?.token_in_decimals ?? 0)} {hops[0]?.token_in_name ?? ''}
+          Pool fees: {formatTokenAmount(route.total_fees, hops[0]?.token_in_decimals ?? 0)} {hops[0]?.token_in_name ?? ''}
+        </span>
+        <span>
+          Tx fees: {formatTokenAmount(route.total_miner_fees, 9)} ERG
         </span>
       </div>
 

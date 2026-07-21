@@ -15,7 +15,7 @@ import { startSign, getTxStatus } from '../api/types'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import { formatTokenAmount } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
-import { Button, Modal, PageHeader } from './ui'
+import { SplitExecuteModal } from './SplitExecuteModal'
 import './RouterTab.css'
 
 const SIGUSD_TOKEN_ID = '03faf2cb329f2e90d6d23b58d91bbb6c046aa143261cc21f52fbe2824bfcbf04'
@@ -63,6 +63,17 @@ function impactClass(impact: number): string {
 
 const HOP_IMPACT_TIERS = [0.5, 1, 2, 5]
 
+function splitPoolsDisjoint(split: SplitRouteDetail): boolean {
+  const seen = new Set<string>()
+  for (const a of split.allocations) {
+    for (const h of a.route.hops) {
+      if (seen.has(h.pool_id)) return false
+      seen.add(h.pool_id)
+    }
+  }
+  return true
+}
+
 export function RouterTab({
   walletBalance, ergUsdPrice, canMintSigusd, reserveRatioPct,
   walletAddress, explorerUrl,
@@ -87,6 +98,7 @@ export function RouterTab({
   const [execStep, setExecStep] = useState<'idle' | 'building' | 'signing' | 'success' | 'error'>('idle')
   const [execError, setExecError] = useState<string | null>(null)
   const [execTxId, setExecTxId] = useState<string | null>(null)
+  const [showSplitModal, setShowSplitModal] = useState(false)
 
   const flow = useTransactionFlow({
     pollStatus: getTxStatus,
@@ -255,263 +267,280 @@ export function RouterTab({
 
   return (
     <div className="router-tab">
-      <PageHeader
-        icon={
-          <div className="router-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+      <header className="router-header">
+        <div className="router-header-left">
+          <div className="router-icon" aria-hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
               <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
             </svg>
           </div>
-        }
-        title="SigUSD Router"
-        subtitle="Find the cheapest path to acquire SigUSD across DEX routes and protocol minting"
-      />
+          <div>
+            <h1 className="router-title">SigUSD Router</h1>
+            <p className="router-subtitle">Cheapest path across DEX routes and protocol minting</p>
+          </div>
+        </div>
+      </header>
 
-      {/* Market Context */}
-      <div className="router-context">
-        {oracleRate != null && (
+      <div className="router-body">
+        {/* Market Context */}
+        <div className="router-context">
+          {oracleRate != null && (
+            <div className="router-context-item">
+              <span className="router-context-label">Oracle ERG/USD</span>
+              <span className="router-context-value">${oracleRate.toFixed(2)}</span>
+            </div>
+          )}
           <div className="router-context-item">
-            <span className="router-context-label">Oracle ERG/USD</span>
-            <span className="router-context-value">${oracleRate.toFixed(2)}</span>
+            <span className="router-context-label">SigUSD Minting</span>
+            <span className={`router-context-value ${canMintSigusd ? 'mint-available' : 'mint-blocked'}`}>
+              {canMintSigusd
+                ? 'Available'
+                : `Blocked (RR ${Math.round(reserveRatioPct ?? 0)}%)`
+              }
+            </span>
+          </div>
+          {walletBalance && (
+            <>
+              <div className="router-context-item">
+                <span className="router-context-label">ERG Balance</span>
+                <span className="router-context-value">{formatErg(ergBalance)}</span>
+              </div>
+              <div className="router-context-item">
+                <span className="router-context-label">SigUSD Balance</span>
+                <span className="router-context-value">{formatSigusd(sigusdBalance)}</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Mode Toggle + Input */}
+        <div className="router-input-panel">
+          <div className="router-mode-toggle">
+            <button
+              className={`router-mode-btn ${mode === 'have-erg' ? 'active' : ''}`}
+              onClick={() => handleModeSwitch('have-erg')}
+            >
+              I have ERG
+            </button>
+            <button
+              className={`router-mode-btn ${mode === 'want-sigusd' ? 'active' : ''}`}
+              onClick={() => handleModeSwitch('want-sigusd')}
+            >
+              I want SigUSD
+            </button>
+          </div>
+
+          <div className="router-input-field">
+            <input
+              type="number"
+              value={inputValue}
+              onChange={e => setInputValue(e.target.value)}
+              placeholder={mode === 'have-erg' ? 'ERG amount' : 'SigUSD amount'}
+              min="0"
+              step="any"
+            />
+            <span className="router-input-suffix">
+              {mode === 'have-erg' ? 'ERG' : 'SigUSD'}
+            </span>
+            {mode === 'have-erg' && walletBalance && (
+              <button
+                className="router-max-btn"
+                onClick={() => setInputValue(
+                  (Math.max(0, ergBalance - 10_000_000) / 1e9).toString()
+                )}
+              >
+                MAX
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="router-error">{error}</div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="router-loading">Finding best routes...</div>
+        )}
+
+        {/* Results */}
+        {!loading && routes.length > 0 && (
+          <div className="router-results">
+            <SummaryBanner routes={routes} split={split} mode={mode} oracleRate={oracleRate} />
+
+            {split && split.improvement_pct > 0.5 && (
+              <SplitSuggestion
+                split={split}
+                oracleRate={oracleRate}
+                canExecute={!!walletAddress && splitPoolsDisjoint(split)}
+                onExecute={() => setShowSplitModal(true)}
+              />
+            )}
+
+            <div className="router-routes-header">
+              Routes ({routes.length})
+            </div>
+
+            {routes.map((rq, idx) => (
+              <RouteCard
+                key={idx}
+                rq={rq}
+                isBest={idx === 0}
+                bestOutput={routes[0].route.total_output}
+                bestInput={routes[0].route.total_input}
+                mode={mode}
+                oracleRate={oracleRate}
+                canExecute={!!walletAddress && rq.route.hops.length === 1}
+                onExecute={() => handleExecuteRoute(rq)}
+              />
+            ))}
+
+            {crossProtocol && crossProtocol.options.length > 0 && (
+              <div className="router-cross-section">
+                <div className="router-section-title">Protocol Comparison</div>
+                {crossProtocol.options.map((opt, idx) => (
+                  <div key={idx} className="router-cross-row">
+                    <div className="router-cross-left">
+                      <span className="router-cross-protocol">{opt.protocol}</span>
+                      <span className="router-cross-desc">{opt.description}</span>
+                    </div>
+                    <div className={`router-cross-right ${
+                      !opt.available ? 'unavailable' :
+                      crossProtocol.best_index === idx ? 'best' : ''
+                    }`}>
+                      {opt.available ? (
+                        <>
+                          <span className="router-cross-output">{formatSigusd(opt.output_amount)}</span>
+                          <span className="router-cross-unit">SigUSD</span>
+                          <span className="router-cross-impact">{opt.impact_or_fee_pct.toFixed(1)}%</span>
+                        </>
+                      ) : (
+                        <span className="router-cross-reason">{opt.unavailable_reason || 'Unavailable'}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {depthTiers.length > 0 && (
+              <div className="router-depth-section">
+                <div
+                  className="router-section-title clickable"
+                  onClick={() => setShowDepth(!showDepth)}
+                >
+                  Liquidity Depth {showDepth ? '\u25BE' : '\u25B8'}
+                </div>
+                {showDepth && depthTiers.map((tier, idx) => (
+                  <DepthTierRow key={idx} tier={tier} />
+                ))}
+              </div>
+            )}
           </div>
         )}
-        <div className="router-context-item">
-          <span className="router-context-label">SigUSD Minting</span>
-          <span className={`router-context-value ${canMintSigusd ? 'mint-available' : 'mint-blocked'}`}>
-            {canMintSigusd
-              ? 'Available'
-              : `Blocked (RR ${Math.round(reserveRatioPct ?? 0)}%)`
-            }
-          </span>
-        </div>
-        {walletBalance && (
+
+        {!loading && !error && inputValue && parseFloat(inputValue) > 0 && routes.length === 0 && (
+          <div className="router-empty">No routes found for this amount.</div>
+        )}
+
+        {!inputValue && !loading && (
           <>
-            <div className="router-context-item">
-              <span className="router-context-label">ERG Balance</span>
-              <span className="router-context-value">{formatErg(ergBalance)}</span>
-            </div>
-            <div className="router-context-item">
-              <span className="router-context-label">SigUSD Balance</span>
-              <span className="router-context-value">{formatSigusd(sigusdBalance)}</span>
-            </div>
+            {arbLoading && (
+              <div className="router-loading">Scanning pools for opportunities...</div>
+            )}
+
+            {!arbLoading && arbSnapshot && arbSnapshot.windows.length > 0 && (
+              <ArbSnapshotPanel
+                snapshot={arbSnapshot}
+                oracleRate={oracleRate!}
+                onRouteClick={(ergNano) => {
+                  setMode('have-erg')
+                  setInputValue((ergNano / 1e9).toString())
+                }}
+              />
+            )}
+
+            {!arbLoading && (!arbSnapshot || arbSnapshot.windows.length === 0) && (
+              <div className="router-help">
+                {oracleRate
+                  ? 'No pools currently offer rates above oracle. Enter an amount above to discover routes.'
+                  : 'Enter an amount above to discover the best routes for acquiring SigUSD. The router searches across all DEX liquidity pools including multi-hop paths through intermediate tokens, and compares against SigmaUSD protocol minting.'}
+              </div>
+            )}
           </>
         )}
       </div>
 
-      {/* Mode Toggle + Input */}
-      <div className="router-input-panel">
-        <div className="router-mode-toggle">
-          <button
-            className={`router-mode-btn ${mode === 'have-erg' ? 'active' : ''}`}
-            onClick={() => handleModeSwitch('have-erg')}
-          >
-            I have ERG
-          </button>
-          <button
-            className={`router-mode-btn ${mode === 'want-sigusd' ? 'active' : ''}`}
-            onClick={() => handleModeSwitch('want-sigusd')}
-          >
-            I want SigUSD
-          </button>
-        </div>
-
-        <div className="router-input-field">
-          <input
-            type="number"
-            value={inputValue}
-            onChange={e => setInputValue(e.target.value)}
-            placeholder={mode === 'have-erg' ? 'ERG amount' : 'SigUSD amount'}
-            min="0"
-            step="any"
-          />
-          <span className="router-input-suffix">
-            {mode === 'have-erg' ? 'ERG' : 'SigUSD'}
-          </span>
-          {mode === 'have-erg' && walletBalance && (
-            <button
-              className="router-max-btn"
-              onClick={() => setInputValue(
-                (Math.max(0, ergBalance - 10_000_000) / 1e9).toString()
-              )}
-            >
-              MAX
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div className="router-error">{error}</div>
-      )}
-
-      {/* Loading */}
-      {loading && (
-        <div className="router-loading">Finding best routes...</div>
-      )}
-
-      {/* Results */}
-      {!loading && routes.length > 0 && (
-        <div className="router-results">
-          <SummaryBanner routes={routes} split={split} mode={mode} oracleRate={oracleRate} />
-
-          {split && split.improvement_pct > 0.5 && (
-            <SplitSuggestion
-              split={split}
-              oracleRate={oracleRate}
-              canExecute={!!walletAddress && split.allocations.every(a => a.route.hops.length === 1)}
-              onExecute={() => {/* TODO: sequential split execution */}}
-            />
-          )}
-
-          <div className="router-routes-header">
-            Routes ({routes.length})
-          </div>
-
-          {routes.map((rq, idx) => (
-            <RouteCard
-              key={idx}
-              rq={rq}
-              isBest={idx === 0}
-              bestOutput={routes[0].route.total_output}
-              bestInput={routes[0].route.total_input}
-              mode={mode}
-              oracleRate={oracleRate}
-              canExecute={!!walletAddress && rq.route.hops.length === 1}
-              onExecute={() => handleExecuteRoute(rq)}
-            />
-          ))}
-
-          {crossProtocol && crossProtocol.options.length > 0 && (
-            <div className="router-cross-section">
-              <div className="router-section-title">Protocol Comparison</div>
-              {crossProtocol.options.map((opt, idx) => (
-                <div key={idx} className="router-cross-row">
-                  <div className="router-cross-left">
-                    <span className="router-cross-protocol">{opt.protocol}</span>
-                    <span className="router-cross-desc">{opt.description}</span>
-                  </div>
-                  <div className={`router-cross-right ${
-                    !opt.available ? 'unavailable' :
-                    crossProtocol.best_index === idx ? 'best' : ''
-                  }`}>
-                    {opt.available ? (
-                      <>
-                        <span className="router-cross-output">{formatSigusd(opt.output_amount)}</span>
-                        <span className="router-cross-unit">SigUSD</span>
-                        <span className="router-cross-impact">{opt.impact_or_fee_pct.toFixed(1)}%</span>
-                      </>
-                    ) : (
-                      <span className="router-cross-reason">{opt.unavailable_reason || 'Unavailable'}</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {depthTiers.length > 0 && (
-            <div className="router-depth-section">
-              <div
-                className="router-section-title clickable"
-                onClick={() => setShowDepth(!showDepth)}
-              >
-                Liquidity Depth {showDepth ? '\u25BE' : '\u25B8'}
-              </div>
-              {showDepth && depthTiers.map((tier, idx) => (
-                <DepthTierRow key={idx} tier={tier} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {!loading && !error && inputValue && parseFloat(inputValue) > 0 && routes.length === 0 && (
-        <div className="router-empty">No routes found for this amount.</div>
-      )}
-
-      {!inputValue && !loading && (
-        <>
-          {arbLoading && (
-            <div className="router-loading">Scanning pools for opportunities...</div>
-          )}
-
-          {!arbLoading && arbSnapshot && arbSnapshot.windows.length > 0 && (
-            <ArbSnapshotPanel
-              snapshot={arbSnapshot}
-              oracleRate={oracleRate!}
-              onRouteClick={(ergNano) => {
-                setMode('have-erg')
-                setInputValue((ergNano / 1e9).toString())
-              }}
-            />
-          )}
-
-          {!arbLoading && (!arbSnapshot || arbSnapshot.windows.length === 0) && (
-            <div className="router-help">
-              {oracleRate
-                ? 'No pools currently offer rates above oracle. Enter an amount above to discover routes.'
-                : 'Enter an amount above to discover the best routes for acquiring SigUSD. The router searches across all DEX liquidity pools including multi-hop paths through intermediate tokens, and compares against SigmaUSD protocol minting.'}
-            </div>
-          )}
-        </>
-      )}
-
       {/* Execution Modal */}
       {execRoute && (
-        <Modal open={true} onClose={closeExecModal} title="Execute Swap" size="sm">
-          {execStep === 'building' && (
-            <div className="router-exec-status">Building transaction...</div>
-          )}
+        <div className="modal-overlay" onClick={closeExecModal}>
+          <div className="modal router-execute-modal" onClick={e => e.stopPropagation()}>
+            {execStep === 'building' && (
+              <div className="router-exec-status">Building transaction...</div>
+            )}
 
-          {execStep === 'signing' && (
-            <div className="router-exec-signing">
-              <h3>Sign Transaction</h3>
-              <p className="router-exec-desc">
-                {execRoute.route.hops[0].token_in_name || 'ERG'} &rarr;{' '}
-                {execRoute.route.hops[0].token_out_name || 'SigUSD'} via pool{' '}
-                {execRoute.route.hops[0].pool_id.slice(0, 8)}
-              </p>
+            {execStep === 'signing' && (
+              <div className="router-exec-signing">
+                <h3>Sign Transaction</h3>
+                <p className="router-exec-desc">
+                  {execRoute.route.hops[0].token_in_name || 'ERG'} &rarr;{' '}
+                  {execRoute.route.hops[0].token_out_name || 'SigUSD'} via pool{' '}
+                  {execRoute.route.hops[0].pool_id.slice(0, 8)}
+                </p>
 
-              {flow.nautilusUrl && (
-                <Button
-                  variant="primary"
-                  style={{ marginBottom: 'var(--space-md)' }}
-                  onClick={() => window.open(flow.nautilusUrl!, '_blank')}
-                >
-                  Sign with Nautilus
-                </Button>
-              )}
+                {flow.nautilusUrl && (
+                  <button
+                    className="router-nautilus-btn"
+                    onClick={() => window.open(flow.nautilusUrl!, '_blank')}
+                  >
+                    Sign with Nautilus
+                  </button>
+                )}
 
-              {flow.qrUrl && (
-                <div className="router-qr-section">
-                  <p className="router-qr-label">Or scan with ErgoPay wallet:</p>
-                  <QRCodeSVG value={flow.qrUrl} size={180} bgColor="transparent" fgColor="#e2e8f0" />
-                </div>
-              )}
+                {flow.qrUrl && (
+                  <div className="router-qr-section">
+                    <p className="router-qr-label">Or scan with ErgoPay wallet:</p>
+                    <QRCodeSVG value={flow.qrUrl} size={180} bgColor="transparent" fgColor="#e2e8f0" />
+                  </div>
+                )}
 
-              <div className="router-exec-waiting">Waiting for signature...</div>
-            </div>
-          )}
+                <div className="router-exec-waiting">Waiting for signature...</div>
+              </div>
+            )}
 
-          {execStep === 'success' && (
-            <div className="router-exec-success">
-              <TxSuccess
-                txId={execTxId || ''}
-                explorerUrl={explorerUrl || 'https://sigmaspace.io'}
-              />
-              <Button onClick={closeExecModal}>Close</Button>
-            </div>
-          )}
+            {execStep === 'success' && (
+              <div className="router-exec-success">
+                <TxSuccess
+                  txId={execTxId || ''}
+                  explorerUrl={explorerUrl || 'https://sigmaspace.io'}
+                />
+                <button className="router-exec-close-btn" onClick={closeExecModal}>Close</button>
+              </div>
+            )}
 
-          {execStep === 'error' && (
-            <div className="router-exec-error">
-              <h3>Error</h3>
-              <p>{execError}</p>
-              <Button onClick={closeExecModal}>Close</Button>
-            </div>
-          )}
-        </Modal>
+            {execStep === 'error' && (
+              <div className="router-exec-error">
+                <h3>Error</h3>
+                <p>{execError}</p>
+                <button className="router-exec-close-btn" onClick={closeExecModal}>Close</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showSplitModal && split && (
+        <SplitExecuteModal
+          isOpen={showSplitModal}
+          onClose={() => setShowSplitModal(false)}
+          split={split}
+          onSuccess={() => {
+            setShowSplitModal(false)
+            fetchRoutes()
+          }}
+        />
       )}
     </div>
   )
@@ -532,7 +561,7 @@ function SummaryBanner({ routes, split, mode, oracleRate }: {
 
   const hasBetterSplit = split && split.improvement_pct > 0.5
   const splitNumericRate = hasBetterSplit && split.total_input > 0
-    ? (split.total_output / 100) / (split.total_input / 1e9) : null
+    ? (split.net_output / 100) / (split.total_input / 1e9) : null
 
   const bestRate = splitNumericRate != null && splitNumericRate > numericRate ? splitNumericRate : numericRate
   const rateClass = oracleRate != null ? (bestRate >= oracleRate ? 'rate-good' : 'rate-bad') : ''
@@ -569,7 +598,7 @@ function SplitSuggestion({ split, oracleRate, canExecute, onExecute }: {
   onExecute: () => void
 }) {
   const splitRate = split.total_input > 0
-    ? (split.total_output / 100) / (split.total_input / 1e9) : 0
+    ? (split.net_output / 100) / (split.total_input / 1e9) : 0
   const rateClass = oracleRate != null ? (splitRate >= oracleRate ? 'rate-good' : 'rate-bad') : ''
 
   return (
@@ -583,7 +612,7 @@ function SplitSuggestion({ split, oracleRate, canExecute, onExecute }: {
 
       <div className="router-split-summary">
         <span className="router-split-total">
-          {formatErg(split.total_input)} ERG &rarr; {formatSigusd(split.total_output)} SigUSD
+          {formatErg(split.total_input)} ERG &rarr; {formatSigusd(split.net_output)} SigUSD
         </span>
         <span className={`router-split-rate ${rateClass}`}>
           {splitRate.toFixed(4)} SigUSD/ERG
@@ -619,7 +648,7 @@ function SplitSuggestion({ split, oracleRate, canExecute, onExecute }: {
       </div>
 
       {canExecute && (
-        <Button variant="primary" className="router-execute-btn" onClick={onExecute}>Execute Split</Button>
+        <button className="router-execute-btn" onClick={onExecute}>Execute Split</button>
       )}
     </div>
   )
@@ -717,7 +746,7 @@ function RouteCard({ rq, isBest, bestOutput, bestInput, mode, oracleRate, canExe
 
       {/* Execute / Multi-hop notice */}
       {canExecute && (
-        <Button variant="primary" className="router-execute-btn" onClick={onExecute}>Execute Swap</Button>
+        <button className="router-execute-btn" onClick={onExecute}>Execute Swap</button>
       )}
       {route.hops.length > 1 && (
         <span className="router-multihop-notice">Multi-hop (view only)</span>
