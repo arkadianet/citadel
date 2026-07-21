@@ -212,7 +212,7 @@ export function WalletConnect({ onConnected, onCancel, onClose }: WalletConnectP
         <div className="wallet-connect-content">
           <h3>Connect with Nautilus</h3>
           <p className="wallet-connect-subtitle">
-            In the browser page, click Connect after choosing the wallet in Nautilus
+            Approve the Nautilus popup in your browser to connect
           </p>
 
           <div className="nautilus-waiting">

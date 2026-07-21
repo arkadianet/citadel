@@ -225,9 +225,10 @@ pub fn generate_signing_page(
 ///
 /// The page will:
 /// 1. Check if Nautilus is installed
-/// 2. Wait for an explicit user click (no silent auto-reconnect)
-/// 3. Revoke any prior dApp auth via `disconnect()`, then `connect()`
-///    so Nautilus prompts and the user can pick a different wallet
+/// 2. On load: revoke prior dApp auth via `disconnect()` (ignore errors),
+///    then call `connect()` so the Nautilus popup appears immediately
+///    (no silent reuse of the last wallet — disconnect-first is required)
+/// 3. If auto-connect fails, show a fallback Connect button
 /// 4. Get wallet addresses
 /// 5. POST address(es) to /connect/{id}
 /// 6. Show success and close
@@ -315,7 +316,7 @@ pub fn generate_connect_page(request_id: &str, host: &str, port: u16) -> String 
         </div>
         <div id="connect-actions" class="hidden">
             <button id="connect-btn" type="button">Connect with Nautilus</button>
-            <p class="hint">Switch wallets in Nautilus first if needed, then connect. Prior sessions are cleared so you can choose a different wallet.</p>
+            <p class="hint">Approve the Nautilus popup to connect. Prior sessions are cleared so you can choose a different wallet.</p>
         </div>
         <div id="actions" class="hidden">
             <button onclick="window.close()">Close Window</button>
@@ -453,6 +454,9 @@ pub fn generate_connect_page(request_id: &str, host: &str, port: u16) -> String 
             }}
         }}
 
+        // Auto-start connect on load so the Nautilus popup appears without an
+        // extra click on this page. Still disconnect-first (inside connectWallet)
+        // so a prior auth is not silently reused. Fallback button if this fails.
         async function preparePage() {{
             try {{
                 await new Promise(r => setTimeout(r, 500));
@@ -464,9 +468,7 @@ pub fn generate_connect_page(request_id: &str, host: &str, port: u16) -> String 
                     return;
                 }}
 
-                setStatus('Ready — choose a wallet in Nautilus, then connect', 'ready', false);
-                connectActions.classList.remove('hidden');
-                connectBtn.disabled = false;
+                await connectWallet();
             }} catch (error) {{
                 showError('Error: ' + (error.message || error.info || 'Unknown error'));
             }}
