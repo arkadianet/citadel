@@ -1,7 +1,7 @@
 /**
  * UTXO Management API
  *
- * TypeScript types and invoke wrappers for consolidate/split Tauri commands.
+ * TypeScript types and invoke wrappers for consolidate/split/restructure Tauri commands.
  */
 
 import { invoke } from '@tauri-apps/api/core'
@@ -19,6 +19,7 @@ export interface ConsolidateBuildResponse {
   changeErg: number
   tokenCount: number
   minerFee: number
+  citadelFeeNano: number
 }
 
 export interface SplitBuildResponse {
@@ -28,8 +29,32 @@ export interface SplitBuildResponse {
   totalSplit: string
   changeErg: number
   minerFee: number
+  citadelFeeNano: number
 }
 
+export interface RestructureTokenSpec {
+  tokenId: string
+  /** Raw (on-chain) amount as decimal string */
+  amount: string
+}
+
+export interface RestructureOutputSpec {
+  /** nanoERG */
+  value: number
+  tokens: RestructureTokenSpec[]
+}
+
+export interface RestructureBuildResponse {
+  unsignedTx: object
+  inputCount: number
+  outputCount: number
+  totalErgIn: number
+  allocatedErg: number
+  changeErg: number
+  hasChange: boolean
+  minerFee: number
+  citadelFeeNano: number
+}
 
 // =============================================================================
 // API Functions
@@ -66,6 +91,20 @@ export async function buildSplitTx(
     count,
     tokenId,
     ergPerBox,
+  })
+}
+
+export async function buildRestructureTx(
+  selectedUtxos: object[],
+  outputs: RestructureOutputSpec[],
+  userErgoTree: string,
+  currentHeight: number,
+): Promise<RestructureBuildResponse> {
+  return await invoke<RestructureBuildResponse>('build_restructure_tx', {
+    selectedUtxos,
+    outputs,
+    userErgoTree,
+    currentHeight,
   })
 }
 

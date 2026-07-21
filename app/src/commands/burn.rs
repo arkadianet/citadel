@@ -13,6 +13,7 @@ pub struct BurnBuildResponse {
     #[serde(with = "citadel_api::dto::u64_as_string")]
     pub burned_amount: u64,
     pub miner_fee: i64,
+    pub citadel_fee_nano: i64,
     pub change_erg: i64,
 }
 
@@ -41,9 +42,12 @@ pub async fn build_burn_tx(
     let inputs = super::parse_eip12_utxos(user_utxos)?;
 
     // Select inputs that have the token + enough ERG for fees
+    let citadel_fee = ergo_tx::resolved_dev_fee_config().budget();
     let selected = ergo_tx::box_selector::select_inputs(
         &inputs,
-        citadel_core::constants::TX_FEE_NANO + citadel_core::constants::MIN_BOX_VALUE_NANO,
+        citadel_core::constants::TX_FEE_NANO
+            + citadel_fee
+            + citadel_core::constants::MIN_BOX_VALUE_NANO,
         Some((&token_id, burn_amount as i64)),
     );
 
@@ -70,6 +74,7 @@ pub async fn build_burn_tx(
         burned_token_id: result.summary.burned_token_id,
         burned_amount: result.summary.burned_amount,
         miner_fee: result.summary.miner_fee,
+        citadel_fee_nano: result.summary.citadel_fee_nano,
         change_erg: result.summary.change_erg,
     })
 }
@@ -84,6 +89,7 @@ pub struct MultiBurnBuildResponse {
     pub unsigned_tx: serde_json::Value,
     pub burned_tokens: Vec<BurnedTokenEntry>,
     pub miner_fee: i64,
+    pub citadel_fee_nano: i64,
     pub change_erg: i64,
 }
 
@@ -126,8 +132,10 @@ pub async fn build_multi_burn_tx(
         .map(|item| (item.token_id.as_str(), item.amount))
         .collect();
 
-    let min_erg =
-        (citadel_core::constants::TX_FEE_NANO + citadel_core::constants::MIN_BOX_VALUE_NANO) as u64;
+    let citadel_fee = ergo_tx::resolved_dev_fee_config().budget();
+    let min_erg = (citadel_core::constants::TX_FEE_NANO
+        + citadel_fee
+        + citadel_core::constants::MIN_BOX_VALUE_NANO) as u64;
 
     // Select inputs covering all required tokens + ERG for fees
     let selected = ergo_tx::select_multi_token_boxes(&inputs, &required_tokens, min_erg)
@@ -165,6 +173,7 @@ pub async fn build_multi_burn_tx(
             })
             .collect(),
         miner_fee: result.summary.miner_fee,
+        citadel_fee_nano: result.summary.citadel_fee_nano,
         change_erg: result.summary.change_erg,
     })
 }

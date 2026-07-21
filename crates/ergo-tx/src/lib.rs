@@ -4,6 +4,7 @@
 
 pub mod box_selector;
 pub mod burn;
+pub mod dev_fee;
 pub mod eip12;
 pub mod send;
 pub mod sigma;
@@ -31,13 +32,21 @@ pub use burn::{
     build_burn_tx, build_multi_burn_tx, BurnBuildResult, BurnError, BurnItem, BurnSummary,
     MultiBurnBuildResult, MultiBurnSummary,
 };
+pub use dev_fee::{
+    append_dev_fee_output, dev_fee_budget, resolved_config as resolved_dev_fee_config,
+    try_load_from_env as try_load_dev_fee_config, with_test_dev_fee, DevFeeConfig, DevFeeError,
+    DEFAULT_DEV_FEE_ADDRESS, DEFAULT_DEV_FEE_ERGO_TREE,
+};
 pub use eip12::*;
 pub use send::{build_send_tx, SendBuildResult, SendError, SendSummary};
 pub use sigma::*;
 pub use tx_helpers::{
     append_change_output, select_inputs_for_multi_spend, select_inputs_for_spend, ChangeOutputError,
 };
+// Re-export nanoERG constant used by fee helpers
+pub use citadel_core::constants::DEV_FEE_NANO;
 pub use utxo_management::{
-    build_consolidate_tx, build_split_tx, ConsolidateBuildResult, ConsolidateSummary,
+    build_consolidate_tx, build_restructure_tx, build_split_tx, ConsolidateBuildResult,
+    ConsolidateSummary, RestructureBuildResult, RestructureOutputSpec, RestructureSummary,
     SplitBuildResult, SplitMode, SplitSummary, UtxoManagementError,
 };

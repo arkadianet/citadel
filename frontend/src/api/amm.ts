@@ -151,6 +151,7 @@ export interface SwapPreviewResponse {
   effective_rate: number
   execution_fee_nano: number
   miner_fee_nano: number
+  citadel_fee_nano: number
   total_erg_cost_nano: number
 }
 
@@ -166,6 +167,7 @@ export interface SwapTxSummary {
   output_token: string
   execution_fee: number
   miner_fee: number
+  citadel_fee_nano: number
   total_erg_cost: number
 }
 
@@ -232,6 +234,7 @@ export interface DirectSwapPreviewResponse {
   fee_amount: number
   effective_rate: number
   miner_fee_nano: number
+  citadel_fee_nano: number
   total_erg_cost_nano: number
 }
 
@@ -247,6 +250,7 @@ export interface DirectSwapSummary {
   min_output: number
   output_token: string
   miner_fee: number
+  citadel_fee_nano: number
   total_erg_cost: number
 }
 

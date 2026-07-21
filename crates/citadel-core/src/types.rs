@@ -101,6 +101,9 @@ pub mod constants {
     /// Standard transaction fee (0.0011 ERG)
     pub const TX_FEE_NANO: i64 = 1_100_000;
 
+    /// Citadel app developer fee (0.011 ERG) — separate from miner fee
+    pub const DEV_FEE_NANO: i64 = 11_000_000;
+
     /// Minimum box value (0.001 ERG)
     pub const MIN_BOX_VALUE_NANO: i64 = 1_000_000;
 

@@ -8,6 +8,9 @@ use ergo_tx::{
     Eip12Output, Eip12UnsignedTx,
 };
 
+// Citadel app fee: skipped — bank box must be outputs[0]; burn path already has
+// protocol-mandated fee outputs. Revisit only with script-aware placement.
+
 /// Bank box must be inputs[0]; new bank box must be outputs[0].
 pub fn build_mint_tx_eip12(
     bank_box: &Eip12InputBox,

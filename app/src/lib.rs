@@ -128,6 +128,7 @@ pub fn run() {
             // UTXO Management
             commands::build_consolidate_tx,
             commands::build_split_tx,
+            commands::build_restructure_tx,
             commands::start_utxo_mgmt_sign,
             commands::get_utxo_mgmt_tx_status,
             // Protocol Activity

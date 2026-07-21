@@ -75,6 +75,7 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
   const [multiBurnSummary, setMultiBurnSummary] = useState<{
     burnedTokens: BurnedTokenEntry[]
     minerFee: number
+    citadelFeeNano: number
   } | null>(null)
 
   const tokens = walletBalance?.tokens ?? []
@@ -287,6 +288,7 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
       setMultiBurnSummary({
         burnedTokens: result.burnedTokens,
         minerFee: result.minerFee,
+        citadelFeeNano: result.citadelFeeNano,
       })
 
       const count = burnItems.length
@@ -582,6 +584,11 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
                   <span>Miner Fee</span>
                   <span>~0.0011 ERG</span>
                 </div>
+                <div className="burn-confirm-row">
+                  <span>Citadel fee</span>
+                  <span>0.011 ERG</span>
+                </div>
+                <p className="burn-muted">Includes 0.011 ERG Citadel fee</p>
               </div>
 
               <div className="burn-danger-box" style={{ marginTop: 'var(--space-md)' }}>
@@ -647,6 +654,17 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
                       <span>Miner Fee</span>
                       <span>{(multiBurnSummary.minerFee / 1e9).toFixed(4)} ERG</span>
                     </div>
+                    {multiBurnSummary.citadelFeeNano > 0 && (
+                      <>
+                        <div className="burn-confirm-row">
+                          <span>Citadel fee</span>
+                          <span>{(multiBurnSummary.citadelFeeNano / 1e9).toFixed(4)} ERG</span>
+                        </div>
+                        <p className="burn-muted">
+                          Includes {(multiBurnSummary.citadelFeeNano / 1e9).toFixed(3)} ERG Citadel fee
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
                 <p>Choose your signing method</p>

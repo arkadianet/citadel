@@ -1,10 +1,13 @@
 use std::collections::HashMap;
 
+use crate::dev_fee::{append_dev_fee_output, resolved_config};
 use crate::eip12::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
 
 use citadel_core::constants::{MIN_BOX_VALUE_NANO as MIN_BOX_VALUE, TX_FEE_NANO as TX_FEE};
 
 const MAX_SPLIT_OUTPUTS: usize = 30;
+const MAX_RESTRUCTURE_OUTPUTS: usize = 30;
+const MAX_TOKENS_PER_BOX: usize = 255;
 
 #[derive(Debug, thiserror::Error)]
 pub enum UtxoManagementError {
@@ -41,6 +44,28 @@ pub enum UtxoManagementError {
 
     #[error("Change amount {change} nanoERG is below minimum box value of {min} nanoERG (not enough to create change output)")]
     ChangeBelowMin { change: i64, min: i64 },
+
+    #[error("Restructure requires at least 1 user output")]
+    NoOutputs,
+
+    #[error("Input box {box_id} does not belong to the wallet (ErgoTree mismatch)")]
+    InputNotOwned { box_id: String },
+
+    #[error("Token {token_id} over-allocated: assigned {assigned}, available {available}")]
+    TokenOverAllocated {
+        token_id: String,
+        assigned: u64,
+        available: u64,
+    },
+
+    #[error("Unassigned tokens remain ({count} type(s)); assign them to an output or leave ERG for automatic change")]
+    UnassignedTokens { count: usize },
+
+    #[error("ERG over-allocated: outputs use {allocated} nanoERG but only {available} available after fee")]
+    ErgOverAllocated { allocated: i64, available: i64 },
+
+    #[error("Citadel fee config error: {0}")]
+    DevFee(String),
 }
 
 #[derive(Debug)]
@@ -50,6 +75,7 @@ pub struct ConsolidateSummary {
     pub change_erg: i64,
     pub token_count: usize,
     pub miner_fee: i64,
+    pub citadel_fee_nano: i64,
 }
 
 #[derive(Debug)]
@@ -75,7 +101,10 @@ pub fn build_consolidate_tx(
         .map(|b| b.value.parse::<i64>().unwrap_or(0))
         .sum();
 
-    let min_needed = TX_FEE + MIN_BOX_VALUE;
+    let fee_cfg = resolved_config();
+    let citadel_fee = fee_cfg.budget();
+
+    let min_needed = TX_FEE + citadel_fee + MIN_BOX_VALUE;
     if total_erg < min_needed {
         return Err(UtxoManagementError::InsufficientErg {
             have: total_erg,
@@ -98,7 +127,7 @@ pub fn build_consolidate_tx(
         });
     }
 
-    let change_erg = total_erg - TX_FEE;
+    let change_erg = total_erg - TX_FEE - citadel_fee;
     let token_count = token_totals.len();
 
     let change_assets: Vec<Eip12Asset> = token_totals
@@ -114,12 +143,15 @@ pub fn build_consolidate_tx(
         additional_registers: HashMap::new(),
     };
 
-    let fee_output = Eip12Output::fee(TX_FEE, current_height);
+    let mut outputs = vec![change_output];
+    append_dev_fee_output(&mut outputs, &fee_cfg, current_height)
+        .map_err(|e| UtxoManagementError::DevFee(e.to_string()))?;
+    outputs.push(Eip12Output::fee(TX_FEE, current_height));
 
     let unsigned_tx = Eip12UnsignedTx {
         inputs: user_inputs.to_vec(),
         data_inputs: vec![],
-        outputs: vec![change_output, fee_output],
+        outputs,
     };
 
     Ok(ConsolidateBuildResult {
@@ -130,6 +162,7 @@ pub fn build_consolidate_tx(
             change_erg,
             token_count,
             miner_fee: TX_FEE,
+            citadel_fee_nano: citadel_fee,
         },
     })
 }
@@ -151,6 +184,7 @@ pub struct SplitSummary {
     pub total_split: String,
     pub change_erg: i64,
     pub miner_fee: i64,
+    pub citadel_fee_nano: i64,
 }
 
 #[derive(Debug)]
@@ -196,8 +230,11 @@ pub fn build_split_tx(
                 });
             }
 
+            let fee_cfg = resolved_config();
+            let citadel_fee = fee_cfg.budget();
+
             let split_total = *amount_per_box * count as i64;
-            let min_without_change = split_total + TX_FEE;
+            let min_without_change = split_total + TX_FEE + citadel_fee;
             if total_erg < min_without_change {
                 return Err(UtxoManagementError::InsufficientErg {
                     have: total_erg,
@@ -205,7 +242,7 @@ pub fn build_split_tx(
                 });
             }
 
-            let remainder = total_erg - split_total - TX_FEE;
+            let remainder = total_erg - split_total - TX_FEE - citadel_fee;
 
             let mut token_totals: HashMap<String, u64> = HashMap::new();
             for input in user_inputs {
@@ -226,11 +263,11 @@ pub fn build_split_tx(
             if has_tokens && remainder < MIN_BOX_VALUE {
                 return Err(UtxoManagementError::InsufficientErg {
                     have: total_erg,
-                    need: split_total + TX_FEE + MIN_BOX_VALUE,
+                    need: split_total + TX_FEE + citadel_fee + MIN_BOX_VALUE,
                 });
             }
 
-            let mut outputs = Vec::with_capacity(count + 2);
+            let mut outputs = Vec::with_capacity(count + 3);
 
             for _ in 0..count {
                 outputs.push(Eip12Output {
@@ -262,6 +299,8 @@ pub fn build_split_tx(
                 });
             }
 
+            append_dev_fee_output(&mut outputs, &fee_cfg, current_height)
+                .map_err(|e| UtxoManagementError::DevFee(e.to_string()))?;
             outputs.push(Eip12Output::fee(TX_FEE, current_height));
 
             let unsigned_tx = Eip12UnsignedTx {
@@ -278,6 +317,7 @@ pub fn build_split_tx(
                     total_split: split_total.to_string(),
                     change_erg: remainder,
                     miner_fee: TX_FEE,
+                    citadel_fee_nano: citadel_fee,
                 },
             })
         }
@@ -297,6 +337,9 @@ pub fn build_split_tx(
                 });
             }
 
+            let fee_cfg = resolved_config();
+            let citadel_fee = fee_cfg.budget();
+
             let total_token_needed = *amount_per_box * count as u64;
             let erg_for_splits = *erg_per_box * count as i64;
 
@@ -315,7 +358,7 @@ pub fn build_split_tx(
                 });
             }
 
-            let min_erg = erg_for_splits + TX_FEE + MIN_BOX_VALUE;
+            let min_erg = erg_for_splits + TX_FEE + citadel_fee + MIN_BOX_VALUE;
             if total_erg < min_erg {
                 return Err(UtxoManagementError::InsufficientErg {
                     have: total_erg,
@@ -323,7 +366,7 @@ pub fn build_split_tx(
                 });
             }
 
-            let change_erg = total_erg - erg_for_splits - TX_FEE;
+            let change_erg = total_erg - erg_for_splits - TX_FEE - citadel_fee;
 
             let mut token_totals: HashMap<String, u64> = HashMap::new();
             for input in user_inputs {
@@ -340,7 +383,7 @@ pub fn build_split_tx(
                 }
             }
 
-            let mut outputs = Vec::with_capacity(count + 2);
+            let mut outputs = Vec::with_capacity(count + 3);
 
             for _ in 0..count {
                 outputs.push(Eip12Output {
@@ -365,6 +408,8 @@ pub fn build_split_tx(
                 additional_registers: HashMap::new(),
             });
 
+            append_dev_fee_output(&mut outputs, &fee_cfg, current_height)
+                .map_err(|e| UtxoManagementError::DevFee(e.to_string()))?;
             outputs.push(Eip12Output::fee(TX_FEE, current_height));
 
             let unsigned_tx = Eip12UnsignedTx {
@@ -381,10 +426,254 @@ pub fn build_split_tx(
                     total_split: total_token_needed.to_string(),
                     change_erg,
                     miner_fee: TX_FEE,
+                    citadel_fee_nano: citadel_fee,
                 },
             })
         }
     }
+}
+
+/// One user-defined output for a restructure transaction.
+#[derive(Debug, Clone)]
+pub struct RestructureOutputSpec {
+    /// nanoERG for this output (must be ≥ MIN_BOX_VALUE)
+    pub value: i64,
+    /// Tokens assigned to this output
+    pub tokens: Vec<(String, u64)>,
+}
+
+#[derive(Debug)]
+pub struct RestructureSummary {
+    pub input_count: usize,
+    pub output_count: usize,
+    pub total_erg_in: i64,
+    pub allocated_erg: i64,
+    pub change_erg: i64,
+    pub has_change: bool,
+    pub miner_fee: i64,
+    pub citadel_fee_nano: i64,
+}
+
+#[derive(Debug)]
+pub struct RestructureBuildResult {
+    pub unsigned_tx: Eip12UnsignedTx,
+    pub summary: RestructureSummary,
+}
+
+/// Build a free-form restructure tx from selected inputs and user-defined outputs.
+///
+/// - All inputs must match `user_ergo_tree` (ownership check).
+/// - User outputs receive the specified ERG + tokens.
+/// - Unassigned ERG (after fee) and any unassigned tokens form an automatic change
+///   output when needed. If tokens remain unassigned but change ERG would be 0,
+///   returns an error (need room for a change box).
+/// - Miner fee is always `TX_FEE`. Citadel app fee is appended before miner fee when enabled.
+pub fn build_restructure_tx(
+    user_inputs: &[Eip12InputBox],
+    outputs: &[RestructureOutputSpec],
+    user_ergo_tree: &str,
+    current_height: i32,
+) -> Result<RestructureBuildResult, UtxoManagementError> {
+    if user_inputs.is_empty() {
+        return Err(UtxoManagementError::NoInputs);
+    }
+    if outputs.is_empty() {
+        return Err(UtxoManagementError::NoOutputs);
+    }
+    if outputs.len() > MAX_RESTRUCTURE_OUTPUTS {
+        return Err(UtxoManagementError::TooManyOutputs {
+            count: outputs.len(),
+            max: MAX_RESTRUCTURE_OUTPUTS,
+        });
+    }
+
+    for input in user_inputs {
+        if input.ergo_tree != user_ergo_tree {
+            return Err(UtxoManagementError::InputNotOwned {
+                box_id: input.box_id.clone(),
+            });
+        }
+    }
+
+    let total_erg: i64 = user_inputs
+        .iter()
+        .map(|b| b.value.parse::<i64>().unwrap_or(0))
+        .sum();
+
+    let mut available_tokens: HashMap<String, u64> = HashMap::new();
+    for input in user_inputs {
+        for asset in &input.assets {
+            let amount = asset.amount.parse::<u64>().unwrap_or(0);
+            *available_tokens
+                .entry(asset.token_id.clone())
+                .or_insert(0) += amount;
+        }
+    }
+
+    let mut assigned_tokens: HashMap<String, u64> = HashMap::new();
+    let mut allocated_erg: i64 = 0;
+
+    for out in outputs {
+        if out.value < MIN_BOX_VALUE {
+            return Err(UtxoManagementError::BelowMinBoxValue {
+                value: out.value,
+                min: MIN_BOX_VALUE,
+            });
+        }
+        if out.tokens.len() > MAX_TOKENS_PER_BOX {
+            return Err(UtxoManagementError::TooManyTokenTypes {
+                count: out.tokens.len(),
+                max: MAX_TOKENS_PER_BOX,
+            });
+        }
+
+        // Merge duplicate token ids within one output
+        let mut out_tokens: HashMap<String, u64> = HashMap::new();
+        for (tid, amt) in &out.tokens {
+            if *amt == 0 {
+                return Err(UtxoManagementError::ZeroSplitAmount);
+            }
+            *out_tokens.entry(tid.clone()).or_insert(0) += *amt;
+        }
+        if out_tokens.len() > MAX_TOKENS_PER_BOX {
+            return Err(UtxoManagementError::TooManyTokenTypes {
+                count: out_tokens.len(),
+                max: MAX_TOKENS_PER_BOX,
+            });
+        }
+
+        for (tid, amt) in out_tokens {
+            *assigned_tokens.entry(tid).or_insert(0) += amt;
+        }
+
+        allocated_erg = allocated_erg.checked_add(out.value).ok_or(
+            UtxoManagementError::InsufficientErg {
+                have: total_erg,
+                need: i64::MAX,
+            },
+        )?;
+    }
+
+    for (tid, assigned) in &assigned_tokens {
+        let available = available_tokens.get(tid).copied().unwrap_or(0);
+        if *assigned > available {
+            return Err(UtxoManagementError::TokenOverAllocated {
+                token_id: tid.clone(),
+                assigned: *assigned,
+                available,
+            });
+        }
+    }
+
+    let fee_cfg = resolved_config();
+    let citadel_fee = fee_cfg.budget();
+
+    let available_after_fee = total_erg - TX_FEE - citadel_fee;
+    if available_after_fee < MIN_BOX_VALUE {
+        return Err(UtxoManagementError::InsufficientErg {
+            have: total_erg,
+            need: TX_FEE + citadel_fee + MIN_BOX_VALUE,
+        });
+    }
+    if allocated_erg > available_after_fee {
+        return Err(UtxoManagementError::ErgOverAllocated {
+            allocated: allocated_erg,
+            available: available_after_fee,
+        });
+    }
+
+    let change_erg = available_after_fee - allocated_erg;
+
+    let mut remaining_tokens: HashMap<String, u64> = HashMap::new();
+    for (tid, avail) in &available_tokens {
+        let assigned = assigned_tokens.get(tid).copied().unwrap_or(0);
+        let rem = avail.saturating_sub(assigned);
+        if rem > 0 {
+            remaining_tokens.insert(tid.clone(), rem);
+        }
+    }
+
+    let need_change = change_erg > 0 || !remaining_tokens.is_empty();
+    if need_change {
+        if change_erg > 0 && change_erg < MIN_BOX_VALUE {
+            return Err(UtxoManagementError::ChangeBelowMin {
+                change: change_erg,
+                min: MIN_BOX_VALUE,
+            });
+        }
+        if !remaining_tokens.is_empty() && change_erg < MIN_BOX_VALUE {
+            // Tokens need a change box but no ERG left for it
+            return Err(UtxoManagementError::UnassignedTokens {
+                count: remaining_tokens.len(),
+            });
+        }
+        if remaining_tokens.len() > MAX_TOKENS_PER_BOX {
+            return Err(UtxoManagementError::TooManyTokenTypes {
+                count: remaining_tokens.len(),
+                max: MAX_TOKENS_PER_BOX,
+            });
+        }
+    }
+
+    let mut tx_outputs = Vec::with_capacity(outputs.len() + 3);
+
+    for out in outputs {
+        let mut merged: HashMap<String, u64> = HashMap::new();
+        for (tid, amt) in &out.tokens {
+            *merged.entry(tid.clone()).or_insert(0) += *amt;
+        }
+        let assets: Vec<Eip12Asset> = merged
+            .into_iter()
+            .map(|(id, amt)| Eip12Asset::new(id, amt as i64))
+            .collect();
+
+        tx_outputs.push(Eip12Output {
+            value: out.value.to_string(),
+            ergo_tree: user_ergo_tree.to_string(),
+            assets,
+            creation_height: current_height,
+            additional_registers: HashMap::new(),
+        });
+    }
+
+    let has_change = need_change;
+    if has_change {
+        let change_assets: Vec<Eip12Asset> = remaining_tokens
+            .into_iter()
+            .map(|(id, amt)| Eip12Asset::new(id, amt as i64))
+            .collect();
+        tx_outputs.push(Eip12Output {
+            value: change_erg.to_string(),
+            ergo_tree: user_ergo_tree.to_string(),
+            assets: change_assets,
+            creation_height: current_height,
+            additional_registers: HashMap::new(),
+        });
+    }
+
+    append_dev_fee_output(&mut tx_outputs, &fee_cfg, current_height)
+        .map_err(|e| UtxoManagementError::DevFee(e.to_string()))?;
+    tx_outputs.push(Eip12Output::fee(TX_FEE, current_height));
+
+    let unsigned_tx = Eip12UnsignedTx {
+        inputs: user_inputs.to_vec(),
+        data_inputs: vec![],
+        outputs: tx_outputs,
+    };
+
+    Ok(RestructureBuildResult {
+        unsigned_tx,
+        summary: RestructureSummary {
+            input_count: user_inputs.len(),
+            output_count: outputs.len() + if has_change { 1 } else { 0 },
+            total_erg_in: total_erg,
+            allocated_erg,
+            change_erg,
+            has_change,
+            miner_fee: TX_FEE,
+            citadel_fee_nano: citadel_fee,
+        },
+    })
 }
 
 #[cfg(test)]
@@ -783,5 +1072,134 @@ mod tests {
 
         assert_eq!(result.summary.change_erg, 0);
         assert_eq!(result.unsigned_tx.outputs.len(), 4);
+    }
+
+    #[test]
+    fn test_restructure_two_outputs() {
+        let inputs = vec![
+            mock_input("box1", 5_000_000_000, vec![(TOKEN_A, 100)]),
+            mock_input("box2", 3_000_000_000, vec![(TOKEN_B, 50)]),
+        ];
+        let outs = vec![
+            RestructureOutputSpec {
+                value: 2_000_000_000,
+                tokens: vec![(TOKEN_A.to_string(), 100)],
+            },
+            RestructureOutputSpec {
+                value: 1_000_000_000,
+                tokens: vec![(TOKEN_B.to_string(), 50)],
+            },
+        ];
+        let result = build_restructure_tx(&inputs, &outs, USER_TREE, 50000).unwrap();
+
+        assert_eq!(result.summary.input_count, 2);
+        assert_eq!(result.summary.allocated_erg, 3_000_000_000);
+        assert!(result.summary.has_change);
+        assert_eq!(
+            result.summary.change_erg,
+            8_000_000_000 - TX_FEE - 3_000_000_000
+        );
+        // 2 user outs + change + fee
+        assert_eq!(result.unsigned_tx.outputs.len(), 4);
+        assert_eq!(result.unsigned_tx.outputs[0].assets[0].token_id, TOKEN_A);
+        assert_eq!(result.unsigned_tx.outputs[1].assets[0].token_id, TOKEN_B);
+    }
+
+    #[test]
+    fn test_restructure_exact_no_change() {
+        let total = 2_000_000_000 + TX_FEE;
+        let inputs = vec![mock_input("box1", total, vec![])];
+        let outs = vec![
+            RestructureOutputSpec {
+                value: 1_000_000_000,
+                tokens: vec![],
+            },
+            RestructureOutputSpec {
+                value: 1_000_000_000,
+                tokens: vec![],
+            },
+        ];
+        let result = build_restructure_tx(&inputs, &outs, USER_TREE, 50000).unwrap();
+        assert!(!result.summary.has_change);
+        assert_eq!(result.summary.change_erg, 0);
+        assert_eq!(result.unsigned_tx.outputs.len(), 3); // 2 + fee
+    }
+
+    #[test]
+    fn test_restructure_rejects_unowned_input() {
+        let mut inputs = vec![mock_input("box1", 5_000_000_000, vec![])];
+        inputs[0].ergo_tree = "0008cd00deadbeef".to_string();
+        let outs = vec![RestructureOutputSpec {
+            value: 1_000_000_000,
+            tokens: vec![],
+        }];
+        let err = build_restructure_tx(&inputs, &outs, USER_TREE, 50000).unwrap_err();
+        match err {
+            UtxoManagementError::InputNotOwned { .. } => {}
+            _ => panic!("Expected InputNotOwned, got {:?}", err),
+        }
+    }
+
+    #[test]
+    fn test_restructure_token_over_alloc() {
+        let inputs = vec![mock_input("box1", 5_000_000_000, vec![(TOKEN_A, 10)])];
+        let outs = vec![RestructureOutputSpec {
+            value: 1_000_000_000,
+            tokens: vec![(TOKEN_A.to_string(), 50)],
+        }];
+        let err = build_restructure_tx(&inputs, &outs, USER_TREE, 50000).unwrap_err();
+        match err {
+            UtxoManagementError::TokenOverAllocated { .. } => {}
+            _ => panic!("Expected TokenOverAllocated, got {:?}", err),
+        }
+    }
+
+    #[test]
+    fn test_restructure_unassigned_tokens_need_change_erg() {
+        let inputs = vec![mock_input("box1", TX_FEE + MIN_BOX_VALUE, vec![(TOKEN_A, 10)])];
+        let outs = vec![RestructureOutputSpec {
+            value: MIN_BOX_VALUE,
+            tokens: vec![],
+        }];
+        let err = build_restructure_tx(&inputs, &outs, USER_TREE, 50000).unwrap_err();
+        match err {
+            UtxoManagementError::UnassignedTokens { count: 1 } => {}
+            _ => panic!("Expected UnassignedTokens, got {:?}", err),
+        }
+    }
+
+    #[test]
+    fn test_restructure_erg_over_alloc() {
+        let inputs = vec![mock_input("box1", 3_000_000_000, vec![])];
+        let outs = vec![RestructureOutputSpec {
+            value: 5_000_000_000,
+            tokens: vec![],
+        }];
+        let err = build_restructure_tx(&inputs, &outs, USER_TREE, 50000).unwrap_err();
+        match err {
+            UtxoManagementError::ErgOverAllocated { .. } => {}
+            _ => panic!("Expected ErgOverAllocated, got {:?}", err),
+        }
+    }
+
+    #[test]
+    fn test_restructure_splits_token_across_outputs() {
+        let inputs = vec![mock_input("box1", 10_000_000_000, vec![(TOKEN_A, 100)])];
+        let outs = vec![
+            RestructureOutputSpec {
+                value: 1_000_000_000,
+                tokens: vec![(TOKEN_A.to_string(), 40)],
+            },
+            RestructureOutputSpec {
+                value: 1_000_000_000,
+                tokens: vec![(TOKEN_A.to_string(), 60)],
+            },
+        ];
+        let result = build_restructure_tx(&inputs, &outs, USER_TREE, 50000).unwrap();
+        assert_eq!(result.unsigned_tx.outputs[0].assets[0].amount, "40");
+        assert_eq!(result.unsigned_tx.outputs[1].assets[0].amount, "60");
+        // change has no leftover tokens
+        let change = &result.unsigned_tx.outputs[2];
+        assert!(change.assets.is_empty());
     }
 }

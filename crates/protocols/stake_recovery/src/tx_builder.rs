@@ -14,6 +14,9 @@ use crate::constants::{
 };
 use crate::state::{RecoverableStake, RecoveryError, StakeStateSnapshot};
 
+// Citadel app fee: permanently skip Paideia executor/refund (OUTPUTS.size pins).
+// Generic recovery funding may be revisited in phase 3 with script review.
+
 /// Total ERG the proxy's unstake branch spends on fixed outputs beyond the (preserved)
 /// StakeStateBox value: incentive (0.1) + executor tip (0.002) + miner fee (0.002).
 const PAIDEIA_EXECUTOR_FIXED_ERG: u64 =

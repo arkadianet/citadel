@@ -422,6 +422,10 @@ function App() {
           capabilityTier={nodeStatus?.capability_tier}
           collapsed={view !== 'home' || sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(c => !c)}
+          walletAddress={walletAddress}
+          ergBalanceNano={walletBalance?.erg_nano ?? 0}
+          explorerUrl={explorerUrl}
+          onRequestConnect={() => setShowWalletConnect(true)}
         />
 
         <main className="main">
@@ -447,6 +451,7 @@ function App() {
               walletAddressCount={walletAddressCount}
               walletBalance={walletBalance}
               explorerUrl={explorerUrl}
+              ergUsdPrice={oraclePrice?.erg_usd}
               onRequestConnect={() => setShowWalletConnect(true)}
               onBalanceRefresh={fetchWalletBalance}
             />

@@ -289,11 +289,21 @@ export function SwapModal({
                       <span>Miner Fee</span>
                       <span>{formatErg(preview.miner_fee_nano)} ERG</span>
                     </div>
+                    {(preview.citadel_fee_nano ?? 0) > 0 && (
+                      <div className="fee-row">
+                        <span>Citadel fee</span>
+                        <span>{formatErg(preview.citadel_fee_nano)} ERG</span>
+                      </div>
+                    )}
                     <div className="fee-row total">
                       <span>Total ERG Cost</span>
                       <span>{formatErg(preview.total_erg_cost_nano)} ERG</span>
                     </div>
                   </div>
+
+                  {(preview.citadel_fee_nano ?? 0) > 0 && (
+                    <p className="slippage-notice">Includes {formatErg(preview.citadel_fee_nano)} ERG Citadel fee</p>
+                  )}
 
                   {/* High Impact Warning */}
                   {preview.price_impact > 3 && (

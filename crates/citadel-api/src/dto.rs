@@ -337,6 +337,7 @@ pub struct DexySwapPreviewResponse {
     pub price_impact: f64,
     pub fee_pct: f64,
     pub miner_fee_nano: i64,
+    pub citadel_fee_nano: i64,
     pub lp_erg_reserves: i64,
     pub lp_dexy_reserves: i64,
 }

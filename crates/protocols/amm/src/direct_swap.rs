@@ -15,8 +15,8 @@ use crate::constants::fees;
 use crate::state::{AmmError, AmmPool, PoolType, SwapInput};
 use crate::tx_builder::MIN_CHANGE_VALUE;
 use ergo_tx::{
-    collect_change_tokens, select_inputs_for_spend, select_token_boxes, Eip12Asset,
-    Eip12InputBox, Eip12Output, Eip12UnsignedTx,
+    append_dev_fee_output, collect_change_tokens, resolved_dev_fee_config, select_inputs_for_spend,
+    select_token_boxes, Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx,
 };
 
 const TX_FEE: u64 = citadel_core::constants::TX_FEE_NANO as u64;
@@ -36,6 +36,7 @@ pub struct DirectSwapSummary {
     pub min_output: u64,
     pub output_token: String,
     pub miner_fee: u64,
+    pub citadel_fee_nano: u64,
     pub total_erg_cost: u64,
 }
 
@@ -250,15 +251,20 @@ fn build_n2t_direct_swap(
         }
     };
 
+    let fee_cfg = resolved_dev_fee_config();
+    let citadel_fee = fee_cfg.budget() as u64;
     let fee_output = Eip12Output::fee(miner_fee as i64, current_height);
 
     let user_erg_needed = if is_erg_to_token {
         input_amount
             .checked_add(MIN_BOX_VALUE)
             .and_then(|v| v.checked_add(miner_fee))
+            .and_then(|v| v.checked_add(citadel_fee))
             .ok_or_else(|| AmmError::TxBuildError("ERG cost overflow".to_string()))?
     } else {
         miner_fee
+            .checked_add(citadel_fee)
+            .ok_or_else(|| AmmError::TxBuildError("ERG cost overflow".to_string()))?
     };
 
     let token_requirement = match input {
@@ -341,6 +347,8 @@ fn build_n2t_direct_swap(
         }
     }
 
+    append_dev_fee_output(&mut outputs, &fee_cfg, current_height)
+        .map_err(|e| AmmError::TxBuildError(e.to_string()))?;
     outputs.push(fee_output);
 
     let mut inputs = vec![pool_box.clone()];
@@ -376,6 +384,7 @@ fn build_n2t_direct_swap(
         min_output,
         output_token: output_token_name,
         miner_fee,
+        citadel_fee_nano: citadel_fee,
         total_erg_cost: user_erg_needed,
     };
 
@@ -538,10 +547,13 @@ fn build_t2t_direct_swap(
         additional_registers: HashMap::new(),
     };
 
+    let fee_cfg = resolved_dev_fee_config();
+    let citadel_fee = fee_cfg.budget() as u64;
     let fee_output = Eip12Output::fee(miner_fee as i64, current_height);
 
     let user_erg_needed = MIN_BOX_VALUE
         .checked_add(miner_fee)
+        .and_then(|v| v.checked_add(citadel_fee))
         .ok_or_else(|| AmmError::TxBuildError("ERG cost overflow".to_string()))?;
 
     let selected = select_token_boxes(user_utxos, input_token_id, input_amount, user_erg_needed)
@@ -608,6 +620,8 @@ fn build_t2t_direct_swap(
         }
     }
 
+    append_dev_fee_output(&mut outputs, &fee_cfg, current_height)
+        .map_err(|e| AmmError::TxBuildError(e.to_string()))?;
     outputs.push(fee_output);
 
     let mut inputs = vec![pool_box.clone()];
@@ -650,6 +664,7 @@ fn build_t2t_direct_swap(
         min_output,
         output_token: output_token_name,
         miner_fee,
+        citadel_fee_nano: citadel_fee,
         total_erg_cost: user_erg_needed,
     };
 
@@ -661,6 +676,12 @@ fn build_t2t_direct_swap(
 
 #[cfg(test)]
 mod tests {
+    use ergo_tx::{with_test_dev_fee, DevFeeConfig};
+
+    fn no_citadel_fee<R>(f: impl FnOnce() -> R) -> R {
+        with_test_dev_fee(DevFeeConfig::disabled(), f)
+    }
+
     use super::*;
     use crate::state::{AmmPool, PoolType, SwapInput, TokenAmount};
 
@@ -738,61 +759,63 @@ mod tests {
 
     #[test]
     fn test_direct_swap_erg_to_token() {
-        let pool = test_n2t_pool();
-        let pool_box = test_pool_box();
-        let user_utxo = test_user_utxo();
+        no_citadel_fee(|| {
+            let pool = test_n2t_pool();
+            let pool_box = test_pool_box();
+            let user_utxo = test_user_utxo();
 
-        let input = SwapInput::Erg {
-            amount: 1_000_000_000,
-        }; // 1 ERG
-        let output =
-            calculator::calculate_output(100_000_000_000, 1_000_000, 1_000_000_000, 997, 1000);
-        let min_output = calculator::apply_slippage(output, 0.5);
+            let input = SwapInput::Erg {
+                amount: 1_000_000_000,
+            }; // 1 ERG
+            let output =
+                calculator::calculate_output(100_000_000_000, 1_000_000, 1_000_000_000, 997, 1000);
+            let min_output = calculator::apply_slippage(output, 0.5);
 
-        let result = build_direct_swap_eip12(
-            &pool_box,
-            &pool,
-            &input,
-            min_output,
-            &[user_utxo],
-            "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-            1_000_000,
-            None,
-            None,
-        );
+            let result = build_direct_swap_eip12(
+                &pool_box,
+                &pool,
+                &input,
+                min_output,
+                &[user_utxo],
+                "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                1_000_000,
+                None,
+                None,
+            );
 
-        assert!(result.is_ok(), "Should build: {:?}", result.err());
-        let build = result.unwrap();
+            assert!(result.is_ok(), "Should build: {:?}", result.err());
+            let build = result.unwrap();
 
-        assert_eq!(build.unsigned_tx.inputs[0].box_id, "pool_box_1");
-        assert_eq!(build.unsigned_tx.inputs[1].box_id, "user_utxo_1");
+            assert_eq!(build.unsigned_tx.inputs[0].box_id, "pool_box_1");
+            assert_eq!(build.unsigned_tx.inputs[1].box_id, "user_utxo_1");
 
-        assert_eq!(build.unsigned_tx.outputs[0].ergo_tree, "pool_ergo_tree_hex");
-        let new_pool_erg: u64 = build.unsigned_tx.outputs[0].value.parse().unwrap();
-        assert_eq!(new_pool_erg, 100_000_000_000 + 1_000_000_000);
-        let new_token_y: u64 = build.unsigned_tx.outputs[0].assets[2]
-            .amount
-            .parse()
-            .unwrap();
-        assert_eq!(new_token_y, 1_000_000 - output);
+            assert_eq!(build.unsigned_tx.outputs[0].ergo_tree, "pool_ergo_tree_hex");
+            let new_pool_erg: u64 = build.unsigned_tx.outputs[0].value.parse().unwrap();
+            assert_eq!(new_pool_erg, 100_000_000_000 + 1_000_000_000);
+            let new_token_y: u64 = build.unsigned_tx.outputs[0].assets[2]
+                .amount
+                .parse()
+                .unwrap();
+            assert_eq!(new_token_y, 1_000_000 - output);
 
-        assert_eq!(build.unsigned_tx.outputs[1].assets.len(), 1);
-        let user_token_received: u64 = build.unsigned_tx.outputs[1].assets[0]
-            .amount
-            .parse()
-            .unwrap();
-        assert_eq!(user_token_received, output);
-        let user_out_erg: u64 = build.unsigned_tx.outputs[1].value.parse().unwrap();
-        assert!(user_out_erg > MIN_BOX_VALUE, "Change ERG should be folded in");
+            assert_eq!(build.unsigned_tx.outputs[1].assets.len(), 1);
+            let user_token_received: u64 = build.unsigned_tx.outputs[1].assets[0]
+                .amount
+                .parse()
+                .unwrap();
+            assert_eq!(user_token_received, output);
+            let user_out_erg: u64 = build.unsigned_tx.outputs[1].value.parse().unwrap();
+            assert!(user_out_erg > MIN_BOX_VALUE, "Change ERG should be folded in");
 
-        assert_eq!(build.unsigned_tx.outputs[2].value, TX_FEE.to_string());
+            assert_eq!(build.unsigned_tx.outputs[2].value, TX_FEE.to_string());
 
-        assert_eq!(build.summary.input_amount, 1_000_000_000);
-        assert_eq!(build.summary.input_token, "ERG");
-        assert_eq!(build.summary.output_amount, output);
-        assert_eq!(build.summary.output_token, "TestToken");
-        assert_eq!(build.summary.miner_fee, TX_FEE);
-    }
+            assert_eq!(build.summary.input_amount, 1_000_000_000);
+            assert_eq!(build.summary.input_token, "ERG");
+            assert_eq!(build.summary.output_amount, output);
+            assert_eq!(build.summary.output_token, "TestToken");
+            assert_eq!(build.summary.miner_fee, TX_FEE);
+            });
+}
 
     #[test]
     fn test_direct_swap_token_to_erg() {
@@ -1292,68 +1315,70 @@ mod tests {
 
     #[test]
     fn test_direct_swap_token_to_erg_small_change_folded_into_output() {
-        // Regression: when user's ERG input minus TX_FEE is below MIN_CHANGE_VALUE
-        // and there are no change tokens, the leftover ERG must be folded into the
-        // user swap output instead of being silently dropped.
-        let pool = test_n2t_pool();
-        let pool_box = test_pool_box();
-        let token_id =
-            "token_y_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string();
+        no_citadel_fee(|| {
+            // Regression: when user's ERG input minus TX_FEE is below MIN_CHANGE_VALUE
+            // and there are no change tokens, the leftover ERG must be folded into the
+            // user swap output instead of being silently dropped.
+            let pool = test_n2t_pool();
+            let pool_box = test_pool_box();
+            let token_id =
+                "token_y_id_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string();
 
-        let user_utxo = Eip12InputBox {
-            value: "1956185".to_string(),
-            assets: vec![Eip12Asset {
+            let user_utxo = Eip12InputBox {
+                value: "1956185".to_string(),
+                assets: vec![Eip12Asset {
+                    token_id: token_id.clone(),
+                    amount: "2192".to_string(),
+                }],
+                ..test_user_utxo()
+            };
+
+            let input = SwapInput::Token {
                 token_id: token_id.clone(),
-                amount: "2192".to_string(),
-            }],
-            ..test_user_utxo()
-        };
+                amount: 2192,
+            };
+            let output = calculator::calculate_output(1_000_000, 100_000_000_000, 2192, 997, 1000);
 
-        let input = SwapInput::Token {
-            token_id: token_id.clone(),
-            amount: 2192,
-        };
-        let output = calculator::calculate_output(1_000_000, 100_000_000_000, 2192, 997, 1000);
+            let result = build_direct_swap_eip12(
+                &pool_box,
+                &pool,
+                &input,
+                1,
+                &[user_utxo],
+                "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                1_000_000,
+                None,
+                None,
+            );
 
-        let result = build_direct_swap_eip12(
-            &pool_box,
-            &pool,
-            &input,
-            1,
-            &[user_utxo],
-            "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-            1_000_000,
-            None,
-            None,
-        );
+            assert!(result.is_ok(), "Should build: {:?}", result.err());
+            let build = result.unwrap();
 
-        assert!(result.is_ok(), "Should build: {:?}", result.err());
-        let build = result.unwrap();
+            assert_eq!(build.unsigned_tx.outputs.len(), 3);
 
-        assert_eq!(build.unsigned_tx.outputs.len(), 3);
+            let total_input_erg: u64 = build
+                .unsigned_tx
+                .inputs
+                .iter()
+                .map(|i| i.value.parse::<u64>().unwrap())
+                .sum();
+            let total_output_erg: u64 = build
+                .unsigned_tx
+                .outputs
+                .iter()
+                .map(|o| o.value.parse::<u64>().unwrap())
+                .sum();
+            assert_eq!(
+                total_input_erg, total_output_erg,
+                "ERG inputs ({}) must equal outputs ({})",
+                total_input_erg, total_output_erg
+            );
 
-        let total_input_erg: u64 = build
-            .unsigned_tx
-            .inputs
-            .iter()
-            .map(|i| i.value.parse::<u64>().unwrap())
-            .sum();
-        let total_output_erg: u64 = build
-            .unsigned_tx
-            .outputs
-            .iter()
-            .map(|o| o.value.parse::<u64>().unwrap())
-            .sum();
-        assert_eq!(
-            total_input_erg, total_output_erg,
-            "ERG inputs ({}) must equal outputs ({})",
-            total_input_erg, total_output_erg
-        );
-
-        let change_erg = 1_956_185u64 - TX_FEE;
-        let user_swap_value: u64 = build.unsigned_tx.outputs[1].value.parse().unwrap();
-        assert_eq!(user_swap_value, output + change_erg);
-    }
+            let change_erg = 1_956_185u64 - TX_FEE;
+            let user_swap_value: u64 = build.unsigned_tx.outputs[1].value.parse().unwrap();
+            assert_eq!(user_swap_value, output + change_erg);
+            });
+}
 
     #[test]
     fn test_direct_swap_token_to_erg_rejects_pool_dust_breach() {

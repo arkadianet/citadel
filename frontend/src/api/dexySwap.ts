@@ -46,6 +46,8 @@ export interface DexySwapPreviewResponse {
   fee_pct: number
   /** Miner fee in nanoERG */
   miner_fee_nano: number
+  /** Citadel app fee in nanoERG (0 when disabled) */
+  citadel_fee_nano: number
   /** LP pool ERG reserves in nanoERG */
   lp_erg_reserves: number
   /** LP pool Dexy token reserves in raw units */
@@ -63,6 +65,7 @@ export interface DexySwapTxSummary {
   price_impact_pct: number
   fee_pct: number
   miner_fee_nano: number
+  citadel_fee_nano: number
 }
 
 /**

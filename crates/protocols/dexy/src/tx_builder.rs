@@ -1,4 +1,7 @@
 //! Dexy transaction builders: FreeMint, LP Swap, LP Deposit/Redeem.
+//!
+//! Citadel app fee (0.011 ERG) is funded from user inputs and placed after
+//! protocol successors (free-mint/bank/buyback or LP/action NFT) and before miner fee.
 
 use std::collections::HashMap;
 
@@ -6,8 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use citadel_core::{constants, ProtocolError, TxError};
 use ergo_tx::{
-    append_change_output, collect_change_tokens, select_inputs_for_spend, Eip12Asset,
-    Eip12InputBox, Eip12Output, Eip12UnsignedTx,
+    append_change_output, append_dev_fee_output, collect_change_tokens, resolved_dev_fee_config,
+    select_inputs_for_spend, Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx,
 };
 
 use crate::calculator::{
@@ -48,6 +51,7 @@ pub struct TxSummary {
     pub token_amount: i64,
     pub token_name: String,
     pub tx_fee_nano: i64,
+    pub citadel_fee_nano: i64,
     pub bank_fee_nano: i64,
     pub buyback_fee_nano: i64,
 }
@@ -214,8 +218,13 @@ pub fn build_mint_dexy_tx(
 
     let adjusted_rate = ctx.oracle_rate_nano / request.variant.oracle_divisor();
     let bank_fee = request.amount * adjusted_rate * BANK_FEE_NUM / FEE_DENOM;
-    let total_cost =
-        bank_erg_added + buyback_fee + constants::TX_FEE_NANO + constants::MIN_BOX_VALUE_NANO;
+    let fee_cfg = resolved_dev_fee_config();
+    let citadel_fee = fee_cfg.budget();
+    let total_cost = bank_erg_added
+        + buyback_fee
+        + constants::TX_FEE_NANO
+        + citadel_fee
+        + constants::MIN_BOX_VALUE_NANO;
 
     let selected =
         select_inputs_for_spend(&request.user_inputs, total_cost as u64, None).map_err(|e| {
@@ -289,12 +298,9 @@ pub fn build_mint_dexy_tx(
             vec![Eip12Asset::new(&state.dexy_token_id, request.amount)],
             request.current_height,
         ),
-        Eip12Output::fee(constants::TX_FEE_NANO, request.current_height),
     ];
 
-    let erg_used =
-        (bank_erg_added + buyback_fee + constants::TX_FEE_NANO + constants::MIN_BOX_VALUE_NANO)
-            as u64;
+    let erg_used = total_cost as u64;
     append_change_output(
         &mut outputs,
         &selected,
@@ -307,6 +313,16 @@ pub fn build_mint_dexy_tx(
     .map_err(|e| TxError::BuildFailed {
         message: e.to_string(),
     })?;
+
+    append_dev_fee_output(&mut outputs, &fee_cfg, request.current_height).map_err(|e| {
+        TxError::BuildFailed {
+            message: e.to_string(),
+        }
+    })?;
+    outputs.push(Eip12Output::fee(
+        constants::TX_FEE_NANO,
+        request.current_height,
+    ));
 
     let unsigned_tx = Eip12UnsignedTx {
         inputs,
@@ -321,6 +337,7 @@ pub fn build_mint_dexy_tx(
         token_amount: request.amount,
         token_name: request.variant.token_name().to_string(),
         tx_fee_nano: constants::TX_FEE_NANO,
+        citadel_fee_nano: citadel_fee,
         bank_fee_nano: bank_fee,
         buyback_fee_nano: buyback_fee,
     };
@@ -420,6 +437,7 @@ pub struct SwapTxSummary {
     pub price_impact_pct: f64,
     pub fee_pct: f64,
     pub miner_fee_nano: i64,
+    pub citadel_fee_nano: i64,
 }
 
 #[derive(Debug)]
@@ -503,14 +521,19 @@ pub fn build_swap_dexy_tx(
         });
     }
 
+    let fee_cfg = resolved_dev_fee_config();
+    let citadel_fee = fee_cfg.budget();
+
     let selected = match request.direction {
         SwapDirection::ErgToDexy => {
-            let needed =
-                request.input_amount + constants::TX_FEE_NANO + constants::MIN_BOX_VALUE_NANO;
+            let needed = request.input_amount
+                + constants::TX_FEE_NANO
+                + citadel_fee
+                + constants::MIN_BOX_VALUE_NANO;
             select_inputs_for_spend(&request.user_inputs, needed as u64, None)
         }
         SwapDirection::DexyToErg => {
-            let min_erg = constants::TX_FEE_NANO + constants::MIN_BOX_VALUE_NANO;
+            let min_erg = constants::TX_FEE_NANO + citadel_fee + constants::MIN_BOX_VALUE_NANO;
             select_inputs_for_spend(
                 &request.user_inputs,
                 min_erg as u64,
@@ -545,9 +568,9 @@ pub fn build_swap_dexy_tx(
                 request.current_height,
             ));
 
-            outputs.push(Eip12Output::fee(constants::TX_FEE_NANO, request.current_height));
-
-            let erg_used = (request.input_amount + constants::TX_FEE_NANO + user_output_erg) as u64;
+            let erg_used =
+                (request.input_amount + constants::TX_FEE_NANO + citadel_fee + user_output_erg)
+                    as u64;
             append_change_output(
                 &mut outputs,
                 &selected,
@@ -562,8 +585,9 @@ pub fn build_swap_dexy_tx(
             })?;
         }
         SwapDirection::DexyToErg => {
-            let user_output_erg =
-                selected.total_erg as i64 + output_amount - constants::TX_FEE_NANO;
+            let user_output_erg = selected.total_erg as i64 + output_amount
+                - constants::TX_FEE_NANO
+                - citadel_fee;
             let remaining_assets = collect_change_tokens(
                 &selected.boxes,
                 Some((&state.dexy_token_id, request.input_amount as u64)),
@@ -575,14 +599,18 @@ pub fn build_swap_dexy_tx(
                 remaining_assets,
                 request.current_height,
             ));
-
-            // Miner fee
-            outputs.push(Eip12Output::fee(
-                constants::TX_FEE_NANO,
-                request.current_height,
-            ));
         }
     }
+
+    append_dev_fee_output(&mut outputs, &fee_cfg, request.current_height).map_err(|e| {
+        TxError::BuildFailed {
+            message: e.to_string(),
+        }
+    })?;
+    outputs.push(Eip12Output::fee(
+        constants::TX_FEE_NANO,
+        request.current_height,
+    ));
 
     // 11. Build unsigned transaction
     let unsigned_tx = Eip12UnsignedTx {
@@ -617,6 +645,7 @@ pub fn build_swap_dexy_tx(
         price_impact_pct: price_impact,
         fee_pct: LP_SWAP_FEE_NUM as f64 / LP_SWAP_FEE_DENOM as f64 * 100.0,
         miner_fee_nano: constants::TX_FEE_NANO,
+        citadel_fee_nano: citadel_fee,
     };
 
     Ok(SwapBuildResult {
@@ -715,6 +744,7 @@ pub struct LpTxSummary {
     pub dexy_amount: i64,
     pub lp_tokens: i64,
     pub miner_fee_nano: i64,
+    pub citadel_fee_nano: i64,
 }
 
 /// Build result for LP deposit/redeem transactions
@@ -856,8 +886,11 @@ pub fn build_lp_deposit_tx(
         calc.consumed_dexy
     );
 
-    // 3. Select user UTXOs: need consumed_erg + TX_FEE + MIN_BOX_VALUE (for user output), and consumed_dexy tokens
-    let min_erg = calc.consumed_erg + constants::TX_FEE_NANO + constants::MIN_BOX_VALUE_NANO;
+    // 3. Select user UTXOs: need consumed_erg + TX_FEE + citadel + MIN_BOX_VALUE, and consumed_dexy
+    let fee_cfg = resolved_dev_fee_config();
+    let citadel_fee = fee_cfg.budget();
+    let min_erg =
+        calc.consumed_erg + constants::TX_FEE_NANO + citadel_fee + constants::MIN_BOX_VALUE_NANO;
     let selected = select_inputs_for_spend(
         &request.user_inputs,
         min_erg as u64,
@@ -880,13 +913,22 @@ pub fn build_lp_deposit_tx(
         Some((dexy_token_id, calc.consumed_dexy as u64)),
     ));
 
-    let user_erg = selected.total_erg as i64 - calc.consumed_erg - constants::TX_FEE_NANO;
-    let outputs = vec![
+    let user_erg =
+        selected.total_erg as i64 - calc.consumed_erg - constants::TX_FEE_NANO - citadel_fee;
+    let mut outputs = vec![
         build_lp_pool_output(ctx, new_lp_erg, new_lp_token_reserves, new_lp_dexy, lp_token_id, dexy_token_id, request.current_height),
         build_action_nft_output(ctx, request.current_height),
         Eip12Output::change(user_erg.max(constants::MIN_BOX_VALUE_NANO), output_ergo_tree, user_tokens, request.current_height),
-        Eip12Output::fee(constants::TX_FEE_NANO, request.current_height),
     ];
+    append_dev_fee_output(&mut outputs, &fee_cfg, request.current_height).map_err(|e| {
+        TxError::BuildFailed {
+            message: e.to_string(),
+        }
+    })?;
+    outputs.push(Eip12Output::fee(
+        constants::TX_FEE_NANO,
+        request.current_height,
+    ));
 
     let unsigned_tx = Eip12UnsignedTx {
         inputs,
@@ -900,6 +942,7 @@ pub fn build_lp_deposit_tx(
         dexy_amount: calc.consumed_dexy,
         lp_tokens: calc.lp_tokens_out,
         miner_fee_nano: constants::TX_FEE_NANO,
+        citadel_fee_nano: citadel_fee,
     };
 
     Ok(LpBuildResult {
@@ -958,7 +1001,9 @@ pub fn build_lp_redeem_tx(
         });
     }
 
-    let min_erg = constants::TX_FEE_NANO + constants::MIN_BOX_VALUE_NANO;
+    let fee_cfg = resolved_dev_fee_config();
+    let citadel_fee = fee_cfg.budget();
+    let min_erg = constants::TX_FEE_NANO + citadel_fee + constants::MIN_BOX_VALUE_NANO;
     let selected = select_inputs_for_spend(
         &request.user_inputs,
         min_erg as u64,
@@ -989,13 +1034,22 @@ pub fn build_lp_redeem_tx(
         Some((lp_token_id, request.lp_to_burn as u64)),
     ));
 
-    let user_output_erg = selected.total_erg as i64 + calc.erg_out - constants::TX_FEE_NANO;
-    let outputs = vec![
+    let user_output_erg =
+        selected.total_erg as i64 + calc.erg_out - constants::TX_FEE_NANO - citadel_fee;
+    let mut outputs = vec![
         build_lp_pool_output(ctx, new_lp_erg, new_lp_token_reserves, new_lp_dexy, lp_token_id, dexy_token_id, request.current_height),
         build_action_nft_output(ctx, request.current_height),
         Eip12Output::change(user_output_erg, output_ergo_tree, user_assets, request.current_height),
-        Eip12Output::fee(constants::TX_FEE_NANO, request.current_height),
     ];
+    append_dev_fee_output(&mut outputs, &fee_cfg, request.current_height).map_err(|e| {
+        TxError::BuildFailed {
+            message: e.to_string(),
+        }
+    })?;
+    outputs.push(Eip12Output::fee(
+        constants::TX_FEE_NANO,
+        request.current_height,
+    ));
 
     let unsigned_tx = Eip12UnsignedTx {
         inputs,
@@ -1009,6 +1063,7 @@ pub fn build_lp_redeem_tx(
         dexy_amount: calc.dexy_out,
         lp_tokens: request.lp_to_burn,
         miner_fee_nano: constants::TX_FEE_NANO,
+        citadel_fee_nano: citadel_fee,
     };
 
     Ok(LpBuildResult {
@@ -1019,6 +1074,12 @@ pub fn build_lp_redeem_tx(
 
 #[cfg(test)]
 mod tests {
+    use ergo_tx::{with_test_dev_fee, DevFeeConfig};
+
+    fn no_citadel_fee<R>(f: impl FnOnce() -> R) -> R {
+        with_test_dev_fee(DevFeeConfig::disabled(), f)
+    }
+
     use super::*;
 
     #[test]
@@ -1142,6 +1203,7 @@ mod tests {
             token_amount: 100,
             token_name: "DexyGold".to_string(),
             tx_fee_nano: 1_100_000,
+            citadel_fee_nano: 0,
             bank_fee_nano: 3_000_000,
             buyback_fee_nano: 2_000_000,
         };
@@ -1460,80 +1522,88 @@ mod tests {
 
         #[test]
         fn test_erg_to_dexy_swap_builds_correctly() {
-            let ctx = create_test_swap_context(1_000_000_000_000, 1_000_000);
-            let state = create_swap_state();
-            let request = create_erg_to_dexy_request(
-                1_000_000_000,   // swap 1 ERG
-                1,               // min 1 Dexy output
-                100_000_000_000, // 100 ERG available
-            );
+            no_citadel_fee(|| {
+                let ctx = create_test_swap_context(1_000_000_000_000, 1_000_000);
+                let state = create_swap_state();
+                let request = create_erg_to_dexy_request(
+                    1_000_000_000,   // swap 1 ERG
+                    1,               // min 1 Dexy output
+                    100_000_000_000, // 100 ERG available
+                );
 
-            let result = build_swap_dexy_tx(&request, &ctx, &state);
-            assert!(result.is_ok(), "Build failed: {:?}", result.err());
+                let result = build_swap_dexy_tx(&request, &ctx, &state);
+                assert!(result.is_ok(), "Build failed: {:?}", result.err());
 
-            let build = result.unwrap();
-            let tx = &build.unsigned_tx;
+                let build = result.unwrap();
+                let tx = &build.unsigned_tx;
 
-            assert_eq!(tx.inputs.len(), 3);
-            assert_eq!(tx.inputs[0].box_id, "lp_box_id");
-            assert_eq!(tx.inputs[1].box_id, "swap_box_id");
-            assert_eq!(tx.data_inputs.len(), 0);
-            assert!(tx.outputs.len() >= 4);
-            assert_eq!(tx.outputs[0].ergo_tree, "lp_ergo_tree_hex");
-            assert_eq!(tx.outputs[1].ergo_tree, "swap_ergo_tree_hex");
-            assert_eq!(tx.outputs[1].value, "1000000");
-            assert_eq!(tx.outputs[2].ergo_tree, "user_ergo_tree");
-            assert_eq!(tx.outputs[2].assets.len(), 1);
-            assert_eq!(tx.outputs[2].assets[0].token_id, DEXY_TOKEN_ID);
-            let user_dexy_out: i64 = tx.outputs[2].assets[0].amount.parse().unwrap();
-            assert!(user_dexy_out > 0, "User should receive Dexy tokens");
-            assert_eq!(tx.outputs[3].value, constants::TX_FEE_NANO.to_string());
+                assert_eq!(tx.inputs.len(), 3);
+                assert_eq!(tx.inputs[0].box_id, "lp_box_id");
+                assert_eq!(tx.inputs[1].box_id, "swap_box_id");
+                assert_eq!(tx.data_inputs.len(), 0);
+                assert!(tx.outputs.len() >= 4);
+                assert_eq!(tx.outputs[0].ergo_tree, "lp_ergo_tree_hex");
+                assert_eq!(tx.outputs[1].ergo_tree, "swap_ergo_tree_hex");
+                assert_eq!(tx.outputs[1].value, "1000000");
+                assert_eq!(tx.outputs[2].ergo_tree, "user_ergo_tree");
+                assert_eq!(tx.outputs[2].assets.len(), 1);
+                assert_eq!(tx.outputs[2].assets[0].token_id, DEXY_TOKEN_ID);
+                let user_dexy_out: i64 = tx.outputs[2].assets[0].amount.parse().unwrap();
+                assert!(user_dexy_out > 0, "User should receive Dexy tokens");
+                assert_eq!(
+                    tx.outputs.last().unwrap().value,
+                    constants::TX_FEE_NANO.to_string()
+                );
 
-            assert_eq!(build.summary.direction, "erg_to_dexy");
-            assert_eq!(build.summary.input_amount, 1_000_000_000);
-            assert!(build.summary.output_amount > 0);
-            assert_eq!(build.summary.fee_pct, 0.3);
-        }
+                assert_eq!(build.summary.direction, "erg_to_dexy");
+                assert_eq!(build.summary.input_amount, 1_000_000_000);
+                assert!(build.summary.output_amount > 0);
+                assert_eq!(build.summary.fee_pct, 0.3);
+                assert_eq!(build.summary.citadel_fee_nano, 0);
+                    });
+}
 
         #[test]
         fn test_dexy_to_erg_swap_builds_correctly() {
-            let ctx = create_test_swap_context(1_000_000_000_000, 1_000_000);
-            let state = create_swap_state();
-            let request = create_dexy_to_erg_request(
-                100,            // sell 100 Dexy
-                1,              // min 1 nanoERG output
-                10_000_000_000, // 10 ERG for fees
-                1000,           // have 1000 Dexy
-            );
+            no_citadel_fee(|| {
+                let ctx = create_test_swap_context(1_000_000_000_000, 1_000_000);
+                let state = create_swap_state();
+                let request = create_dexy_to_erg_request(
+                    100,            // sell 100 Dexy
+                    1,              // min 1 nanoERG output
+                    10_000_000_000, // 10 ERG for fees
+                    1000,           // have 1000 Dexy
+                );
 
-            let result = build_swap_dexy_tx(&request, &ctx, &state);
-            assert!(result.is_ok(), "Build failed: {:?}", result.err());
+                let result = build_swap_dexy_tx(&request, &ctx, &state);
+                assert!(result.is_ok(), "Build failed: {:?}", result.err());
 
-            let build = result.unwrap();
-            let tx = &build.unsigned_tx;
+                let build = result.unwrap();
+                let tx = &build.unsigned_tx;
 
-            assert_eq!(tx.inputs.len(), 3);
-            assert_eq!(tx.outputs.len(), 4);
+                assert_eq!(tx.inputs.len(), 3);
+                assert_eq!(tx.outputs.len(), 4);
 
-            let user_output = &tx.outputs[2];
-            assert_eq!(user_output.ergo_tree, "user_ergo_tree");
-            let user_erg_out: i64 = user_output.value.parse().unwrap();
-            assert!(
-                user_erg_out > 10_000_000_000,
-                "User should receive more ERG than started with"
-            );
+                let user_output = &tx.outputs[2];
+                assert_eq!(user_output.ergo_tree, "user_ergo_tree");
+                let user_erg_out: i64 = user_output.value.parse().unwrap();
+                assert!(
+                    user_erg_out > 10_000_000_000,
+                    "User should receive more ERG than started with"
+                );
 
-            let remaining_dexy = user_output
-                .assets
-                .iter()
-                .find(|a| a.token_id == DEXY_TOKEN_ID);
-            assert!(remaining_dexy.is_some(), "User should have remaining Dexy");
-            assert_eq!(remaining_dexy.unwrap().amount, "900");
+                let remaining_dexy = user_output
+                    .assets
+                    .iter()
+                    .find(|a| a.token_id == DEXY_TOKEN_ID);
+                assert!(remaining_dexy.is_some(), "User should have remaining Dexy");
+                assert_eq!(remaining_dexy.unwrap().amount, "900");
 
-            assert_eq!(build.summary.direction, "dexy_to_erg");
-            assert_eq!(build.summary.input_amount, 100);
-            assert!(build.summary.output_amount > 0);
-        }
+                assert_eq!(build.summary.direction, "dexy_to_erg");
+                assert_eq!(build.summary.input_amount, 100);
+                assert!(build.summary.output_amount > 0);
+                    });
+}
 
         #[test]
         fn test_swap_summary_price_impact() {
@@ -1595,6 +1665,7 @@ mod tests {
                 price_impact_pct: 0.1,
                 fee_pct: 0.3,
                 miner_fee_nano: 1_100_000,
+                citadel_fee_nano: 0,
             };
 
             let json = serde_json::to_string(&summary).unwrap();
@@ -1630,23 +1701,30 @@ mod tests {
 
         #[test]
         fn test_erg_to_dexy_change_output_when_needed() {
-            let ctx = create_test_swap_context(1_000_000_000_000, 1_000_000);
-            let state = create_swap_state();
-            let request = create_erg_to_dexy_request(
-                1_000_000_000, // swap 1 ERG
-                1,
-                100_000_000_000, // 100 ERG - lots of change
-            );
+            no_citadel_fee(|| {
+                let ctx = create_test_swap_context(1_000_000_000_000, 1_000_000);
+                let state = create_swap_state();
+                let request = create_erg_to_dexy_request(
+                    1_000_000_000, // swap 1 ERG
+                    1,
+                    100_000_000_000, // 100 ERG - lots of change
+                );
 
-            let result = build_swap_dexy_tx(&request, &ctx, &state).unwrap();
-            let tx = &result.unsigned_tx;
+                let result = build_swap_dexy_tx(&request, &ctx, &state).unwrap();
+                let tx = &result.unsigned_tx;
 
-            assert_eq!(tx.outputs.len(), 5, "Should have change output");
-            let change = &tx.outputs[4];
-            assert_eq!(change.ergo_tree, "user_ergo_tree");
-            let change_erg: i64 = change.value.parse().unwrap();
-            assert!(change_erg >= constants::MIN_BOX_VALUE_NANO);
-        }
+                assert_eq!(tx.outputs.len(), 5, "Should have change output");
+                // [lp, swap_nft, user_out, change, miner_fee]
+                let change = &tx.outputs[3];
+                assert_eq!(change.ergo_tree, "user_ergo_tree");
+                let change_erg: i64 = change.value.parse().unwrap();
+                assert!(change_erg >= constants::MIN_BOX_VALUE_NANO);
+                assert_eq!(
+                    tx.outputs[4].value,
+                    constants::TX_FEE_NANO.to_string()
+                );
+                    });
+}
     }
 
     mod lp_deposit_redeem_tests {
@@ -1881,73 +1959,75 @@ mod tests {
 
         #[test]
         fn test_lp_deposit_builds_correctly() {
-            let ctx = create_deposit_context(1_000_000_000_000, 500_000, 99_900_000_000);
-            let request = LpDepositRequest {
-                variant: DexyVariant::Gold,
-                deposit_erg: 10_000_000_000,
-                deposit_dexy: 5_000,
-                user_address: "user_addr".to_string(),
-                user_ergo_tree: "user_ergo_tree".to_string(),
-                user_inputs: vec![create_test_input(
-                    100_000_000_000, // 100 ERG
-                    vec![(DEXY_TOKEN_ID, 10_000)],
-                )],
-                current_height: 100000,
-                recipient_ergo_tree: None,
-            };
+            no_citadel_fee(|| {
+                let ctx = create_deposit_context(1_000_000_000_000, 500_000, 99_900_000_000);
+                let request = LpDepositRequest {
+                    variant: DexyVariant::Gold,
+                    deposit_erg: 10_000_000_000,
+                    deposit_dexy: 5_000,
+                    user_address: "user_addr".to_string(),
+                    user_ergo_tree: "user_ergo_tree".to_string(),
+                    user_inputs: vec![create_test_input(
+                        100_000_000_000, // 100 ERG
+                        vec![(DEXY_TOKEN_ID, 10_000)],
+                    )],
+                    current_height: 100000,
+                    recipient_ergo_tree: None,
+                };
 
-            let result =
-                build_lp_deposit_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
-            assert!(result.is_ok(), "Build failed: {:?}", result.err());
+                let result =
+                    build_lp_deposit_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
+                assert!(result.is_ok(), "Build failed: {:?}", result.err());
 
-            let build = result.unwrap();
-            let tx = &build.unsigned_tx;
+                let build = result.unwrap();
+                let tx = &build.unsigned_tx;
 
-            assert_eq!(tx.inputs.len(), 3);
-            assert_eq!(tx.inputs[0].box_id, "lp_box_id");
-            assert_eq!(tx.inputs[1].box_id, "mint_box_id");
-            assert_eq!(tx.data_inputs.len(), 0);
-            assert!(
-                tx.outputs.len() >= 3,
-                "Expected at least 3 outputs, got {}",
-                tx.outputs.len()
-            );
+                assert_eq!(tx.inputs.len(), 3);
+                assert_eq!(tx.inputs[0].box_id, "lp_box_id");
+                assert_eq!(tx.inputs[1].box_id, "mint_box_id");
+                assert_eq!(tx.data_inputs.len(), 0);
+                assert!(
+                    tx.outputs.len() >= 3,
+                    "Expected at least 3 outputs, got {}",
+                    tx.outputs.len()
+                );
 
-            assert_eq!(tx.outputs[0].ergo_tree, "lp_ergo_tree_hex");
-            let lp_erg_out: i64 = tx.outputs[0].value.parse().unwrap();
-            assert!(lp_erg_out > 1_000_000_000_000, "LP ERG should increase after deposit");
-            assert_eq!(tx.outputs[0].assets.len(), 3);
-            assert_eq!(tx.outputs[0].assets[0].token_id, LP_NFT_ID);
-            assert_eq!(tx.outputs[0].assets[1].token_id, LP_TOKEN_ID);
-            assert_eq!(tx.outputs[0].assets[2].token_id, DEXY_TOKEN_ID);
-            let new_lp_reserves: i64 = tx.outputs[0].assets[1].amount.parse().unwrap();
-            assert!(new_lp_reserves < 99_900_000_000, "LP token reserves should decrease");
-            assert_eq!(tx.outputs[1].ergo_tree, "mint_ergo_tree_hex");
-            assert_eq!(tx.outputs[1].value, "1000000");
-            assert_eq!(tx.outputs[1].assets.len(), 1);
-            assert_eq!(tx.outputs[1].assets[0].token_id, LP_MINT_NFT_ID);
+                assert_eq!(tx.outputs[0].ergo_tree, "lp_ergo_tree_hex");
+                let lp_erg_out: i64 = tx.outputs[0].value.parse().unwrap();
+                assert!(lp_erg_out > 1_000_000_000_000, "LP ERG should increase after deposit");
+                assert_eq!(tx.outputs[0].assets.len(), 3);
+                assert_eq!(tx.outputs[0].assets[0].token_id, LP_NFT_ID);
+                assert_eq!(tx.outputs[0].assets[1].token_id, LP_TOKEN_ID);
+                assert_eq!(tx.outputs[0].assets[2].token_id, DEXY_TOKEN_ID);
+                let new_lp_reserves: i64 = tx.outputs[0].assets[1].amount.parse().unwrap();
+                assert!(new_lp_reserves < 99_900_000_000, "LP token reserves should decrease");
+                assert_eq!(tx.outputs[1].ergo_tree, "mint_ergo_tree_hex");
+                assert_eq!(tx.outputs[1].value, "1000000");
+                assert_eq!(tx.outputs[1].assets.len(), 1);
+                assert_eq!(tx.outputs[1].assets[0].token_id, LP_MINT_NFT_ID);
 
-            let user_output = &tx.outputs[2];
-            assert_eq!(user_output.ergo_tree, "user_ergo_tree");
-            assert!(
-                user_output.assets.iter().any(|a| a.token_id == LP_TOKEN_ID),
-                "User should receive LP tokens"
-            );
-            let lp_out: i64 = user_output
-                .assets
-                .iter()
-                .find(|a| a.token_id == LP_TOKEN_ID)
-                .unwrap()
-                .amount
-                .parse()
-                .unwrap();
-            assert!(lp_out > 0, "User should receive positive LP tokens");
+                let user_output = &tx.outputs[2];
+                assert_eq!(user_output.ergo_tree, "user_ergo_tree");
+                assert!(
+                    user_output.assets.iter().any(|a| a.token_id == LP_TOKEN_ID),
+                    "User should receive LP tokens"
+                );
+                let lp_out: i64 = user_output
+                    .assets
+                    .iter()
+                    .find(|a| a.token_id == LP_TOKEN_ID)
+                    .unwrap()
+                    .amount
+                    .parse()
+                    .unwrap();
+                assert!(lp_out > 0, "User should receive positive LP tokens");
 
-            assert!(build.summary.action.starts_with("lp_deposit"));
-            assert!(build.summary.erg_amount > 0);
-            assert!(build.summary.dexy_amount > 0);
-            assert!(build.summary.lp_tokens > 0);
-        }
+                assert!(build.summary.action.starts_with("lp_deposit"));
+                assert!(build.summary.erg_amount > 0);
+                assert!(build.summary.dexy_amount > 0);
+                assert!(build.summary.lp_tokens > 0);
+                    });
+}
 
         #[test]
         fn test_lp_deposit_with_recipient() {
@@ -2050,74 +2130,76 @@ mod tests {
 
         #[test]
         fn test_lp_redeem_builds_correctly() {
-            // Pool: 1000 ERG, 500K Dexy, 99.9B LP tokens reserved (100M circulating)
-            // Oracle rate (raw): 1T nanoERG/kg -> adjusted: 1M nanoERG/mg
-            // LP rate: 1T / 500K = 2M nanoERG/token
-            // can_redeem: 2M > 1M * 98/100 = 980K -> true
-            let ctx = create_redeem_context(
-                1_000_000_000_000,
-                500_000,
-                99_900_000_000,
-                1_000_000_000_000,
-            );
+            no_citadel_fee(|| {
+                // Pool: 1000 ERG, 500K Dexy, 99.9B LP tokens reserved (100M circulating)
+                // Oracle rate (raw): 1T nanoERG/kg -> adjusted: 1M nanoERG/mg
+                // LP rate: 1T / 500K = 2M nanoERG/token
+                // can_redeem: 2M > 1M * 98/100 = 980K -> true
+                let ctx = create_redeem_context(
+                    1_000_000_000_000,
+                    500_000,
+                    99_900_000_000,
+                    1_000_000_000_000,
+                );
 
-            let request = LpRedeemRequest {
-                variant: DexyVariant::Gold,
-                lp_to_burn: 1_000_000,
-                user_address: "user_addr".to_string(),
-                user_ergo_tree: "user_ergo_tree".to_string(),
-                user_inputs: vec![create_test_input(
-                    10_000_000_000, // 10 ERG for fees
-                    vec![(LP_TOKEN_ID, 2_000_000)],
-                )],
-                current_height: 100000,
-                recipient_ergo_tree: None,
-            };
+                let request = LpRedeemRequest {
+                    variant: DexyVariant::Gold,
+                    lp_to_burn: 1_000_000,
+                    user_address: "user_addr".to_string(),
+                    user_ergo_tree: "user_ergo_tree".to_string(),
+                    user_inputs: vec![create_test_input(
+                        10_000_000_000, // 10 ERG for fees
+                        vec![(LP_TOKEN_ID, 2_000_000)],
+                    )],
+                    current_height: 100000,
+                    recipient_ergo_tree: None,
+                };
 
-            let result = build_lp_redeem_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
-            assert!(result.is_ok(), "Build failed: {:?}", result.err());
+                let result = build_lp_redeem_tx(&request, &ctx, DEXY_TOKEN_ID, LP_TOKEN_ID, INITIAL_LP);
+                assert!(result.is_ok(), "Build failed: {:?}", result.err());
 
-            let build = result.unwrap();
-            let tx = &build.unsigned_tx;
+                let build = result.unwrap();
+                let tx = &build.unsigned_tx;
 
-            assert_eq!(tx.inputs.len(), 3);
-            assert_eq!(tx.inputs[0].box_id, "lp_box_id");
-            assert_eq!(tx.inputs[1].box_id, "redeem_box_id");
-            assert_eq!(tx.data_inputs.len(), 1);
-            assert_eq!(tx.data_inputs[0].box_id, "oracle_box_id");
-            assert!(
-                tx.outputs.len() >= 4,
-                "Expected at least 4 outputs, got {}",
-                tx.outputs.len()
-            );
+                assert_eq!(tx.inputs.len(), 3);
+                assert_eq!(tx.inputs[0].box_id, "lp_box_id");
+                assert_eq!(tx.inputs[1].box_id, "redeem_box_id");
+                assert_eq!(tx.data_inputs.len(), 1);
+                assert_eq!(tx.data_inputs[0].box_id, "oracle_box_id");
+                assert!(
+                    tx.outputs.len() >= 4,
+                    "Expected at least 4 outputs, got {}",
+                    tx.outputs.len()
+                );
 
-            assert_eq!(tx.outputs[0].ergo_tree, "lp_ergo_tree_hex");
-            let lp_erg_out: i64 = tx.outputs[0].value.parse().unwrap();
-            assert!(lp_erg_out < 1_000_000_000_000, "LP ERG should decrease after redeem");
-            let new_lp_reserves: i64 = tx.outputs[0].assets[1].amount.parse().unwrap();
-            assert!(new_lp_reserves > 99_900_000_000, "LP token reserves should increase");
-            assert_eq!(tx.outputs[1].ergo_tree, "redeem_ergo_tree_hex");
-            assert_eq!(tx.outputs[1].value, "1000000");
-            assert_eq!(tx.outputs[1].assets.len(), 1);
-            assert_eq!(tx.outputs[1].assets[0].token_id, LP_REDEEM_NFT_ID);
+                assert_eq!(tx.outputs[0].ergo_tree, "lp_ergo_tree_hex");
+                let lp_erg_out: i64 = tx.outputs[0].value.parse().unwrap();
+                assert!(lp_erg_out < 1_000_000_000_000, "LP ERG should decrease after redeem");
+                let new_lp_reserves: i64 = tx.outputs[0].assets[1].amount.parse().unwrap();
+                assert!(new_lp_reserves > 99_900_000_000, "LP token reserves should increase");
+                assert_eq!(tx.outputs[1].ergo_tree, "redeem_ergo_tree_hex");
+                assert_eq!(tx.outputs[1].value, "1000000");
+                assert_eq!(tx.outputs[1].assets.len(), 1);
+                assert_eq!(tx.outputs[1].assets[0].token_id, LP_REDEEM_NFT_ID);
 
-            let user_output = &tx.outputs[2];
-            assert_eq!(user_output.ergo_tree, "user_ergo_tree");
-            let user_erg: i64 = user_output.value.parse().unwrap();
-            assert!(user_erg > 0, "User should receive ERG");
-            let dexy_asset = user_output
-                .assets
-                .iter()
-                .find(|a| a.token_id == DEXY_TOKEN_ID);
-            assert!(dexy_asset.is_some(), "User should receive Dexy tokens");
-            let dexy_out: i64 = dexy_asset.unwrap().amount.parse().unwrap();
-            assert!(dexy_out > 0, "User should receive positive Dexy tokens");
+                let user_output = &tx.outputs[2];
+                assert_eq!(user_output.ergo_tree, "user_ergo_tree");
+                let user_erg: i64 = user_output.value.parse().unwrap();
+                assert!(user_erg > 0, "User should receive ERG");
+                let dexy_asset = user_output
+                    .assets
+                    .iter()
+                    .find(|a| a.token_id == DEXY_TOKEN_ID);
+                assert!(dexy_asset.is_some(), "User should receive Dexy tokens");
+                let dexy_out: i64 = dexy_asset.unwrap().amount.parse().unwrap();
+                assert!(dexy_out > 0, "User should receive positive Dexy tokens");
 
-            assert!(build.summary.action.starts_with("lp_redeem"));
-            assert!(build.summary.erg_amount > 0);
-            assert!(build.summary.dexy_amount > 0);
-            assert_eq!(build.summary.lp_tokens, 1_000_000);
-        }
+                assert!(build.summary.action.starts_with("lp_redeem"));
+                assert!(build.summary.erg_amount > 0);
+                assert!(build.summary.dexy_amount > 0);
+                assert_eq!(build.summary.lp_tokens, 1_000_000);
+                    });
+}
 
         #[test]
         fn test_lp_redeem_no_oracle_fails() {
@@ -2154,6 +2236,7 @@ mod tests {
                 dexy_amount: 5_000,
                 lp_tokens: 1_000_000,
                 miner_fee_nano: 1_100_000,
+                citadel_fee_nano: 0,
             };
 
             let json = serde_json::to_string(&summary).unwrap();

@@ -7,6 +7,9 @@ use ergo_tx::{
     Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx,
 };
 
+// Citadel app fee: deferred (phase 2). Proxy funding txs are likely safe, but
+// need budget + UI disclosure per lend/borrow/repay path before enabling.
+
 /// Miner fee (0.001 ERG). Matches the Duckpools bot's TX_FEE.
 pub const TX_FEE_NANO: i64 = 1_000_000;
 

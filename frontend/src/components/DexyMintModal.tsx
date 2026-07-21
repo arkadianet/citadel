@@ -5,7 +5,7 @@ import './DexyMintModal.css'
 import type { MintPath } from './DexyPathCard'
 import { formatErg } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
-import { TX_FEE_NANO } from '../constants'
+import { DEV_FEE_NANO, TX_FEE_NANO } from '../constants'
 import { AdvancedOptions, useRecipientAddress } from './AdvancedOptions'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import type { TxStatusResponse } from '../api/types'
@@ -535,21 +535,22 @@ export function DexyMintModal({
                     <span>Transaction Fee</span>
                     <span>{formatErg(Number(preview.tx_fee_nano))} ERG</span>
                   </div>
+                  <div className="detail-row">
+                    <span>Citadel fee</span>
+                    <span>{formatErg(DEV_FEE_NANO)} ERG</span>
+                  </div>
                   <div className="detail-row total">
                     <span>Total</span>
                     <span>{formatErg(Number(preview.total_cost_nano))} ERG</span>
                   </div>
                 </div>
 
-                {selectedPathData && selectedPathData.fee_percent > 0 ? (
-                  <p className="preview-note">
-                    Includes {selectedPathData.fee_percent}% protocol fee
-                  </p>
-                ) : (
-                  <p className="preview-note">
-                    No protocol fee for this path
-                  </p>
-                )}
+                <p className="preview-note">
+                  Includes {formatErg(DEV_FEE_NANO)} ERG Citadel fee
+                  {selectedPathData && selectedPathData.fee_percent > 0
+                    ? ` · ${selectedPathData.fee_percent}% protocol fee`
+                    : ''}
+                </p>
               </div>
 
               {error && <div className="message error">{error}</div>}

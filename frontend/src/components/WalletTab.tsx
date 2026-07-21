@@ -49,6 +49,8 @@ interface WalletTabProps {
   walletAddressCount: number
   walletBalance: WalletBalance | null
   explorerUrl: string
+  /** Optional ERG/USD for nested UTXO fiat display. */
+  ergUsdPrice?: number
   onRequestConnect?: () => void
   /** Optional deep-link into a Wallet sub-tab (e.g. from legacy sidebar routes). */
   initialSubTab?: SubTab
@@ -102,6 +104,7 @@ export function WalletTab({
   walletAddressCount,
   walletBalance,
   explorerUrl,
+  ergUsdPrice,
   onRequestConnect,
   initialSubTab,
   onBalanceRefresh,
@@ -929,6 +932,9 @@ export function WalletTab({
                     <p className="wallet-muted">
                       {sendSummary.inputCount} input{sendSummary.inputCount !== 1 ? 's' : ''} · fee{' '}
                       {formatErg(sendSummary.minerFee)} ERG
+                      {sendSummary.citadelFeeNano > 0 && (
+                        <> · Includes {formatErg(sendSummary.citadelFeeNano)} ERG Citadel fee</>
+                      )}
                     </p>
                   )}
                   <div className="wallet-sign-options">
@@ -1018,6 +1024,7 @@ export function WalletTab({
             walletAddress={walletAddress}
             walletBalance={walletBalance}
             explorerUrl={explorerUrl}
+            ergUsdPrice={ergUsdPrice}
           />
         </div>
       )}
