@@ -118,7 +118,6 @@ async fn fetch_boxes_by_ergo_tree(
     let address = ergo_tree_to_address_local(ergo_tree_hex)?;
 
     let boxes = client
-        .inner()
         .unspent_boxes_by_address(&address, 0, 500)
         .await
         .map_err(|e| ProtocolError::StateUnavailable {

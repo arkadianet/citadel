@@ -20,9 +20,14 @@ pub mod tx_builder;
 
 // Re-exports
 pub use arb_chain::{
-    build_arb_chain, build_swap_chain, ArbChainBuild, ArbChainLeg, SwapChainBuild,
+    build_arb_chain, build_split_chains, build_swap_chain, ArbChainBuild, ArbChainLeg,
+    SplitAllocationSummary, SplitChainBuild, SplitChainSpec, SwapChainBuild,
 };
-pub use calculator::{calculate_output, calculate_price_impact, quote_swap};
+pub use calculator::{
+    calculate_output, calculate_price_impact, calculate_token_to_erg_output,
+    max_erg_extractable, max_token_in_for_erg_out, quote_swap, would_breach_pool_min_erg,
+    MIN_BOX_VALUE as AMM_MIN_BOX_VALUE,
+};
 pub use constants::{erg, fees, lp, pool_indices, pool_templates, swap_template_bytes};
 pub use cross_protocol::{
     compare_acquisition, AcquisitionComparison, AcquisitionOption, SigmaUsdParams,
@@ -50,10 +55,11 @@ pub use router::{
     build_pool_graph, build_pool_graph_with_limit, calculate_all_depth_tiers,
     ensure_direct_pair_edges,
     calculate_depth_tiers, find_best_routes, find_best_routes_by_output, find_paths,
-    make_route_quote, optimize_split, optimize_split_detailed, quote_route, quote_route_reverse,
-    DepthTiers, PoolEdge, PoolGraph, Route, RouteHop, RouteQuote, SplitAllocation,
-    SplitAllocationDetail, SplitRoute, SplitRouteDetail, DEFAULT_MAX_POOLS_PER_PAIR,
-    DEFAULT_MIN_LIQUIDITY_NANO, ERG_TOKEN_ID,
+    make_route_quote, max_executable_swap_to_erg, max_swap_hint_if_needed, optimize_split,
+    optimize_split_detailed, quote_route, quote_route_reverse, DepthTiers, MaxSwapHint, PoolEdge,
+    PoolGraph, Route, RouteHop, RouteQuote, SplitAllocation, SplitAllocationDetail, SplitRoute,
+    SplitRouteDetail, DEFAULT_MAX_POOLS_PER_PAIR, DEFAULT_MIN_LIQUIDITY_NANO, ERG_TOKEN_ID,
+    MINER_FEE_PER_HOP, miner_fees_for_hops,
     calculate_oracle_arb_snapshot, OracleArbSnapshot, OracleArbWindow,
     find_circular_arbs, find_cycles, CircularArb, CircularArbSnapshot,
 };

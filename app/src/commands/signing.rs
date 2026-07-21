@@ -115,7 +115,7 @@ pub async fn get_mint_tx_status(
             tx_id: Some(tx_id),
             error: None,
         }),
-        Some(RequestStatus::AddressReceived(_)) => Ok(MintTxStatusResponse {
+        Some(RequestStatus::AddressReceived { .. }) => Ok(MintTxStatusResponse {
             // AddressReceived is for connect requests, not mint tx
             status: "pending".to_string(),
             tx_id: None,

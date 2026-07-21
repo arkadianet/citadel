@@ -44,6 +44,36 @@ pub struct SwapChainBuild {
     pub final_output: u64,
 }
 
+/// One allocation in a parallel split (disjoint pools across allocations).
+#[derive(Debug, Clone)]
+pub struct SplitChainSpec {
+    /// Pools in hop order for this allocation.
+    pub pools: Vec<(AmmPool, Eip12InputBox)>,
+    /// None = ERG.
+    pub source_token: Option<String>,
+    pub input_amount: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SplitAllocationSummary {
+    pub input_amount: u64,
+    pub output_amount: u64,
+    pub final_token: Option<String>,
+    pub leg_count: usize,
+}
+
+/// Flattened multi-allocation split: each allocation is its own swap-chain,
+/// built sequentially so later allocations spend remaining wallet boxes
+/// (including 0-conf outputs from earlier legs that aren't needed as hop
+/// intermediates).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SplitChainBuild {
+    pub legs: Vec<ArbChainLeg>,
+    pub allocations: Vec<SplitAllocationSummary>,
+    pub total_output: u64,
+    pub final_token: Option<String>,
+}
+
 /// Build a full ERG -> ... -> ERG arb chain over `pools` (in hop order).
 ///
 /// `pools` must be freshly fetched (pool state + current pool box). The
@@ -112,6 +142,108 @@ pub fn build_swap_chain(
         legs,
         final_token,
         final_output,
+    })
+}
+
+/// Build a split across multiple allocations as one flat leg list for
+/// successive sign → ordered submit.
+///
+/// Allocations must use disjoint pool sets (quote math assumes independent
+/// pools; shared pool boxes would double-spend). UTXOs are threaded: each
+/// allocation is built from boxes still available after prior legs.
+pub fn build_split_chains(
+    specs: &[SplitChainSpec],
+    user_utxos: &[Eip12InputBox],
+    user_ergo_tree: &str,
+    current_height: i32,
+    min_total_output: Option<u64>,
+) -> Result<SplitChainBuild, AmmError> {
+    if specs.len() < 2 {
+        return Err(AmmError::TxBuildError(
+            "Split requires at least 2 allocations".to_string(),
+        ));
+    }
+
+    // Disjoint pools across allocations.
+    let mut seen_pools = std::collections::HashSet::new();
+    for (i, spec) in specs.iter().enumerate() {
+        if spec.pools.is_empty() {
+            return Err(AmmError::TxBuildError(format!(
+                "Split allocation {} has empty route",
+                i
+            )));
+        }
+        if spec.input_amount == 0 {
+            return Err(AmmError::TxBuildError(format!(
+                "Split allocation {} has zero input",
+                i
+            )));
+        }
+        for (pool, _) in &spec.pools {
+            if !seen_pools.insert(pool.pool_id.clone()) {
+                return Err(AmmError::TxBuildError(format!(
+                    "Split allocations share pool {} — cannot execute safely \
+                     (quote assumes disjoint liquidity)",
+                    &pool.pool_id[..8.min(pool.pool_id.len())]
+                )));
+            }
+        }
+    }
+
+    let mut available = user_utxos.to_vec();
+    let mut all_legs = Vec::new();
+    let mut allocations = Vec::new();
+    let mut total_output = 0u64;
+    let mut final_token: Option<Option<String>> = None;
+
+    for (i, spec) in specs.iter().enumerate() {
+        let (legs, token, output, next_available) = build_chain_core(
+            &spec.pools,
+            spec.source_token.clone(),
+            spec.input_amount,
+            &available,
+            user_ergo_tree,
+            current_height,
+        )
+        .map_err(|e| AmmError::TxBuildError(format!("Split allocation {}: {}", i, e)))?;
+
+        match &final_token {
+            None => final_token = Some(token.clone()),
+            Some(expected) if expected != &token => {
+                return Err(AmmError::TxBuildError(format!(
+                    "Split allocations end in different tokens ({:?} vs {:?})",
+                    expected, token
+                )));
+            }
+            _ => {}
+        }
+
+        let leg_count = legs.len();
+        all_legs.extend(legs);
+        total_output = total_output.saturating_add(output);
+        allocations.push(SplitAllocationSummary {
+            input_amount: spec.input_amount,
+            output_amount: output,
+            final_token: token,
+            leg_count,
+        });
+        available = next_available;
+    }
+
+    if let Some(min_out) = min_total_output {
+        if total_output < min_out {
+            return Err(AmmError::TxBuildError(format!(
+                "Built split output {} below minimum {} (pools moved since quote)",
+                total_output, min_out
+            )));
+        }
+    }
+
+    Ok(SplitChainBuild {
+        legs: all_legs,
+        allocations,
+        total_output,
+        final_token: final_token.flatten(),
     })
 }
 
@@ -507,5 +639,110 @@ mod tests {
             .iter()
             .skip(1)
             .all(|i| leg1_ids.contains(&&i.box_id)));
+    }
+
+    #[test]
+    fn split_two_disjoint_same_target_token() {
+        // Two pools both trading the same token Y (different NFTs / liquidity).
+        let pool_a = n2t_pool(0x01, 0x33, 100_000_000_000, 1_000_000);
+        let pool_b = n2t_pool(0x11, 0x33, 200_000_000_000, 3_000_000);
+        let box_a = pool_box(&pool_a);
+        let box_b = pool_box(&pool_b);
+        let utxos = vec![user_utxo(10_000_000_000)];
+
+        let specs = vec![
+            SplitChainSpec {
+                pools: vec![(pool_a, box_a)],
+                source_token: None,
+                input_amount: 1_000_000_000,
+            },
+            SplitChainSpec {
+                pools: vec![(pool_b, box_b)],
+                source_token: None,
+                input_amount: 2_000_000_000,
+            },
+        ];
+
+        let result =
+            build_split_chains(&specs, &utxos, USER_TREE, 1_000_000, None).unwrap();
+        assert_eq!(result.legs.len(), 2);
+        assert_eq!(result.allocations.len(), 2);
+        assert_eq!(result.final_token, Some(hex_id(0x33)));
+        assert_eq!(
+            result.total_output,
+            result.allocations[0].output_amount + result.allocations[1].output_amount
+        );
+        // Second allocation must not spend boxes the first allocation already used.
+        let first_consumed: Vec<&String> = result.legs[0]
+            .unsigned_tx
+            .inputs
+            .iter()
+            .skip(1)
+            .map(|i| &i.box_id)
+            .collect();
+        assert!(!result.legs[1]
+            .unsigned_tx
+            .inputs
+            .iter()
+            .skip(1)
+            .any(|i| first_consumed.contains(&&i.box_id)));
+    }
+
+    #[test]
+    fn split_rejects_shared_pool() {
+        let pool_a = n2t_pool(0x01, 0x33, 100_000_000_000, 1_000_000);
+        let box_a = pool_box(&pool_a);
+        let box_a2 = pool_box(&pool_a);
+        let utxos = vec![user_utxo(10_000_000_000)];
+
+        let specs = vec![
+            SplitChainSpec {
+                pools: vec![(pool_a.clone(), box_a)],
+                source_token: None,
+                input_amount: 1_000_000_000,
+            },
+            SplitChainSpec {
+                pools: vec![(pool_a, box_a2)],
+                source_token: None,
+                input_amount: 1_000_000_000,
+            },
+        ];
+
+        let err = build_split_chains(&specs, &utxos, USER_TREE, 1_000_000, None).unwrap_err();
+        assert!(
+            err.to_string().contains("share pool"),
+            "unexpected error: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn split_rejects_below_min_output() {
+        let pool_a = n2t_pool(0x01, 0x33, 100_000_000_000, 1_000_000);
+        let pool_b = n2t_pool(0x11, 0x33, 200_000_000_000, 3_000_000);
+        let specs = vec![
+            SplitChainSpec {
+                pools: vec![(pool_a.clone(), pool_box(&pool_a))],
+                source_token: None,
+                input_amount: 1_000_000_000,
+            },
+            SplitChainSpec {
+                pools: vec![(pool_b.clone(), pool_box(&pool_b))],
+                source_token: None,
+                input_amount: 1_000_000_000,
+            },
+        ];
+        let utxos = vec![user_utxo(10_000_000_000)];
+        let built =
+            build_split_chains(&specs, &utxos, USER_TREE, 1_000_000, None).unwrap();
+        let err = build_split_chains(
+            &specs,
+            &utxos,
+            USER_TREE,
+            1_000_000,
+            Some(built.total_output + 1),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("below minimum"));
     }
 }

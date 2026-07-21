@@ -20,7 +20,6 @@ pub async fn fetch_mewlock_state(
     // so we must use the canonical contract address.
     let address = MEWLOCK_ADDRESS.to_string();
     let boxes = client
-        .inner()
         .unspent_boxes_by_address(&address, 0, 500)
         .await
         .map_err(|e| ProtocolError::StateUnavailable {

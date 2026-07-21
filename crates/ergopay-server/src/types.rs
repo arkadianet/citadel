@@ -37,8 +37,13 @@ pub enum RequestType {
 pub enum RequestStatus {
     /// Waiting for wallet to respond
     Pending,
-    /// Address received (for connect requests)
-    AddressReceived(String),
+    /// Address(es) received (for connect requests).
+    /// `primary` is the preferred change/display address; `addresses` is the
+    /// full set from the wallet (used + unused), always including `primary`.
+    AddressReceived {
+        primary: String,
+        addresses: Vec<String>,
+    },
     /// Transaction submitted by wallet
     TxSubmitted { tx_id: String },
     /// Transaction signed and returned by wallet (sign-only requests);

@@ -107,12 +107,23 @@ pub async fn discover_nodes(
     if let Some(client) = state.node_client().await {
         if let Ok(peers) = client.get_connected_peers().await {
             for peer in peers {
-                // Peer address is like "/1.2.3.4:9030" — extract IP, replace port with 9053
+                // Prefer an advertised REST URL when present.
+                if let Some(rest) = peer.rest_api_url {
+                    let rest = rest.trim_end_matches('/').to_string();
+                    if seen.insert(rest.clone()) {
+                        urls.push(rest);
+                    }
+                    continue;
+                }
+                // Peer address is "/1.2.3.4:9030" (Scala) or "1.2.3.4:9030" (Rust).
+                // P2P port ≠ REST — try common API ports including ergo-rust-node's 9063.
                 let addr = peer.address.trim_start_matches('/');
                 if let Some(ip) = addr.split(':').next() {
-                    let candidate = format!("http://{}:9053", ip);
-                    if seen.insert(candidate.clone()) {
-                        urls.push(candidate);
+                    for port in [9053u16, 9063] {
+                        let candidate = format!("http://{}:{}", ip, port);
+                        if seen.insert(candidate.clone()) {
+                            urls.push(candidate);
+                        }
                     }
                 }
             }

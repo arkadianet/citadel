@@ -29,7 +29,8 @@ pub async fn get_wallet_status(state: State<'_, AppState>) -> Result<WalletStatu
 
     Ok(WalletStatusResponse {
         connected: wallet.is_some(),
-        address: wallet.map(|w| w.address),
+        address: wallet.as_ref().map(|w| w.address.clone()),
+        addresses: wallet.map(|w| w.addresses).unwrap_or_default(),
     })
 }
 
@@ -44,30 +45,37 @@ pub async fn get_connection_status(
         Some(RequestStatus::Pending) => Ok(ConnectionStatusResponse {
             status: wallet_status::PENDING.to_string(),
             address: None,
+            addresses: Vec::new(),
         }),
-        Some(RequestStatus::AddressReceived(address)) => {
-            // Update the wallet state
+        Some(RequestStatus::AddressReceived {
+            primary,
+            addresses,
+        }) => {
             state
-                .set_wallet(address.clone())
+                .set_wallet_addresses(primary.clone(), addresses.clone())
                 .await
                 .str_err()?;
 
             Ok(ConnectionStatusResponse {
                 status: wallet_status::CONNECTED.to_string(),
-                address: Some(address),
+                address: Some(primary),
+                addresses,
             })
         }
         Some(RequestStatus::Expired) => Ok(ConnectionStatusResponse {
             status: wallet_status::EXPIRED.to_string(),
             address: None,
+            addresses: Vec::new(),
         }),
         Some(RequestStatus::Failed(msg)) => Ok(ConnectionStatusResponse {
             status: format!("{}: {}", wallet_status::FAILED, msg),
             address: None,
+            addresses: Vec::new(),
         }),
         _ => Ok(ConnectionStatusResponse {
             status: "unknown".to_string(),
             address: None,
+            addresses: Vec::new(),
         }),
     }
 }
@@ -95,7 +103,7 @@ pub async fn get_wallet_balance(
     }
 
     let (confirmed_erg, confirmed_tokens) = client
-        .get_address_balances(&wallet.address)
+        .get_addresses_balances(&wallet.addresses)
         .await
         .str_err()?;
 
@@ -103,7 +111,7 @@ pub async fn get_wallet_balance(
     // UI to show (and immediately re-spend) 0-conf swap proceeds. Falls back to
     // confirmed-only inside get_effective_utxos if the mempool query fails.
     let effective_utxos = client
-        .get_effective_utxos(&wallet.address)
+        .get_effective_utxos_multi(&wallet.addresses)
         .await
         .str_err()?;
     let (erg_nano, tokens) = sum_eip12_utxos(&effective_utxos);
@@ -156,7 +164,8 @@ pub async fn get_wallet_balance(
     }
 
     Ok(WalletBalanceResponse {
-        address: wallet.address,
+        address: wallet.address.clone(),
+        addresses: wallet.addresses.clone(),
         erg_nano,
         erg_formatted: format!("{:.4}", erg_nano as f64 / 1e9),
         sigusd_amount,
@@ -203,12 +212,34 @@ pub async fn get_recent_transactions(
         return Err("Transaction history requires extraIndex enabled on the node".to_string());
     }
 
-    let address = &wallet.address;
+    let address_set: std::collections::HashSet<&str> =
+        wallet.addresses.iter().map(|s| s.as_str()).collect();
 
-    let raw_txs = client
-        .get_recent_transactions(address, limit)
-        .await
-        .str_err()?;
+    // Fetch recent txs per address and merge (dedupe by tx id).
+    let mut raw_by_id: std::collections::HashMap<String, serde_json::Value> =
+        std::collections::HashMap::new();
+    for addr in &wallet.addresses {
+        let batch = client
+            .get_recent_transactions(addr, limit)
+            .await
+            .str_err()?;
+        for tx in batch {
+            let id = tx["id"].as_str().unwrap_or_default().to_string();
+            if id.is_empty() {
+                continue;
+            }
+            raw_by_id.entry(id).or_insert(tx);
+        }
+    }
+    let mut raw_txs: Vec<serde_json::Value> = raw_by_id.into_values().collect();
+    raw_txs.sort_by(|a, b| {
+        let ta = a["timestamp"].as_u64().unwrap_or(0);
+        let tb = b["timestamp"].as_u64().unwrap_or(0);
+        tb.cmp(&ta)
+    });
+    if raw_txs.len() > limit as usize {
+        raw_txs.truncate(limit as usize);
+    }
 
     let sigusd_token_id = sigmausd::constants::mainnet::SIGUSD_TOKEN_ID;
     let sigrsv_token_id = sigmausd::constants::mainnet::SIGRSV_TOKEN_ID;
@@ -233,7 +264,8 @@ pub async fn get_recent_transactions(
 
         if let Some(inputs) = tx["inputs"].as_array() {
             for input in inputs {
-                if input["address"].as_str() == Some(address) {
+                let addr = input["address"].as_str().unwrap_or("");
+                if address_set.contains(addr) {
                     erg_in += input["value"].as_i64().unwrap_or(0);
                     if let Some(assets) = input["assets"].as_array() {
                         for asset in assets {
@@ -248,7 +280,8 @@ pub async fn get_recent_transactions(
 
         if let Some(outputs) = tx["outputs"].as_array() {
             for output in outputs {
-                if output["address"].as_str() == Some(address) {
+                let addr = output["address"].as_str().unwrap_or("");
+                if address_set.contains(addr) {
                     erg_out += output["value"].as_i64().unwrap_or(0);
                     if let Some(assets) = output["assets"].as_array() {
                         for asset in assets {
@@ -307,6 +340,97 @@ pub async fn get_recent_transactions(
     Ok(RecentTxsResponse { transactions })
 }
 
+/// Build a simple ERG and/or token send transaction for ErgoPay/Nautilus signing.
+///
+/// Change always returns to `change_address` (wallet primary). Inputs come from
+/// all connected addresses via the supplied UTXOs (typically `get_user_utxos`).
+///
+/// `erg_nano` and `token_amount` are strings to avoid JS precision loss.
+#[tauri::command]
+pub async fn build_send_tx(
+    _state: State<'_, AppState>,
+    recipient_address: String,
+    change_address: String,
+    erg_nano: String,
+    token_id: Option<String>,
+    token_amount: Option<String>,
+    user_utxos: Vec<serde_json::Value>,
+    current_height: i32,
+) -> Result<serde_json::Value, String> {
+    use citadel_core::constants::{MIN_BOX_VALUE_NANO, TX_FEE_NANO};
+
+    let send_erg: i64 = erg_nano
+        .parse()
+        .map_err(|e| format!("Invalid erg_nano '{}': {}", erg_nano, e))?;
+
+    let send_token = match (&token_id, &token_amount) {
+        (Some(tid), Some(amt)) => {
+            let amount: u64 = amt
+                .parse()
+                .map_err(|e| format!("Invalid token_amount '{}': {}", amt, e))?;
+            Some((tid.as_str(), amount))
+        }
+        (None, None) => None,
+        _ => {
+            return Err(
+                "token_id and token_amount must both be set or both omitted".to_string(),
+            )
+        }
+    };
+
+    let recipient_tree = ergo_tx::address_to_ergo_tree(&recipient_address).str_err()?;
+    let change_tree = ergo_tx::address_to_ergo_tree(&change_address).str_err()?;
+
+    let all_inputs = super::parse_eip12_utxos(user_utxos)?;
+
+    // Select inputs: leave headroom for fee + possible change min-box
+    let selected = match send_token {
+        Some((tid, amount)) => {
+            let with_change = (send_erg + TX_FEE_NANO + MIN_BOX_VALUE_NANO) as u64;
+            match ergo_tx::select_token_boxes(&all_inputs, tid, amount, with_change) {
+                Ok(sel) => sel,
+                Err(_) => {
+                    let exact = (send_erg + TX_FEE_NANO) as u64;
+                    ergo_tx::select_token_boxes(&all_inputs, tid, amount, exact).str_err()?
+                }
+            }
+        }
+        None => {
+            let with_change = (send_erg + TX_FEE_NANO + MIN_BOX_VALUE_NANO) as u64;
+            match ergo_tx::select_erg_boxes(&all_inputs, with_change) {
+                Ok(sel) => sel,
+                Err(_) => {
+                    let exact = (send_erg + TX_FEE_NANO) as u64;
+                    ergo_tx::select_erg_boxes(&all_inputs, exact).str_err()?
+                }
+            }
+        }
+    };
+
+    let result = ergo_tx::build_send_tx(
+        &selected.boxes,
+        &recipient_tree,
+        &change_tree,
+        send_erg,
+        send_token,
+        current_height,
+    )
+    .str_err()?;
+
+    let unsigned_tx = serde_json::to_value(&result.unsigned_tx)
+        .map_err(|e| format!("Failed to serialize tx: {}", e))?;
+
+    Ok(serde_json::json!({
+        "unsignedTx": unsigned_tx,
+        "recipientErg": result.summary.recipient_erg,
+        "tokenId": result.summary.token_id,
+        "tokenAmount": result.summary.token_amount.map(|a| a.to_string()),
+        "changeErg": result.summary.change_erg,
+        "minerFee": result.summary.miner_fee,
+        "inputCount": result.summary.input_count,
+    }))
+}
+
 /// Returns mempool-aware UTXOs (confirmed minus spent-in-mempool, plus unconfirmed change).
 #[tauri::command]
 pub async fn get_user_utxos(state: State<'_, AppState>) -> Result<Vec<serde_json::Value>, String> {
@@ -318,7 +442,7 @@ pub async fn get_user_utxos(state: State<'_, AppState>) -> Result<Vec<serde_json
     let client = state.require_node_client().await?;
 
     let utxos = client
-        .get_effective_utxos(&wallet.address)
+        .get_effective_utxos_multi(&wallet.addresses)
         .await
         .str_err()?;
 

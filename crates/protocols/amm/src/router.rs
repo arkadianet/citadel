@@ -9,12 +9,72 @@ use serde::{Deserialize, Serialize};
 
 use crate::calculator::{
     apply_slippage, calculate_input, calculate_output, calculate_price_impact,
+    calculate_token_to_erg_output, max_token_in_for_erg_out, would_breach_pool_min_erg,
 };
 use crate::state::{AmmPool, PoolType};
 
 pub const ERG_TOKEN_ID: &str = "ERG";
 pub const DEFAULT_MIN_LIQUIDITY_NANO: u64 = 10_000_000_000; // 10 ERG
 pub const DEFAULT_MAX_POOLS_PER_PAIR: usize = 3;
+
+/// Network miner fee charged once per hop (each hop is its own tx).
+pub const MINER_FEE_PER_HOP: u64 = citadel_core::constants::TX_FEE_NANO as u64;
+
+pub fn miner_fees_for_hops(hops: usize) -> u64 {
+    MINER_FEE_PER_HOP.saturating_mul(hops as u64)
+}
+
+fn finish_route(
+    hops: Vec<RouteHop>,
+    total_input: u64,
+    total_output: u64,
+    total_fees: u64,
+    total_price_impact: f64,
+    effective_rate: f64,
+) -> Route {
+    let total_miner_fees = miner_fees_for_hops(hops.len());
+    let ends_in_erg = hops
+        .last()
+        .map(|h| h.token_out == ERG_TOKEN_ID)
+        .unwrap_or(false);
+    let net_output = if ends_in_erg {
+        total_output.saturating_sub(total_miner_fees)
+    } else {
+        total_output
+    };
+    Route {
+        hops,
+        total_input,
+        total_output,
+        total_price_impact,
+        total_fees,
+        total_miner_fees,
+        net_output,
+        effective_rate,
+    }
+}
+
+/// Score used when ranking routes / optimizing splits.
+fn route_score(route: &Route) -> u64 {
+    route.net_output
+}
+
+fn path_ends_in_erg(path: &[PoolEdge]) -> bool {
+    path.last()
+        .map(|e| e.token_out == ERG_TOKEN_ID)
+        .unwrap_or(false)
+}
+
+/// Gross CFMM output and fee-aware score for an allocation on `path`.
+fn quote_allocation(path: &[PoolEdge], input: u64) -> (u64, u64, u64) {
+    if input == 0 {
+        return (0, 0, 0);
+    }
+    match quote_route(path, input) {
+        Some(r) => (r.total_output, r.total_miner_fees, route_score(&r)),
+        None => (0, 0, 0),
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct PoolEdge {
@@ -58,7 +118,13 @@ pub struct Route {
     pub total_input: u64,
     pub total_output: u64,
     pub total_price_impact: f64,
+    /// AMM pool fees (swap fee), in input-token units along the path.
     pub total_fees: u64,
+    /// Miner fees for executing this route (hops × network tx fee).
+    pub total_miner_fees: u64,
+    /// Fee-aware score: `total_output - total_miner_fees` when the route ends
+    /// in ERG (miner fees are paid in ERG). Otherwise equals `total_output`.
+    pub net_output: u64,
     pub effective_rate: f64,
 }
 
@@ -74,14 +140,19 @@ pub struct SplitAllocation {
     pub route_index: usize,
     pub fraction: f64,
     pub input_amount: u64,
+    /// Gross CFMM output for this allocation (before miner fees).
     pub output_amount: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SplitRoute {
     pub allocations: Vec<SplitAllocation>,
+    /// Sum of gross CFMM outputs.
     pub total_output: u64,
     pub total_input: u64,
+    pub total_miner_fees: u64,
+    /// Fee-aware total (gross − miner fees when target is ERG).
+    pub net_output: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,8 +168,20 @@ pub struct SplitRouteDetail {
     pub allocations: Vec<SplitAllocationDetail>,
     pub total_output: u64,
     pub total_input: u64,
-    /// How much more output the split gives vs best single route
+    pub total_miner_fees: u64,
+    pub net_output: u64,
+    /// Improvement of split net_output vs best single-route net_output.
     pub improvement_pct: f64,
+}
+
+/// Largest executable input when `requested_input` cannot be quoted (e.g. would
+/// drain an N2T pool below min box ERG). Only set for routes ending in ERG.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaxSwapHint {
+    pub max_input: u64,
+    pub max_output: u64,
+    /// Machine-readable cause (`pool_min_erg`).
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -360,13 +443,23 @@ pub fn quote_route(path: &[PoolEdge], input_amount: u64) -> Option<Route> {
     let mut total_fees: u64 = 0;
 
     for edge in path {
-        let output = calculate_output(
-            edge.reserves_in,
-            edge.reserves_out,
-            current_amount,
-            edge.pool.fee_num,
-            edge.pool.fee_denom,
-        );
+        let output = if edge.token_out == ERG_TOKEN_ID {
+            calculate_token_to_erg_output(
+                edge.reserves_in,
+                edge.reserves_out,
+                current_amount,
+                edge.pool.fee_num,
+                edge.pool.fee_denom,
+            )
+        } else {
+            calculate_output(
+                edge.reserves_in,
+                edge.reserves_out,
+                current_amount,
+                edge.pool.fee_num,
+                edge.pool.fee_denom,
+            )
+        };
 
         if output == 0 {
             return None;
@@ -425,14 +518,14 @@ pub fn quote_route(path: &[PoolEdge], input_amount: u64) -> Option<Route> {
 
     let effective_rate = actual_rate;
 
-    Some(Route {
+    Some(finish_route(
         hops,
-        total_input: input_amount,
+        input_amount,
         total_output,
-        total_price_impact,
         total_fees,
+        total_price_impact,
         effective_rate,
-    })
+    ))
 }
 
 pub fn find_best_routes(
@@ -450,7 +543,8 @@ pub fn find_best_routes(
         .filter_map(|path| quote_route(path, input_amount))
         .collect();
 
-    routes.sort_by(|a, b| b.total_output.cmp(&a.total_output));
+    // Prefer fee-aware net when ending in ERG; otherwise gross (== net).
+    routes.sort_by(|a, b| route_score(b).cmp(&route_score(a)));
     routes.truncate(max_routes);
     routes
 }
@@ -475,6 +569,9 @@ pub fn quote_route_reverse(path: &[PoolEdge], desired_output: u64) -> Option<Rou
     let mut needed = desired_output;
 
     for edge in path.iter().rev() {
+        if edge.token_out == ERG_TOKEN_ID && would_breach_pool_min_erg(edge.reserves_out, needed) {
+            return None;
+        }
         let input_needed = calculate_input(
             edge.reserves_in,
             edge.reserves_out,
@@ -560,14 +657,14 @@ pub fn quote_route_reverse(path: &[PoolEdge], desired_output: u64) -> Option<Rou
         0.0
     };
 
-    Some(Route {
+    Some(finish_route(
         hops,
         total_input,
         total_output,
-        total_price_impact,
         total_fees,
-        effective_rate: actual_rate,
-    })
+        total_price_impact,
+        actual_rate,
+    ))
 }
 
 pub fn find_best_routes_by_output(
@@ -590,7 +687,7 @@ pub fn find_best_routes_by_output(
     routes
 }
 
-/// Grid-search optimal split across up to 3 routes to maximize total output.
+/// Grid-search optimal split across up to 3 routes to maximize fee-aware net.
 pub fn optimize_split(
     paths: &[Vec<PoolEdge>],
     total_input: u64,
@@ -599,11 +696,10 @@ pub fn optimize_split(
     let max_splits = max_splits.min(paths.len()).min(3);
 
     if max_splits <= 1 || paths.is_empty() {
-        let output = paths
+        let (output, fees, net) = paths
             .first()
-            .and_then(|p| quote_route(p, total_input))
-            .map(|r| r.total_output)
-            .unwrap_or(0);
+            .map(|p| quote_allocation(p, total_input))
+            .unwrap_or((0, 0, 0));
         return SplitRoute {
             allocations: vec![SplitAllocation {
                 route_index: 0,
@@ -613,6 +709,8 @@ pub fn optimize_split(
             }],
             total_output: output,
             total_input,
+            total_miner_fees: fees,
+            net_output: net,
         };
     }
 
@@ -624,52 +722,55 @@ pub fn optimize_split(
     optimize_split_multi(paths, total_input, max_splits)
 }
 
+fn finalize_split(
+    paths: &[Vec<PoolEdge>],
+    total_input: u64,
+    allocations: Vec<SplitAllocation>,
+) -> SplitRoute {
+    let total_output: u64 = allocations.iter().map(|a| a.output_amount).sum();
+    let ends_in_erg = paths.first().map(|p| path_ends_in_erg(p)).unwrap_or(false);
+    let total_miner_fees: u64 = allocations
+        .iter()
+        .filter(|a| a.input_amount > 0)
+        .map(|a| miner_fees_for_hops(paths[a.route_index].len()))
+        .sum();
+    let net_output = if ends_in_erg {
+        total_output.saturating_sub(total_miner_fees)
+    } else {
+        total_output
+    };
+
+    SplitRoute {
+        allocations,
+        total_output,
+        total_input,
+        total_miner_fees,
+        net_output,
+    }
+}
+
 fn optimize_split_two(paths: &[Vec<PoolEdge>], total_input: u64) -> SplitRoute {
-    let mut best_total: u64 = 0;
+    let mut best_score: u64 = 0;
     let mut best_permille: u64 = 1000; // permille for path[0]
 
     for permille in 0..=1000u64 {
         let input_a = total_input * permille / 1000;
         let input_b = total_input - input_a;
 
-        let out_a = if input_a > 0 {
-            quote_route(&paths[0], input_a)
-                .map(|r| r.total_output)
-                .unwrap_or(0)
-        } else {
-            0
-        };
-        let out_b = if input_b > 0 {
-            quote_route(&paths[1], input_b)
-                .map(|r| r.total_output)
-                .unwrap_or(0)
-        } else {
-            0
-        };
+        let (_, _, score_a) = quote_allocation(&paths[0], input_a);
+        let (_, _, score_b) = quote_allocation(&paths[1], input_b);
+        let score = score_a.saturating_add(score_b);
 
-        let total = out_a + out_b;
-        if total > best_total {
-            best_total = total;
+        if score > best_score {
+            best_score = score;
             best_permille = permille;
         }
     }
 
     let input_a = total_input * best_permille / 1000;
     let input_b = total_input - input_a;
-    let out_a = if input_a > 0 {
-        quote_route(&paths[0], input_a)
-            .map(|r| r.total_output)
-            .unwrap_or(0)
-    } else {
-        0
-    };
-    let out_b = if input_b > 0 {
-        quote_route(&paths[1], input_b)
-            .map(|r| r.total_output)
-            .unwrap_or(0)
-    } else {
-        0
-    };
+    let (out_a, _, _) = quote_allocation(&paths[0], input_a);
+    let (out_b, _, _) = quote_allocation(&paths[1], input_b);
 
     let mut allocations = Vec::new();
     if input_a > 0 {
@@ -689,11 +790,7 @@ fn optimize_split_two(paths: &[Vec<PoolEdge>], total_input: u64) -> SplitRoute {
         });
     }
 
-    SplitRoute {
-        allocations,
-        total_output: best_total,
-        total_input,
-    }
+    finalize_split(paths, total_input, allocations)
 }
 
 fn optimize_split_multi(
@@ -708,10 +805,12 @@ fn optimize_split_multi(
 
     for _ in 0..5 {
         for i in 0..n {
-            let mut best_output: u64 = 0;
+            let mut best_score: u64 = 0;
             let mut best_frac: u64 = fractions[i];
 
-            let other_sum: u64 = fractions.iter().enumerate()
+            let other_sum: u64 = fractions
+                .iter()
+                .enumerate()
                 .filter(|&(j, _)| j != i)
                 .map(|(_, f)| f)
                 .sum();
@@ -739,21 +838,15 @@ fn optimize_split_multi(
                     }
                 }
 
-                let total: u64 = (0..n)
+                let score: u64 = (0..n)
                     .map(|k| {
                         let inp = total_input * test_fracs[k] / 1000;
-                        if inp > 0 {
-                            quote_route(&paths[k], inp)
-                                .map(|r| r.total_output)
-                                .unwrap_or(0)
-                        } else {
-                            0
-                        }
+                        quote_allocation(&paths[k], inp).2
                     })
                     .sum();
 
-                if total > best_output {
-                    best_output = total;
+                if score > best_score {
+                    best_score = score;
                     best_frac = f;
                 }
             }
@@ -779,13 +872,7 @@ fn optimize_split_multi(
         .filter(|&k| fractions[k] > 0)
         .map(|k| {
             let input = total_input * fractions[k] / 1000;
-            let output = if input > 0 {
-                quote_route(&paths[k], input)
-                    .map(|r| r.total_output)
-                    .unwrap_or(0)
-            } else {
-                0
-            };
+            let (output, _, _) = quote_allocation(&paths[k], input);
             SplitAllocation {
                 route_index: k,
                 fraction: fractions[k] as f64 / 1000.0,
@@ -795,16 +882,10 @@ fn optimize_split_multi(
         })
         .collect();
 
-    let total_output: u64 = allocations.iter().map(|a| a.output_amount).sum();
-
-    SplitRoute {
-        allocations,
-        total_output,
-        total_input,
-    }
+    finalize_split(paths, total_input, allocations)
 }
 
-/// Optimal split with full route details. Only returned if > 0.5% better than best single route.
+/// Optimal split with full route details. Only returned if > 0.5% better on net.
 pub fn optimize_split_detailed(
     graph: &PoolGraph,
     source_token: &str,
@@ -819,12 +900,12 @@ pub fn optimize_split_detailed(
         return None;
     }
 
-    let unfiltered_best: u64 = all_paths
+    let unfiltered_best_net: u64 = all_paths
         .iter()
-        .filter_map(|p| quote_route(p, total_input).map(|r| r.total_output))
+        .filter_map(|p| quote_route(p, total_input).map(|r| route_score(&r)))
         .max()
         .unwrap_or(0);
-    if unfiltered_best == 0 {
+    if unfiltered_best_net == 0 {
         return None;
     }
 
@@ -850,7 +931,7 @@ pub fn optimize_split_detailed(
     let mut quoted: Vec<(usize, u64)> = paths
         .iter()
         .enumerate()
-        .filter_map(|(i, p)| quote_route(p, total_input).map(|r| (i, r.total_output)))
+        .filter_map(|(i, p)| quote_route(p, total_input).map(|r| (i, route_score(&r))))
         .collect();
     quoted.sort_by(|a, b| b.1.cmp(&a.1));
 
@@ -868,8 +949,8 @@ pub fn optimize_split_detailed(
 
     let split = optimize_split(&top_paths, total_input, max_splits);
 
-    let improvement = (split.total_output as f64 - unfiltered_best as f64)
-        / unfiltered_best as f64
+    let improvement = (split.net_output as f64 - unfiltered_best_net as f64)
+        / unfiltered_best_net as f64
         * 100.0;
 
     if improvement < 0.5 {
@@ -898,12 +979,130 @@ pub fn optimize_split_detailed(
     Some(SplitRouteDetail {
         total_output: split.total_output,
         total_input: split.total_input,
+        total_miner_fees: split.total_miner_fees,
+        net_output: split.net_output,
         improvement_pct: improvement,
         allocations,
     })
 }
 
 const IMPACT_TIERS: [f64; 5] = [0.005, 0.01, 0.02, 0.05, 0.10];
+
+/// Max executable input for `source → ERG` across all paths (best = largest input).
+pub fn max_executable_swap_to_erg(
+    graph: &PoolGraph,
+    source_token: &str,
+    max_hops: usize,
+) -> Option<MaxSwapHint> {
+    let paths = find_paths(graph, source_token, ERG_TOKEN_ID, max_hops);
+    let mut best: Option<(u64, u64)> = None;
+    for path in &paths {
+        if let Some((inp, out)) = max_executable_input_on_path(path) {
+            if best.map(|(i, _)| inp > i).unwrap_or(true) {
+                best = Some((inp, out));
+            }
+        }
+    }
+    let (max_input, max_output) = best?;
+    if max_input == 0 {
+        return None;
+    }
+    Some(MaxSwapHint {
+        max_input,
+        max_output,
+        reason: "pool_min_erg".to_string(),
+    })
+}
+
+/// When `requested_input` cannot be quoted to ERG but a smaller size can,
+/// return that max executable size (pool min-ERG ceiling).
+pub fn max_swap_hint_if_needed(
+    graph: &PoolGraph,
+    source_token: &str,
+    target_token: &str,
+    requested_input: u64,
+    max_hops: usize,
+) -> Option<MaxSwapHint> {
+    if target_token != ERG_TOKEN_ID || requested_input == 0 {
+        return None;
+    }
+    let has_quote = find_paths(graph, source_token, target_token, max_hops)
+        .iter()
+        .any(|p| quote_route(p, requested_input).is_some());
+    if has_quote {
+        return None;
+    }
+    let hint = max_executable_swap_to_erg(graph, source_token, max_hops)?;
+    if hint.max_input == 0 || hint.max_input >= requested_input {
+        return None;
+    }
+    Some(hint)
+}
+
+fn max_executable_input_on_path(path: &[PoolEdge]) -> Option<(u64, u64)> {
+    if path.is_empty() {
+        return None;
+    }
+    if quote_route(path, 1).is_none() {
+        return None;
+    }
+
+    // Direct token → ERG: closed-form max input, then walk down if CFMM
+    // rounding would still breach the dust ceiling.
+    if path.len() == 1 && path[0].token_out == ERG_TOKEN_ID {
+        let e = &path[0];
+        let mut hi = max_token_in_for_erg_out(
+            e.reserves_in,
+            e.reserves_out,
+            e.pool.fee_num,
+            e.pool.fee_denom,
+        )?;
+        if quote_route(path, 1).is_none() {
+            return None;
+        }
+        let mut lo = 1u64;
+        while lo < hi {
+            let mid = lo + (hi - lo + 1) / 2;
+            if quote_route(path, mid).is_some() {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        let route = quote_route(path, lo)?;
+        return Some((lo, route.total_output));
+    }
+
+    // Multi-hop: binary search the largest input that still quotes.
+    let mut hi = path[0].reserves_in.saturating_mul(100).max(1_000);
+    for _ in 0..32 {
+        if quote_route(path, hi).is_none() {
+            break;
+        }
+        let next = hi.saturating_mul(2);
+        if next == hi {
+            let route = quote_route(path, hi)?;
+            return Some((hi, route.total_output));
+        }
+        hi = next;
+    }
+    if quote_route(path, hi).is_some() {
+        let route = quote_route(path, hi)?;
+        return Some((hi, route.total_output));
+    }
+
+    let mut lo = 1u64;
+    while lo < hi {
+        let mid = lo + (hi - lo + 1) / 2;
+        if quote_route(path, mid).is_some() {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    let route = quote_route(path, lo)?;
+    Some((lo, route.total_output))
+}
 
 /// Max input per impact tier. Constant product: `max_input = reserves_in * impact / (1 - impact)`
 pub fn calculate_depth_tiers(edge: &PoolEdge) -> DepthTiers {
@@ -1171,7 +1370,7 @@ pub fn find_circular_arbs(
     let start = std::time::Instant::now();
     let cycles = find_cycles(graph, max_hops);
 
-    let tx_fee_per_hop: u64 = 1_000_000; // 0.001 ERG
+    let tx_fee_per_hop: u64 = MINER_FEE_PER_HOP;
 
     let mut windows: Vec<CircularArb> = Vec::new();
 
@@ -1846,6 +2045,101 @@ mod tests {
     }
 
     #[test]
+    fn test_quote_erg_out_nets_miner_fees() {
+        let pool = make_n2t_pool("p1", 100_000_000_000, "tok", "Token", 1_000_000, 997);
+        let graph = build_pool_graph(&[pool], 0);
+        let paths = find_paths(&graph, "tok", ERG_TOKEN_ID, 1);
+        let route = quote_route(&paths[0], 10_000).unwrap();
+        assert_eq!(route.total_miner_fees, MINER_FEE_PER_HOP);
+        assert_eq!(
+            route.net_output,
+            route.total_output.saturating_sub(MINER_FEE_PER_HOP)
+        );
+    }
+
+    #[test]
+    fn test_quote_token_out_net_equals_gross() {
+        let pool = make_n2t_pool("p1", 100_000_000_000, "tok", "Token", 1_000_000, 997);
+        let graph = build_pool_graph(&[pool], 0);
+        let paths = find_paths(&graph, ERG_TOKEN_ID, "tok", 1);
+        let route = quote_route(&paths[0], 1_000_000_000).unwrap();
+        assert_eq!(route.total_miner_fees, MINER_FEE_PER_HOP);
+        assert_eq!(route.net_output, route.total_output);
+    }
+
+    #[test]
+    fn test_erg_out_ranking_prefers_fewer_hops_when_gross_close() {
+        // Direct pool slightly worse gross than a 3-hop path, but far better after fees.
+        // Direct: large output. Multi-hop: slightly higher gross, 3× miner fees.
+        let direct = make_n2t_pool("direct", 100_000_000_000, "comet", "COMET", 50_000_000, 997);
+        // Build a long path comet -> mid -> mid2 -> ERG that needs intermediate tokens.
+        let mid = make_t2t_pool(
+            "t2t1", "comet", "COMET", 50_000_000, "mid", "MID", 50_000_000, 997,
+        );
+        let mid2 = make_t2t_pool(
+            "t2t2", "mid", "MID", 50_000_000, "mid2", "MID2", 50_000_000, 997,
+        );
+        let to_erg = make_n2t_pool("to_erg", 200_000_000_000, "mid2", "MID2", 100_000_000, 997);
+        let graph = build_pool_graph(&[direct, mid, mid2, to_erg], 0);
+
+        let input = 1_000_000u64; // 1M COMET (0 decimals in test helpers)
+        let routes = find_best_routes(&graph, "comet", ERG_TOKEN_ID, input, 4, 10);
+        assert!(!routes.is_empty());
+        // Best by net should be the 1-hop when multi-hop fees dominate small gains.
+        let best = &routes[0];
+        assert_eq!(best.hops.len(), 1, "fee-aware ranking should prefer 1-hop");
+        assert!(best.net_output <= best.total_output);
+    }
+
+    #[test]
+    fn test_split_detailed_uses_net_improvement() {
+        // Two equal ERG-out pools: split improves gross/net similarly (1 hop each).
+        let p1 = make_n2t_pool("p1", 50_000_000_000, "comet", "COMET", 50_000_000, 997);
+        let p2 = make_n2t_pool("p2", 50_000_000_000, "comet", "COMET", 50_000_000, 997);
+        let graph = build_pool_graph(&[p1, p2], 0);
+        let split = optimize_split_detailed(
+            &graph,
+            "comet",
+            ERG_TOKEN_ID,
+            20_000_000,
+            2,
+            2,
+            None,
+        );
+        if let Some(s) = split {
+            assert_eq!(s.total_miner_fees, MINER_FEE_PER_HOP * 2);
+            assert_eq!(
+                s.net_output,
+                s.total_output.saturating_sub(s.total_miner_fees)
+            );
+            assert!(s.improvement_pct > 0.5);
+        }
+    }
+
+    #[test]
+    fn test_max_swap_hint_when_amount_too_large() {
+        let pool = make_n2t_pool("thin", 10_000_000, "etosi", "eTOSI", 1_000, 997);
+        let graph = build_pool_graph(&[pool], 0);
+        let requested = 20_000u64;
+        assert!(
+            find_best_routes(&graph, "etosi", ERG_TOKEN_ID, requested, 2, 5).is_empty()
+        );
+        let hint = max_swap_hint_if_needed(&graph, "etosi", ERG_TOKEN_ID, requested, 2).unwrap();
+        assert!(hint.max_input > 0 && hint.max_input < requested);
+        assert!(!find_best_routes(&graph, "etosi", ERG_TOKEN_ID, hint.max_input, 2, 5).is_empty());
+        assert_eq!(hint.reason, "pool_min_erg");
+    }
+
+    #[test]
+    fn test_max_swap_hint_absent_when_amount_ok() {
+        let pool = make_n2t_pool("deep", 100_000_000_000, "etosi", "eTOSI", 1_000_000, 997);
+        let graph = build_pool_graph(&[pool], 0);
+        assert!(
+            max_swap_hint_if_needed(&graph, "etosi", ERG_TOKEN_ID, 1_000, 2).is_none()
+        );
+    }
+
+    #[test]
     fn test_circular_arb_tx_fees_deducted() {
         let pools = vec![
             make_n2t_pool("p1", 100_000_000_000, "aa", "TokenA", 200_000, 997),
@@ -1855,7 +2149,7 @@ mod tests {
         let graph = build_pool_graph(&pools, 0);
         let snap = find_circular_arbs(&graph, 4, 0);
         for arb in &snap.windows {
-            assert_eq!(arb.tx_fee_nano, 1_000_000 * arb.hops as u64);
+            assert_eq!(arb.tx_fee_nano, MINER_FEE_PER_HOP * arb.hops as u64);
             assert_eq!(
                 arb.net_profit_nano,
                 arb.gross_profit_nano - arb.tx_fee_nano as i64

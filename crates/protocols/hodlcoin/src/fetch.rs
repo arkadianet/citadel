@@ -94,7 +94,6 @@ pub async fn discover_banks(
     node: &ergo_node_client::NodeClient,
 ) -> Result<Vec<HodlBankState>, HodlError> {
     let boxes = node
-        .inner()
         .unspent_boxes_by_ergo_tree(constants::HODLERG_BANK_ERGO_TREE, 0, 100)
         .await
         .map_err(|e| HodlError::NodeError(e.to_string()))?;

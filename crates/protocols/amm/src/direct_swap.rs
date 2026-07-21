@@ -148,7 +148,7 @@ fn build_n2t_direct_swap(
             (output, true)
         }
         SwapInput::Token { amount, .. } => {
-            let output = calculator::calculate_output(
+            let output = calculator::calculate_token_to_erg_output(
                 pool_token_y_amount,
                 pool_erg,
                 *amount,
@@ -156,7 +156,14 @@ fn build_n2t_direct_swap(
                 fee_denom,
             );
             if output == 0 {
-                return Err(AmmError::InsufficientLiquidity);
+                let max_out = calculator::max_erg_extractable(pool_erg);
+                return Err(AmmError::TxBuildError(format!(
+                    "Swap would leave pool below minimum ERG (pool has {} nanoERG, \
+                     max extractable {}, need at least {} dust reserved). Try a smaller amount.",
+                    pool_erg,
+                    max_out,
+                    calculator::MIN_BOX_VALUE
+                )));
             }
             (output, false)
         }
@@ -186,10 +193,13 @@ fn build_n2t_direct_swap(
         let new_erg = pool_erg
             .checked_sub(output_amount)
             .ok_or_else(|| AmmError::TxBuildError("Pool ERG underflow".to_string()))?;
-        if new_erg < MIN_BOX_VALUE {
-            return Err(AmmError::TxBuildError(
-                "New pool box would have less than minimum ERG".to_string(),
-            ));
+        // Defensive: calculate_token_to_erg_output already enforces this.
+        if new_erg < calculator::MIN_BOX_VALUE {
+            return Err(AmmError::TxBuildError(format!(
+                "New pool box would have less than minimum ERG ({} < {})",
+                new_erg,
+                calculator::MIN_BOX_VALUE
+            )));
         }
         let new_token_y = pool_token_y_amount
             .checked_add(input_amount)
@@ -1343,5 +1353,49 @@ mod tests {
         let change_erg = 1_956_185u64 - TX_FEE;
         let user_swap_value: u64 = build.unsigned_tx.outputs[1].value.parse().unwrap();
         assert_eq!(user_swap_value, output + change_erg);
+    }
+
+    #[test]
+    fn test_direct_swap_token_to_erg_rejects_pool_dust_breach() {
+        let mut pool = test_n2t_pool();
+        pool.erg_reserves = Some(10_000_000); // 0.01 ERG — like a drained eTOSI pool
+        pool.token_y.amount = 1_000;
+
+        let mut pool_box = test_pool_box();
+        pool_box.value = "10000000".to_string();
+        pool_box.assets[2].amount = "1000".to_string();
+
+        let token_id = pool.token_y.token_id.clone();
+        let user_utxo = Eip12InputBox {
+            assets: vec![Eip12Asset {
+                token_id: token_id.clone(),
+                amount: "20000".to_string(),
+            }],
+            ..test_user_utxo()
+        };
+
+        let input = SwapInput::Token {
+            token_id,
+            amount: 20_000, // drains past min-box reservation
+        };
+        let result = build_direct_swap_eip12(
+            &pool_box,
+            &pool,
+            &input,
+            1,
+            &[user_utxo],
+            "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            1_000_000,
+            None,
+            None,
+        );
+
+        assert!(result.is_err(), "Must reject dust-breaching swap");
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("minimum ERG") || err.contains("max extractable"),
+            "unexpected error: {}",
+            err
+        );
     }
 }

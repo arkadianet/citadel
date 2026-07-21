@@ -16,12 +16,31 @@ use crate::types::{ErgoPayResponse, MessageSeverity, RequestStatus, RequestType,
 /// Query parameters for connect/tx endpoints
 #[derive(Debug, Deserialize)]
 pub struct AddressQuery {
-    /// Wallet address (from #P2PK_ADDRESS# substitution)
+    /// Primary wallet address (from #P2PK_ADDRESS# or Nautilus change address)
     pub address: Option<String>,
+    /// Optional comma-separated list of additional addresses from the wallet
+    pub addresses: Option<String>,
+}
+
+fn parse_address_list(primary: &str, addresses_csv: Option<&str>) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut push = |a: &str| {
+        let a = a.trim();
+        if !a.is_empty() && !out.iter().any(|x| x == a) {
+            out.push(a.to_string());
+        }
+    };
+    push(primary);
+    if let Some(csv) = addresses_csv {
+        for part in csv.split(',') {
+            push(part);
+        }
+    }
+    out
 }
 
 /// Handle wallet connection request
-/// GET /connect/{id}?address=9xxx
+/// GET /connect/{id}?address=9xxx&addresses=9aaa,9bbb
 pub async fn handle_connect(
     State(state): State<Arc<ServerState>>,
     Path(request_id): Path<String>,
@@ -54,13 +73,39 @@ pub async fn handle_connect(
         }));
     }
 
-    // Update status
-    request.status = RequestStatus::AddressReceived(address.clone());
+    let addresses = parse_address_list(&address, query.addresses.as_deref());
+    for a in &addresses {
+        if !a.starts_with('9') || a.len() < 40 {
+            return Ok(Json(ErgoPayResponse {
+                message: Some(format!("Invalid address in list: {}", a)),
+                message_severity: Some(MessageSeverity::Error),
+                ..Default::default()
+            }));
+        }
+    }
 
-    tracing::info!("Wallet connected: {} for request {}", address, request_id);
+    // Update status
+    request.status = RequestStatus::AddressReceived {
+        primary: address.clone(),
+        addresses: addresses.clone(),
+    };
+
+    tracing::info!(
+        "Wallet connected: {} (+{} addresses) for request {}",
+        address,
+        addresses.len().saturating_sub(1),
+        request_id
+    );
 
     Ok(Json(ErgoPayResponse {
-        message: Some("Wallet connected successfully!".to_string()),
+        message: Some(if addresses.len() > 1 {
+            format!(
+                "Wallet connected with {} addresses!",
+                addresses.len()
+            )
+        } else {
+            "Wallet connected successfully!".to_string()
+        }),
         message_severity: Some(MessageSeverity::Information),
         address: Some(address),
         ..Default::default()

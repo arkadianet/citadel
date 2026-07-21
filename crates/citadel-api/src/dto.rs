@@ -220,12 +220,16 @@ pub struct WalletConnectResponse {
 pub struct WalletStatusResponse {
     pub connected: bool,
     pub address: Option<String>,
+    #[serde(default)]
+    pub addresses: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionStatusResponse {
     pub status: String,
     pub address: Option<String>,
+    #[serde(default)]
+    pub addresses: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -250,6 +254,8 @@ pub struct TokenBalance {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletBalanceResponse {
     pub address: String,
+    #[serde(default)]
+    pub addresses: Vec<String>,
     pub erg_nano: u64,
     pub erg_formatted: String,
     pub sigusd_amount: u64,

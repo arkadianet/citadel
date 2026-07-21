@@ -953,7 +953,6 @@ pub async fn discover_stuck_proxy_boxes(
     for addr_info in &proxy_addresses {
         let addr_string = addr_info.address.to_string();
         let boxes = match client
-            .inner()
             .unspent_boxes_by_address(&addr_string, 0, 500)
             .await
         {

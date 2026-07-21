@@ -1,6 +1,19 @@
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 
+/// Ergo dust limit — every box (including Spectrum pool boxes) must keep at least this.
+pub const MIN_BOX_VALUE: u64 = citadel_core::constants::MIN_BOX_VALUE_NANO as u64;
+
+/// Max ERG that can leave an N2T pool in one swap while leaving a valid pool box.
+pub fn max_erg_extractable(pool_erg: u64) -> u64 {
+    pool_erg.saturating_sub(MIN_BOX_VALUE)
+}
+
+/// True when taking `erg_out` from the pool would leave it below min box value.
+pub fn would_breach_pool_min_erg(pool_erg: u64, erg_out: u64) -> bool {
+    pool_erg.saturating_sub(erg_out) < MIN_BOX_VALUE
+}
+
 /// output = (reserves_out * input * fee_num) / (reserves_in * fee_denom + input * fee_num)
 pub fn calculate_output(
     reserves_in: u64,
@@ -23,6 +36,43 @@ pub fn calculate_output(
 
     let result = numerator / denominator;
     result.try_into().unwrap_or(0)
+}
+
+/// CFMM output for token → ERG on an N2T pool, or `0` if the swap would leave
+/// the pool box below the network minimum ERG (unexecutable).
+pub fn calculate_token_to_erg_output(
+    token_reserves: u64,
+    erg_reserves: u64,
+    input_amount: u64,
+    fee_num: i32,
+    fee_denom: i32,
+) -> u64 {
+    let output = calculate_output(
+        token_reserves,
+        erg_reserves,
+        input_amount,
+        fee_num,
+        fee_denom,
+    );
+    if output == 0 || would_breach_pool_min_erg(erg_reserves, output) {
+        0
+    } else {
+        output
+    }
+}
+
+/// Largest token input that still leaves `>= MIN_BOX_VALUE` ERG in the pool.
+pub fn max_token_in_for_erg_out(
+    token_reserves: u64,
+    erg_reserves: u64,
+    fee_num: i32,
+    fee_denom: i32,
+) -> Option<u64> {
+    let max_out = max_erg_extractable(erg_reserves);
+    if max_out == 0 {
+        return None;
+    }
+    calculate_input(token_reserves, erg_reserves, max_out, fee_num, fee_denom)
 }
 
 /// input = (reserves_in * output * fee_denom) / ((reserves_out - output) * fee_num)
@@ -204,7 +254,7 @@ pub fn quote_swap(pool: &AmmPool, input: &SwapInput) -> Option<SwapQuote> {
             }
             let reserves_in = pool.token_y.amount;
             let reserves_out = pool.erg_reserves?;
-            let output = calculate_output(
+            let output = calculate_token_to_erg_output(
                 reserves_in,
                 reserves_out,
                 *amount,
@@ -435,5 +485,43 @@ mod tests {
         let y = u64::MAX / 2;
         let result = calculate_initial_lp_share(x, y);
         assert!(result > 0);
+    }
+
+    #[test]
+    fn test_token_to_erg_rejects_below_min_box() {
+        // Pool with 0.01 ERG. Large sell approaches full drain (> max extractable).
+        let erg_reserves = 10_000_000u64;
+        let token_reserves = 1_000u64;
+        let input = 20_000u64; // >> reserves → output ≈ erg_reserves
+        let raw = calculate_output(token_reserves, erg_reserves, input, 997, 1000);
+        assert!(
+            raw > max_erg_extractable(erg_reserves),
+            "raw {} should exceed max {}",
+            raw,
+            max_erg_extractable(erg_reserves)
+        );
+        assert_eq!(
+            calculate_token_to_erg_output(token_reserves, erg_reserves, input, 997, 1000),
+            0
+        );
+    }
+
+    #[test]
+    fn test_token_to_erg_allows_safe_amount() {
+        let erg_reserves = 100_000_000_000u64; // 100 ERG
+        let token_reserves = 1_000_000u64;
+        let out = calculate_token_to_erg_output(token_reserves, erg_reserves, 10_000, 997, 1000);
+        assert!(out > 0);
+        assert!(!would_breach_pool_min_erg(erg_reserves, out));
+    }
+
+    #[test]
+    fn test_max_token_in_leaves_min_box() {
+        let erg_reserves = 10_000_000u64; // 0.01 ERG
+        let token_reserves = 1_000_000u64;
+        let max_in = max_token_in_for_erg_out(token_reserves, erg_reserves, 997, 1000).unwrap();
+        let out = calculate_token_to_erg_output(token_reserves, erg_reserves, max_in, 997, 1000);
+        assert!(out > 0);
+        assert_eq!(erg_reserves - out, MIN_BOX_VALUE);
     }
 }

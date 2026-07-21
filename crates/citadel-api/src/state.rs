@@ -18,14 +18,31 @@ pub enum ApiError {
 
 #[derive(Clone, Debug)]
 pub struct WalletState {
+    /// Preferred display / change address.
     pub address: String,
+    /// All known addresses from the wallet (includes `address`).
+    pub addresses: Vec<String>,
     pub connected_at: Instant,
 }
 
 impl WalletState {
     pub fn new(address: String) -> Self {
+        Self::with_addresses(address.clone(), vec![address])
+    }
+
+    pub fn with_addresses(primary: String, addresses: Vec<String>) -> Self {
+        let mut addrs = Vec::new();
+        for a in std::iter::once(primary.clone()).chain(addresses.into_iter()) {
+            if !a.is_empty() && !addrs.iter().any(|x| x == &a) {
+                addrs.push(a);
+            }
+        }
+        if addrs.is_empty() {
+            addrs.push(primary.clone());
+        }
         Self {
-            address,
+            address: primary,
+            addresses: addrs,
             connected_at: Instant::now(),
         }
     }
@@ -161,9 +178,20 @@ impl AppState {
     }
 
     pub async fn set_wallet(&self, address: String) -> Result<(), ApiError> {
-        validate_p2pk_address(&address)?;
+        self.set_wallet_addresses(address, Vec::new()).await
+    }
+
+    pub async fn set_wallet_addresses(
+        &self,
+        primary: String,
+        addresses: Vec<String>,
+    ) -> Result<(), ApiError> {
+        validate_p2pk_address(&primary)?;
+        for a in &addresses {
+            validate_p2pk_address(a)?;
+        }
         let mut wallet = self.inner.wallet.write().await;
-        *wallet = Some(WalletState::new(address));
+        *wallet = Some(WalletState::with_addresses(primary, addresses));
         Ok(())
     }
 
