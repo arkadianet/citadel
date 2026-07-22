@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
 /* ============================================================================
    SigUSD Router — Viewport-locked protocol page
    ============================================================================ */
@@ -6,8 +8,9 @@
   --protocol-accent: #34d399; /* protocol accent */
   --protocol-accent-bg: rgba(52, 211, 153, 0.1); /* protocol accent */
   --protocol-accent-border: rgba(52, 211, 153, 0.18); /* protocol accent */
+  --text-strong: rgb(var(--text)); /* protocol accent */
 
-  --rt-font: var(--ds-font-sans);
+  --rt-font: 'Plus Jakarta Sans', system-ui, sans-serif;
   --rt-mono: var(--ds-font-mono);
   --rt-surface: var(--ds-surface-base);
   --rt-surface-soft: var(--ds-surface-base);
@@ -20,11 +23,11 @@
   --rt-danger: var(--ds-danger);
   --rt-warn: var(--ds-warning);
   --rt-indigo: var(--protocol-accent);
-  --rt-radius: var(--ds-radius-md);
-  --rt-radius-sm: var(--ds-radius-sm);
-  --rt-gap: var(--ds-space-3);
-  --rt-pad-y: var(--ds-space-3);
-  --rt-pad-x: var(--ds-space-4);
+  --rt-radius: clamp(8px, 0.9vh, 12px);
+  --rt-radius-sm: clamp(6px, 0.7vh, 10px);
+  --rt-gap: clamp(0.4rem, 1.1vh, 0.75rem);
+  --rt-pad-y: clamp(0.55rem, 1.2vh, 0.9rem);
+  --rt-pad-x: clamp(0.7rem, 1.1vw, 1.15rem);
 
   container-type: size;
   container-name: rt;

@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
 /* ============================================================================
    Smart Swap — all component styles
    Matches the Dashboard / SigmaUSD / Dexy visual language: Plus Jakarta Sans,
@@ -9,9 +11,10 @@
 .smart-swap-view {
   --protocol-accent: #34d399; /* protocol accent */
   --protocol-accent-bg: rgba(52, 211, 153, 0.1); /* protocol accent */
+  --text-strong: rgb(var(--text)); /* protocol accent */
   --protocol-accent-border: rgba(52, 211, 153, 0.18); /* protocol accent */
 
-  --ssw-font: var(--ds-font-sans);
+  --ssw-font: 'Plus Jakarta Sans', system-ui, sans-serif;
   --ssw-mono: var(--ds-font-mono);
   --ssw-surface: var(--ds-surface-base);
   --ssw-surface-solid: var(--ds-surface-elevated);
@@ -20,8 +23,8 @@
   --ssw-border: var(--ds-border);
   --ssw-border-strong: var(--ds-border-hover);
   --ssw-faint: var(--slate-500);
-  --ssw-radius: var(--ds-radius-md);
-  --ssw-radius-sm: var(--ds-radius-sm);
+  --ssw-radius: clamp(8px, 0.9vh, 12px);
+  --ssw-radius-sm: clamp(6px, 0.7vh, 10px);
 
   flex: 1;
   min-height: 0;
