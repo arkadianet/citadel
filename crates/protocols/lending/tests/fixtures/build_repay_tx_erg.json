@@ -1,0 +1,44 @@
+{
+  "dataInputs": [],
+  "inputs": [
+    {
+      "additionalRegisters": {},
+      "assets": [],
+      "boxId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "creationHeight": 1000000,
+      "ergoTree": "0008cd0327e65711a59378c59359c3571c6b49a4c25d28e5583b8fa2c99a7b4b5de5a34f",
+      "extension": {},
+      "index": 0,
+      "transactionId": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+      "value": "10000000000"
+    }
+  ],
+  "outputs": [
+    {
+      "additionalRegisters": {
+        "R4": "0500",
+        "R5": "0e240008cd038d39af8c37583609ff51c6a577efe60684119da2fbd0d75f9c72372886a58a63",
+        "R6": "04a0947a",
+        "R7": "0e20aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "assets": [],
+      "creationHeight": 1000000,
+      "ergoTree": "100904060400040001010101010104000580897a04bd019592b1a57300d802d601b2a5730100d602b2db63087201730200d1ededededed93c27201e4c6a7050eed938c720201e4c6a7080e928c720202e4c6a7040593e4c67201040ec5a7730373047305d801d601b2a5730600d1ededed93c27201e4c6a7050e92c1720199c1a7730792a3e4c6a7060491a37308",
+      "value": "5003000000"
+    },
+    {
+      "additionalRegisters": {},
+      "assets": [],
+      "creationHeight": 1000000,
+      "ergoTree": "1005040004000e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a701730073011001020402d19683030193a38cc7b2a57300000193c2b2a57301007473027303830108cdeeac93b1a57304",
+      "value": "1000000"
+    },
+    {
+      "additionalRegisters": {},
+      "assets": [],
+      "creationHeight": 1000000,
+      "ergoTree": "0008cd038d39af8c37583609ff51c6a577efe60684119da2fbd0d75f9c72372886a58a63",
+      "value": "4996000000"
+    }
+  ]
+}

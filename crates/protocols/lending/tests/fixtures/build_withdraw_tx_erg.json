@@ -1,0 +1,58 @@
+{
+  "dataInputs": [],
+  "inputs": [
+    {
+      "additionalRegisters": {},
+      "assets": [
+        {
+          "amount": "5000",
+          "tokenId": "fc888e0eed50a4042324793a7894134d83c7aaf5c99f4bf643e7e2b4e71e0095"
+        }
+      ],
+      "boxId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "creationHeight": 1000000,
+      "ergoTree": "0008cd0327e65711a59378c59359c3571c6b49a4c25d28e5583b8fa2c99a7b4b5de5a34f",
+      "extension": {},
+      "index": 0,
+      "transactionId": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+      "value": "10000000000"
+    }
+  ],
+  "outputs": [
+    {
+      "additionalRegisters": {
+        "R4": "0e240008cd038d39af8c37583609ff51c6a577efe60684119da2fbd0d75f9c72372886a58a63",
+        "R5": "0580e8888743",
+        "R6": "05a0947a"
+      },
+      "assets": [
+        {
+          "amount": "1000",
+          "tokenId": "fc888e0eed50a4042324793a7894134d83c7aaf5c99f4bf643e7e2b4e71e0095"
+        }
+      ],
+      "creationHeight": 1000000,
+      "ergoTree": "100e040604000580897a010004000400040001000101010101010404010004bd01d1d801d601e4c6a7040e958fb1a57300d803d602b2a5730100d603c67202040ed604db63087202ededededededed93c2720272019099c1a7c17202730295e6720393e47203c5a77303927ea305e4c6a706059594b17204730493b27204730500b2db6308a7730600730773087309730ad802d602b2a5730b00d603c67202070eededed93c27202720192c17202e4c6a7050595e6720393e47203c5a7730c91a3730d",
+      "value": "3000000"
+    },
+    {
+      "additionalRegisters": {},
+      "assets": [],
+      "creationHeight": 1000000,
+      "ergoTree": "1005040004000e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a701730073011001020402d19683030193a38cc7b2a57300000193c2b2a57301007473027303830108cdeeac93b1a57304",
+      "value": "1000000"
+    },
+    {
+      "additionalRegisters": {},
+      "assets": [
+        {
+          "amount": "4000",
+          "tokenId": "fc888e0eed50a4042324793a7894134d83c7aaf5c99f4bf643e7e2b4e71e0095"
+        }
+      ],
+      "creationHeight": 1000000,
+      "ergoTree": "0008cd038d39af8c37583609ff51c6a577efe60684119da2fbd0d75f9c72372886a58a63",
+      "value": "9996000000"
+    }
+  ]
+}
