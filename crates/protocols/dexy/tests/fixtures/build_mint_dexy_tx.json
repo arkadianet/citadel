@@ -1,0 +1,174 @@
+{
+  "dataInputs": [
+    {
+      "additionalRegisters": {},
+      "assets": [
+        {
+          "amount": "1",
+          "tokenId": "3c45f29a5165b030fdb5eaf5d81f8108f9d8f507b31487dd51f4ae08fe07cf4a"
+        }
+      ],
+      "boxId": "3333333333333333333333333333333333333333333333333333333333333333",
+      "creationHeight": 100000,
+      "ergoTree": "oracle_ergo_tree",
+      "index": 0,
+      "transactionId": "4444444444444444444444444444444444444444444444444444444444444444",
+      "value": "1000000"
+    },
+    {
+      "additionalRegisters": {},
+      "assets": [
+        {
+          "amount": "1",
+          "tokenId": "905ecdef97381b92c2f0ea9b516f312bfb18082c61b24b40affa6a55555c77c7"
+        }
+      ],
+      "boxId": "5555555555555555555555555555555555555555555555555555555555555555",
+      "creationHeight": 100000,
+      "ergoTree": "lp_ergo_tree",
+      "index": 0,
+      "transactionId": "6666666666666666666666666666666666666666666666666666666666666666",
+      "value": "500000000000"
+    }
+  ],
+  "inputs": [
+    {
+      "additionalRegisters": {},
+      "assets": [
+        {
+          "amount": "1",
+          "tokenId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "boxId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "creationHeight": 100000,
+      "ergoTree": "free_mint_ergo_tree",
+      "extension": {},
+      "index": 0,
+      "transactionId": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "value": "1000000"
+    },
+    {
+      "additionalRegisters": {},
+      "assets": [
+        {
+          "amount": "1",
+          "tokenId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "amount": "10000",
+          "tokenId": "6122f7289e7bb2df2de273e09d4b2756cda6aeb0f40438dc9d257688f45183ad"
+        }
+      ],
+      "boxId": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "creationHeight": 100000,
+      "ergoTree": "bank_ergo_tree",
+      "extension": {},
+      "index": 0,
+      "transactionId": "1111111111111111111111111111111111111111111111111111111111111111",
+      "value": "1000000000000"
+    },
+    {
+      "additionalRegisters": {},
+      "assets": [
+        {
+          "amount": "1",
+          "tokenId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ],
+      "boxId": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "creationHeight": 100000,
+      "ergoTree": "buyback_ergo_tree",
+      "extension": {
+        "0": "0402"
+      },
+      "index": 0,
+      "transactionId": "2222222222222222222222222222222222222222222222222222222222222222",
+      "value": "5000000"
+    },
+    {
+      "additionalRegisters": {},
+      "assets": [],
+      "boxId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "creationHeight": 100000,
+      "ergoTree": "user_ergo_tree",
+      "extension": {},
+      "index": 0,
+      "transactionId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "value": "100000000000"
+    }
+  ],
+  "outputs": [
+    {
+      "additionalRegisters": {
+        "R4": "0480b518",
+        "R5": "05fc4d"
+      },
+      "assets": [
+        {
+          "amount": "1",
+          "tokenId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "creationHeight": 100000,
+      "ergoTree": "free_mint_ergo_tree",
+      "value": "1000000"
+    },
+    {
+      "additionalRegisters": {},
+      "assets": [
+        {
+          "amount": "1",
+          "tokenId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "amount": "9990",
+          "tokenId": "6122f7289e7bb2df2de273e09d4b2756cda6aeb0f40438dc9d257688f45183ad"
+        }
+      ],
+      "creationHeight": 100000,
+      "ergoTree": "bank_ergo_tree",
+      "value": "1000002206600"
+    },
+    {
+      "additionalRegisters": {
+        "R4": "0e20cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "assets": [
+        {
+          "amount": "1",
+          "tokenId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ],
+      "creationHeight": 100000,
+      "ergoTree": "buyback_ergo_tree",
+      "value": "5004400"
+    },
+    {
+      "additionalRegisters": {},
+      "assets": [
+        {
+          "amount": "10",
+          "tokenId": "6122f7289e7bb2df2de273e09d4b2756cda6aeb0f40438dc9d257688f45183ad"
+        }
+      ],
+      "creationHeight": 100000,
+      "ergoTree": "user_ergo_tree",
+      "value": "1000000"
+    },
+    {
+      "additionalRegisters": {},
+      "assets": [],
+      "creationHeight": 100000,
+      "ergoTree": "user_ergo_tree",
+      "value": "99995689000"
+    },
+    {
+      "additionalRegisters": {},
+      "assets": [],
+      "creationHeight": 100000,
+      "ergoTree": "1005040004000e36100204a00b08cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798ea02d192a39a8cc7a701730073011001020402d19683030193a38cc7b2a57300000193c2b2a57301007473027303830108cdeeac93b1a57304",
+      "value": "1100000"
+    }
+  ]
+}
