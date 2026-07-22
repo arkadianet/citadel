@@ -1,7 +1,7 @@
 # Task 20 Report — Wave 4 UI consolidation
 
 **Status:** FIXED (App.css diet A4 applied; awaiting reviewer)  
-**BASE → HEAD:** `011f3e2` → `3e863da`  
+**BASE → HEAD:** `011f3e2` → `32c7eda`  
 **Commits (16):**
 - `942a890` / `da1db15` — remigrate Router/SmartSwap (+ Modal/Button exec flow in TSX)
 - `34a44d4` — Dexy
