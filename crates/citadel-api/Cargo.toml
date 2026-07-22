@@ -14,6 +14,7 @@ sigmausd = { workspace = true }
 dexy = { workspace = true }
 lending = { workspace = true }
 amm = { workspace = true }
+hodlcoin = { workspace = true }
 ergo-tx = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
