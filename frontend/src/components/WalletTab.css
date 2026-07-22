@@ -1,17 +1,21 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
 .wallet-tab {
+  --protocol-accent: #34d399; /* protocol accent */
+  --protocol-accent-bg: rgba(52, 211, 153, 0.1); /* protocol accent */
+  --protocol-accent-border: rgba(52, 211, 153, 0.18); /* protocol accent */
+  --text-strong: rgb(var(--text)); /* protocol accent */
   --wallet-font: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --wallet-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  --wallet-surface: rgba(6, 14, 28, 0.72);
-  --wallet-surface-soft: rgba(10, 20, 38, 0.55);
-  --wallet-border: rgba(148, 163, 184, 0.12);
-  --wallet-border-strong: rgba(148, 163, 184, 0.2);
-  --wallet-ink: rgb(241 245 249);
-  --wallet-muted: #8b9bb0;
-  --wallet-faint: #5f7088;
-  --wallet-accent: #34d399;
-  --wallet-danger: #f87171;
+  --wallet-mono: var(--ds-font-mono);
+  --wallet-surface: var(--ds-surface-base);
+  --wallet-surface-soft: var(--ds-surface-base);
+  --wallet-border: var(--ds-border);
+  --wallet-border-strong: var(--ds-border-hover);
+  --wallet-ink: var(--text-strong);
+  --wallet-muted: var(--slate-400);
+  --wallet-faint: var(--slate-500);
+  --wallet-accent: var(--protocol-accent);
+  --wallet-danger: var(--ds-danger);
   --wallet-radius: clamp(8px, 0.9vh, 12px);
   --wallet-gap: clamp(0.4rem, 1.1vh, 0.75rem);
   --wallet-pad-y: clamp(0.55rem, 1.2vh, 0.9rem);
@@ -54,13 +58,13 @@
 .wallet-icon {
   width: clamp(30px, 3.6vh, 36px);
   height: clamp(30px, 3.6vh, 36px);
-  border-radius: 9px;
+  border-radius: var(--ds-radius-sm);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(52, 211, 153, 0.1);
-  border: 1px solid rgba(52, 211, 153, 0.22);
+  background: var(--ds-success-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-success) 22%, transparent);
   color: var(--wallet-accent);
 }
 
@@ -146,7 +150,7 @@
 
 .wallet-pending {
   font-size: 0.72rem;
-  color: #fbbf24;
+  color: var(--ds-warning);
 }
 
 .wallet-error {
@@ -161,8 +165,8 @@
 }
 
 .wallet-balance-hero {
-  background: linear-gradient(145deg, rgba(52, 211, 153, 0.12), var(--wallet-surface));
-  border: 1px solid rgba(52, 211, 153, 0.2);
+  background: linear-gradient(145deg, var(--ds-success-bg), var(--wallet-surface));
+  border: 1px solid color-mix(in srgb, var(--ds-success) 20%, transparent);
   border-radius: var(--wallet-radius);
   padding: clamp(0.75rem, 1.4vh, 1.1rem);
   display: flex;
@@ -291,8 +295,8 @@
 
 .wallet-qr-wrap {
   padding: 0.75rem;
-  background: #0b1220;
-  border-radius: 12px;
+  background: var(--ds-surface-elevated);
+  border-radius: var(--ds-radius-md);
   border: 1px solid var(--wallet-border-strong);
 }
 
@@ -326,7 +330,7 @@
 .wallet-field input,
 .wallet-field select {
   width: 100%;
-  border-radius: 8px;
+  border-radius: var(--ds-radius-sm);
   border: 1px solid var(--wallet-border-strong);
   background: var(--wallet-surface-soft);
   color: var(--wallet-ink);
@@ -338,7 +342,7 @@
 .wallet-field input:focus,
 .wallet-field select:focus {
   outline: none;
-  border-color: rgba(52, 211, 153, 0.45);
+  border-color: color-mix(in srgb, var(--ds-success) 45%, transparent);
 }
 
 .wallet-asset-toggle {
@@ -348,7 +352,7 @@
 }
 
 .wallet-asset-toggle button {
-  border-radius: 8px;
+  border-radius: var(--ds-radius-sm);
   border: 1px solid var(--wallet-border);
   background: var(--wallet-surface-soft);
   color: var(--wallet-muted);
@@ -361,8 +365,8 @@
 
 .wallet-asset-toggle button.active {
   color: var(--wallet-accent);
-  border-color: rgba(52, 211, 153, 0.35);
-  background: rgba(52, 211, 153, 0.1);
+  border-color: color-mix(in srgb, var(--ds-success) 35%, transparent);
+  background: var(--ds-success-bg);
 }
 
 .wallet-max-btn {
@@ -385,9 +389,9 @@
 
 .wallet-primary-btn {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ds-radius-sm);
   background: var(--wallet-accent);
-  color: #042f1e;
+  color: var(--ds-btn-primary-text);
   font-weight: 700;
   font-size: 0.85rem;
   padding: 0.6rem 0.9rem;
@@ -400,7 +404,7 @@
 
 .wallet-secondary-btn {
   border: 1px solid var(--wallet-border-strong);
-  border-radius: 8px;
+  border-radius: var(--ds-radius-sm);
   background: transparent;
   color: var(--wallet-ink);
   font-weight: 600;
@@ -490,7 +494,7 @@
   align-items: flex-start;
   gap: 0.15rem;
   padding: 0.7rem 0.85rem;
-  border-radius: 10px;
+  border-radius: var(--ds-radius-md);
   border: 1px solid var(--wallet-border-strong);
   background: var(--wallet-surface-soft);
   color: var(--wallet-ink);
@@ -509,7 +513,7 @@
 }
 
 .wallet-sign-option:hover {
-  border-color: rgba(52, 211, 153, 0.4);
+  border-color: color-mix(in srgb, var(--ds-success) 40%, transparent);
 }
 
 /* ---- NFTs ---- */
@@ -540,7 +544,7 @@
   display: block;
   width: 88px;
   height: 88px;
-  border-radius: 12px;
+  border-radius: var(--ds-radius-md);
   overflow: hidden;
   border: 1px solid var(--wallet-border);
   background: var(--wallet-surface-soft);
@@ -572,7 +576,7 @@
   letter-spacing: 0.04em;
   color: var(--wallet-muted);
   background:
-    linear-gradient(145deg, rgba(52, 211, 153, 0.12), transparent 55%),
+    linear-gradient(145deg, var(--ds-success-bg), transparent 55%),
     var(--wallet-surface-soft);
 }
 
@@ -583,7 +587,7 @@
 .wallet-nft-placeholder.xl {
   font-size: 2.2rem;
   min-height: 180px;
-  border-radius: 14px;
+  border-radius: var(--ds-radius-lg);
 }
 
 .wallet-nft-layout {
@@ -614,7 +618,7 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.55rem;
-  border-radius: 14px;
+  border-radius: var(--ds-radius-lg);
   border: 1px solid var(--wallet-border);
   background: var(--wallet-surface);
   color: inherit;
@@ -630,14 +634,14 @@
 }
 
 .wallet-nft-card.selected {
-  border-color: rgba(52, 211, 153, 0.55);
-  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.25);
+  border-color: color-mix(in srgb, var(--ds-success) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ds-success) 25%, transparent);
 }
 
 .wallet-nft-art {
   position: relative;
   aspect-ratio: 1;
-  border-radius: 10px;
+  border-radius: var(--ds-radius-md);
   overflow: hidden;
   background: var(--wallet-surface-soft);
   border: 1px solid var(--wallet-border);
@@ -685,7 +689,7 @@
 }
 
 .wallet-nft-detail-art {
-  border-radius: 14px;
+  border-radius: var(--ds-radius-lg);
   overflow: hidden;
   border: 1px solid var(--wallet-border);
   background: var(--wallet-surface-soft);
@@ -697,7 +701,7 @@
   display: block;
   max-height: 280px;
   object-fit: contain;
-  background: #0a1220;
+  background: var(--ds-surface-elevated);
 }
 
 .wallet-nft-detail-title {
