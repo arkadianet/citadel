@@ -35,7 +35,7 @@ crates/
   ergo-tx/               EIP-12 tx building, box selection, sigma encoding
   ergopay-core/          Transaction reduction for signing
   ergopay-server/        Local HTTP server for Nautilus signing flow
-  citadel-api/           Façade: AppState, DTOs (unused Axum routes still present until Wave 1 delete)
+  citadel-api/           Façade: AppState, DTOs, use-case services (no Axum)
   protocols/
     amm/                 Spectrum DEX AMM (swaps, LP, router, arb-scanner)
     dexy/                Dexy oracle-pegged stablecoins
@@ -76,8 +76,9 @@ crates/
 
 1. Create crate at `crates/protocols/{name}/` with `constants.rs`, `fetch.rs`, `state.rs`, `tx_builder.rs`
 2. Add to workspace in root `Cargo.toml`
-3. Add Tauri commands in `app/src/commands/{name}.rs`, register in `commands/mod.rs`
-4. Register commands in `app/src/lib.rs` invoke_handler
-5. Add frontend API wrapper in `frontend/src/api/{name}.ts`
-6. Add UI component in `frontend/src/components/{Name}Tab.tsx`
-7. Add sidebar entry in `Sidebar.tsx` and view routing in `App.tsx`
+3. Add façade use-cases in `crates/citadel-api/src/services/{name}.rs` (DTO mapping + orchestration)
+4. Add thin Tauri commands in `app/src/commands/{name}.rs` (parse args → service → `Result<T, String>`), register in `commands/mod.rs`
+5. Register commands in `app/src/lib.rs` invoke_handler (**stable invoke names**)
+6. Add frontend API wrapper in `frontend/src/api/{name}.ts`
+7. Add UI component in `frontend/src/components/{Name}Tab.tsx`
+8. Add sidebar entry in `Sidebar.tsx` and view routing in `App.tsx`
