@@ -5,8 +5,10 @@ use crate::eip12::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
 
 use citadel_core::constants::{MIN_BOX_VALUE_NANO as MIN_BOX_VALUE, TX_FEE_NANO as TX_FEE};
 
+// App UX caps — Ergo protocol allows up to 32_767 inputs/outputs per tx;
+// block cost/size may still limit practical size before that hard ceiling.
 const MAX_SPLIT_OUTPUTS: usize = 30;
-const MAX_RESTRUCTURE_OUTPUTS: usize = 30;
+const MAX_RESTRUCTURE_OUTPUTS: usize = 120;
 const MAX_TOKENS_PER_BOX: usize = 255;
 
 #[derive(Debug, thiserror::Error)]
@@ -463,7 +465,8 @@ pub struct RestructureBuildResult {
 /// Build a free-form restructure tx from selected inputs and user-defined outputs.
 ///
 /// - All inputs must match `user_ergo_tree` (ownership check).
-/// - User outputs receive the specified ERG + tokens.
+/// - User outputs receive the specified ERG + tokens (capped at
+///   `MAX_RESTRUCTURE_OUTPUTS` — an app UX limit, not an Ergo protocol ceiling).
 /// - Unassigned ERG (after fee) and any unassigned tokens form an automatic change
 ///   output when needed. If tokens remain unassigned but change ERG would be 0,
 ///   returns an error (need room for a change box).
@@ -1201,5 +1204,27 @@ mod tests {
         // change has no leftover tokens
         let change = &result.unsigned_tx.outputs[2];
         assert!(change.assets.is_empty());
+    }
+
+    #[test]
+    fn test_restructure_count_exceeds_max() {
+        let n = MAX_RESTRUCTURE_OUTPUTS + 1;
+        let total = (n as i64) * MIN_BOX_VALUE + TX_FEE;
+        let inputs = vec![mock_input("box1", total, vec![])];
+        let outs = vec![
+            RestructureOutputSpec {
+                value: MIN_BOX_VALUE,
+                tokens: vec![],
+            };
+            n
+        ];
+        let err = build_restructure_tx(&inputs, &outs, USER_TREE, 50000).unwrap_err();
+        match err {
+            UtxoManagementError::TooManyOutputs {
+                count,
+                max: MAX_RESTRUCTURE_OUTPUTS,
+            } if count == n => {}
+            _ => panic!("Expected TooManyOutputs, got {:?}", err),
+        }
     }
 }

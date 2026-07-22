@@ -19,3 +19,10 @@ export const LENDING_PROXY_FEE_NANO = 2_000_000
 
 /** Combined fees reserved on wallet/UTXO txs (miner + Citadel) */
 export const WALLET_TX_FEES_NANO = TX_FEE_NANO + DEV_FEE_NANO
+
+/**
+ * Max user-defined output slots for UTXO Restructure.
+ * App cap (keep in sync with `ergo_tx::utxo_management::MAX_RESTRUCTURE_OUTPUTS`).
+ * Protocol allows up to 32_767 outputs; block cost may bind earlier.
+ */
+export const MAX_RESTRUCTURE_OUTPUTS = 120
