@@ -5,17 +5,21 @@
    ============================================================================ */
 
 .burn-tab {
+  --protocol-accent: #f87171; /* protocol accent */
+  --protocol-accent-bg: rgba(52, 211, 153, 0.1); /* protocol accent */
+  --protocol-accent-border: rgba(52, 211, 153, 0.18); /* protocol accent */
+  --text-strong: rgb(var(--text)); /* protocol accent */
   --burn-font: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --burn-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  --burn-surface: rgba(6, 14, 28, 0.72);
-  --burn-surface-soft: rgba(10, 20, 38, 0.55);
-  --burn-border: rgba(148, 163, 184, 0.12);
-  --burn-border-strong: rgba(148, 163, 184, 0.2);
-  --burn-ink: rgb(241 245 249);
-  --burn-muted: #8b9bb0;
-  --burn-faint: #5f7088;
-  --burn-accent: #34d399;
-  --burn-danger: #f87171;
+  --burn-mono: var(--ds-font-mono);
+  --burn-surface: var(--ds-surface-base);
+  --burn-surface-soft: var(--ds-surface-base);
+  --burn-border: var(--ds-border);
+  --burn-border-strong: var(--ds-border-hover);
+  --burn-ink: var(--text-strong);
+  --burn-muted: var(--slate-400);
+  --burn-faint: var(--slate-500);
+  --burn-accent: var(--protocol-accent);
+  --burn-danger: var(--ds-danger);
   --burn-radius: clamp(8px, 0.9vh, 12px);
   --burn-radius-sm: clamp(6px, 0.7vh, 10px);
   --burn-gap: clamp(0.4rem, 1.1vh, 0.75rem);
@@ -75,13 +79,13 @@
 .burn-icon {
   width: clamp(30px, 3.6vh, 36px);
   height: clamp(30px, 3.6vh, 36px);
-  border-radius: 9px;
+  border-radius: var(--ds-radius-sm);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(248, 113, 113, 0.1);
-  border: 1px solid rgba(248, 113, 113, 0.2);
+  background: var(--ds-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 20%, transparent);
   color: var(--burn-danger);
 }
 
@@ -154,7 +158,7 @@
   align-items: center;
   justify-content: space-between;
   padding: clamp(0.4rem, 0.9vh, 0.55rem) clamp(0.55rem, 1vw, 0.75rem);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  border-bottom: 1px solid var(--ds-border);
   flex-shrink: 0;
 }
 
@@ -177,9 +181,9 @@
 }
 
 .burn-toolbar-btn:hover {
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--ds-border);
   color: var(--burn-ink);
-  border-color: rgba(148, 163, 184, 0.3);
+  border-color: var(--ds-border-hover);
 }
 
 .burn-cart-badge {
@@ -189,7 +193,7 @@
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
-  border-radius: 10px;
+  border-radius: var(--ds-radius-md);
   background: var(--burn-danger);
   color: white;
   font-size: 0.65rem;
@@ -198,7 +202,7 @@
 
 .burn-token-search {
   padding: clamp(0.45rem, 1vh, 0.6rem);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  border-bottom: 1px solid var(--ds-border);
   flex-shrink: 0;
 }
 
@@ -206,7 +210,7 @@
   width: 100%;
   padding: 0.4rem 0.6rem;
   border-radius: var(--burn-radius-sm);
-  background: rgba(2, 8, 18, 0.4);
+  background: var(--ds-input-bg);
   border: 1px solid var(--burn-border-strong);
   color: var(--burn-ink);
   font: inherit;
@@ -216,8 +220,8 @@
 
 .burn-token-search input:focus {
   outline: none;
-  border-color: rgba(248, 113, 113, 0.4);
-  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.12);
+  border-color: color-mix(in srgb, var(--ds-danger) 40%, transparent);
+  box-shadow: 0 0 0 3px var(--ds-danger-bg);
 }
 
 .burn-token-search input::placeholder {
@@ -236,8 +240,8 @@
 }
 
 .burn-token-list::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 4px;
+  background: var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
 }
 
 .burn-token-item {
@@ -248,7 +252,7 @@
   padding: clamp(0.4rem, 0.9vh, 0.55rem) clamp(0.55rem, 1vw, 0.7rem);
   background: none;
   border: none;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.07);
+  border-bottom: 1px solid var(--ds-border);
   cursor: pointer;
   transition: background 0.15s;
   text-align: left;
@@ -257,11 +261,11 @@
 }
 
 .burn-token-item:hover {
-  background: rgba(148, 163, 184, 0.06);
+  background: var(--ds-neutral-bg);
 }
 
 .burn-token-item.in-cart {
-  background: rgba(248, 113, 113, 0.08);
+  background: var(--ds-danger-bg);
 }
 
 /* Avatar with checkmark overlay */
@@ -294,7 +298,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid rgba(2, 8, 18, 0.8);
+  border: 2px solid var(--ds-modal-scrim);
 }
 
 .burn-token-info {
@@ -348,7 +352,7 @@
   padding: 0.35rem 0.6rem;
   font-size: clamp(0.62rem, 1.15vh, 0.7rem);
   color: var(--burn-faint);
-  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  border-top: 1px solid var(--ds-border);
   flex-shrink: 0;
 }
 
@@ -398,13 +402,13 @@
 }
 
 .burn-basket-list::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 4px;
+  background: var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
 }
 
 /* Basket item: compact row */
 .burn-basket-item {
-  background: rgba(2, 8, 18, 0.35);
+  background: var(--ds-input-bg);
   border: 1px solid var(--burn-border);
   border-radius: var(--burn-radius-sm);
   padding: 0.5rem;
@@ -449,7 +453,7 @@
 
 .burn-basket-remove:hover {
   color: var(--burn-danger);
-  background: rgba(248, 113, 113, 0.1);
+  background: var(--ds-danger-bg);
 }
 
 .burn-basket-amount-row {
@@ -470,7 +474,7 @@
   padding: 0.3rem 0.5rem;
   padding-right: 48px;
   border-radius: var(--burn-radius-sm);
-  background: rgba(2, 8, 18, 0.5);
+  background: var(--ds-input-bg);
   border: 1px solid var(--burn-border-strong);
   color: var(--burn-ink);
   font-size: clamp(0.7rem, 1.3vh, 0.8rem);
@@ -481,13 +485,13 @@
 
 .burn-basket-amount-wrapper input:focus {
   outline: none;
-  border-color: rgba(248, 113, 113, 0.4);
-  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.12);
+  border-color: color-mix(in srgb, var(--ds-danger) 40%, transparent);
+  box-shadow: 0 0 0 2px var(--ds-danger-bg);
 }
 
 .burn-basket-amount-wrapper input.over-balance {
   border-color: var(--burn-danger);
-  color: #fca5a5;
+  color: var(--ds-danger);
 }
 
 .burn-basket-amount-wrapper .burn-max-btn {
@@ -511,7 +515,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  border-top: 1px solid var(--ds-border);
   padding-top: 0.5rem;
 }
 
@@ -534,9 +538,9 @@
   right: 0.5rem;
   padding: 0.15rem 0.5rem;
   border-radius: var(--burn-radius-sm);
-  border: 1px solid rgba(248, 113, 113, 0.3);
-  background: rgba(248, 113, 113, 0.1);
-  color: #fca5a5;
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 30%, transparent);
+  background: var(--ds-danger-bg);
+  color: var(--ds-danger);
   font-size: clamp(0.6rem, 1.1vh, 0.66rem);
   font-weight: 600;
   cursor: pointer;
@@ -546,14 +550,14 @@
 }
 
 .burn-max-btn:hover {
-  background: rgba(248, 113, 113, 0.2);
-  border-color: rgba(248, 113, 113, 0.5);
+  background: color-mix(in srgb, var(--ds-danger) 20%, transparent);
+  border-color: color-mix(in srgb, var(--ds-danger) 50%, transparent);
 }
 
 /* Burn warning */
 .burn-danger-box {
-  background: rgba(248, 113, 113, 0.06);
-  border: 1px solid rgba(248, 113, 113, 0.2);
+  background: var(--ds-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 20%, transparent);
   border-radius: var(--burn-radius-sm);
   padding: 0.55rem 0.75rem;
   display: flex;
@@ -569,7 +573,7 @@
 .burn-danger-box p {
   margin: 0;
   font-size: clamp(0.7rem, 1.3vh, 0.8rem);
-  color: #fca5a5;
+  color: var(--ds-danger);
   line-height: 1.5;
 }
 
@@ -589,8 +593,8 @@
 }
 
 .burn-submit-btn:hover:not(:disabled) {
-  background: #ef4444;
-  box-shadow: 0 0 20px rgba(248, 113, 113, 0.25);
+  background: var(--red-500);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--ds-danger) 25%, transparent);
 }
 
 .burn-submit-btn:disabled {
@@ -629,7 +633,7 @@
 }
 
 .burn-confirm-row.burn-amount-row span:last-child {
-  color: #fca5a5;
+  color: var(--ds-danger);
   font-weight: 700;
   font-size: clamp(0.8rem, 1.6vh, 0.92rem);
 }
@@ -653,8 +657,8 @@
 }
 
 .burn-confirm-token-list::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 4px;
+  background: var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
 }
 
 .burn-confirm-token-name {
@@ -701,7 +705,7 @@
 
 .burn-success-item span:last-child {
   font-family: var(--burn-mono);
-  color: #fca5a5;
+  color: var(--ds-danger);
   font-weight: 600;
 }
 
