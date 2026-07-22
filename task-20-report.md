@@ -82,7 +82,7 @@ Step 4 — Phase B deferred until App.css diet + kit cleanup pass done-check.
 
 Reviewer Important: prior diet left modal/message/spinner/node-list in `App.css` (680 LOC). Completed A4 chrome-only strip.
 
-**Commit:** `refactor(ui): reduce App.css to app chrome` (follow-up extract)
+**Commit:** `32c7eda` `refactor(ui): reduce App.css to app chrome` (follow-up extract)
 
 ### Changes
 - `frontend/src/App.css` **680 → 358** LOC — only `:root`, resets, `.app`/`.app-body`/`.main*`, header/logo/wallet/settings-btn chrome, `.mono`.
