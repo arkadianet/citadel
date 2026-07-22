@@ -1,7 +1,9 @@
 use citadel_core::{ProtocolError, TokenId};
 use ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox;
 use ergo_node_client::{NodeCapabilities, NodeClient};
-use ergo_tx::ergo_box_utils::{find_token_amount, get_register_int, get_register_long, map_node_error};
+use ergo_tx::ergo_box_utils::{
+    find_token_amount, get_register_int, get_register_long, map_node_error,
+};
 use ergo_tx::{Eip12DataInputBox, Eip12InputBox};
 
 use crate::constants::DexyIds;
@@ -46,12 +48,13 @@ pub async fn fetch_dexy_state(
 
     let current_height = capabilities.chain_height as i32;
 
-    let token_info = client
-        .get_token_info(&ids.dexy_token)
-        .await
-        .map_err(|e| ProtocolError::BoxParseError {
-            message: format!("Failed to get Dexy token info: {}", e),
-        })?;
+    let token_info =
+        client
+            .get_token_info(&ids.dexy_token)
+            .await
+            .map_err(|e| ProtocolError::BoxParseError {
+                message: format!("Failed to get Dexy token info: {}", e),
+            })?;
     let total_supply = token_info.emission_amount.unwrap_or(0);
 
     let bank_data = parse_bank_box(&bank_box, ids)?;
@@ -137,16 +140,10 @@ pub fn parse_free_mint_box_data(ergo_box: &ErgoBox) -> Result<DexyFreeMintBoxDat
     })
 }
 
-async fn box_creation_info(
-    client: &NodeClient,
-    ergo_box: &ErgoBox,
-) -> Result<(String, u16), ProtocolError> {
-    client
-        .get_box_creation_info(&ergo_box.box_id().to_string())
-        .await
-        .map_err(|e| ProtocolError::BoxParseError {
-            message: format!("Failed to get box creation info: {}", e),
-        })
+fn map_box_creation_info_err(e: impl std::fmt::Display) -> ProtocolError {
+    ProtocolError::BoxParseError {
+        message: format!("Failed to get box creation info: {}", e),
+    }
 }
 
 fn serialize_ergo_tree(ergo_box: &ErgoBox) -> Result<String, ProtocolError> {
@@ -262,11 +259,26 @@ pub async fn fetch_tx_context(
     let oracle_data = parse_oracle_box(&oracle_box)?;
     let lp_data = parse_lp_box(&lp_box, ids)?;
 
-    let free_mint_tx_info = box_creation_info(client, &free_mint_box).await?;
-    let bank_tx_info = box_creation_info(client, &bank_box).await?;
-    let buyback_tx_info = box_creation_info(client, &buyback_box).await?;
-    let oracle_tx_info = box_creation_info(client, &oracle_box).await?;
-    let lp_tx_info = box_creation_info(client, &lp_box).await?;
+    let free_mint_tx_info = client
+        .get_box_creation_info(&free_mint_box.box_id().to_string())
+        .await
+        .map_err(map_box_creation_info_err)?;
+    let bank_tx_info = client
+        .get_box_creation_info(&bank_box.box_id().to_string())
+        .await
+        .map_err(map_box_creation_info_err)?;
+    let buyback_tx_info = client
+        .get_box_creation_info(&buyback_box.box_id().to_string())
+        .await
+        .map_err(map_box_creation_info_err)?;
+    let oracle_tx_info = client
+        .get_box_creation_info(&oracle_box.box_id().to_string())
+        .await
+        .map_err(map_box_creation_info_err)?;
+    let lp_tx_info = client
+        .get_box_creation_info(&lp_box.box_id().to_string())
+        .await
+        .map_err(map_box_creation_info_err)?;
 
     let free_mint_input =
         Eip12InputBox::from_ergo_box(&free_mint_box, free_mint_tx_info.0, free_mint_tx_info.1);
@@ -335,7 +347,10 @@ pub async fn fetch_swap_tx_context(
             message: format!("LP box not found: {}", e),
         })?;
 
-    let (lp_tx_id, lp_index) = box_creation_info(client, &lp_box).await?;
+    let (lp_tx_id, lp_index) = client
+        .get_box_creation_info(&lp_box.box_id().to_string())
+        .await
+        .map_err(map_box_creation_info_err)?;
     let lp_input = Eip12InputBox::from_ergo_box(&lp_box, lp_tx_id, lp_index);
     let lp_data = parse_lp_box(&lp_box, ids)?;
     let lp_ergo_tree = serialize_ergo_tree(&lp_box)?;
@@ -349,7 +364,10 @@ pub async fn fetch_swap_tx_context(
             message: format!("LP Swap NFT box not found: {}", e),
         })?;
 
-    let (swap_tx_id, swap_index) = box_creation_info(client, &swap_box).await?;
+    let (swap_tx_id, swap_index) = client
+        .get_box_creation_info(&swap_box.box_id().to_string())
+        .await
+        .map_err(map_box_creation_info_err)?;
     let swap_input = Eip12InputBox::from_ergo_box(&swap_box, swap_tx_id, swap_index);
 
     let swap_erg_value = swap_box.value.as_i64();
@@ -413,7 +431,10 @@ pub async fn fetch_lp_tx_context(
             message: format!("LP box not found: {}", e),
         })?;
 
-    let (lp_tx_id, lp_index) = box_creation_info(client, &lp_box).await?;
+    let (lp_tx_id, lp_index) = client
+        .get_box_creation_info(&lp_box.box_id().to_string())
+        .await
+        .map_err(map_box_creation_info_err)?;
     let lp_input = Eip12InputBox::from_ergo_box(&lp_box, lp_tx_id, lp_index);
     let lp_data = parse_lp_box(&lp_box, ids)?;
     let lp_ergo_tree = serialize_ergo_tree(&lp_box)?;
@@ -436,7 +457,10 @@ pub async fn fetch_lp_tx_context(
             message: format!("{} box not found: {}", action_label, e),
         })?;
 
-    let (action_tx_id, action_index) = box_creation_info(client, &action_box).await?;
+    let (action_tx_id, action_index) = client
+        .get_box_creation_info(&action_box.box_id().to_string())
+        .await
+        .map_err(map_box_creation_info_err)?;
     let action_input = Eip12InputBox::from_ergo_box(&action_box, action_tx_id, action_index);
 
     let action_erg_value = action_box.value.as_i64();
@@ -455,7 +479,10 @@ pub async fn fetch_lp_tx_context(
 
             let oracle_data = parse_oracle_box(&oracle_box)?;
 
-            let (oracle_tx_id, oracle_index) = box_creation_info(client, &oracle_box).await?;
+            let (oracle_tx_id, oracle_index) = client
+                .get_box_creation_info(&oracle_box.box_id().to_string())
+                .await
+                .map_err(map_box_creation_info_err)?;
             let data_input =
                 Eip12DataInputBox::from_ergo_box(&oracle_box, oracle_tx_id, oracle_index);
 
