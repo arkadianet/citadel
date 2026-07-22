@@ -1,28 +1,30 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-
 /* ============================================================================
    SigUSD Router — Viewport-locked protocol page
    ============================================================================ */
 
 .router-tab {
-  --rt-font: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --rt-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  --rt-surface: rgba(6, 14, 28, 0.72);
-  --rt-surface-soft: rgba(10, 20, 38, 0.55);
-  --rt-border: rgba(148, 163, 184, 0.12);
-  --rt-border-strong: rgba(148, 163, 184, 0.2);
-  --rt-ink: rgb(241 245 249);
-  --rt-muted: #8b9bb0;
-  --rt-faint: #5f7088;
-  --rt-accent: #34d399;
-  --rt-danger: #f87171;
-  --rt-warn: #fbbf24;
-  --rt-indigo: #a78bfa;
-  --rt-radius: clamp(8px, 0.9vh, 12px);
-  --rt-radius-sm: clamp(6px, 0.7vh, 10px);
-  --rt-gap: clamp(0.4rem, 1.1vh, 0.75rem);
-  --rt-pad-y: clamp(0.55rem, 1.2vh, 0.9rem);
-  --rt-pad-x: clamp(0.7rem, 1.1vw, 1.15rem);
+  --protocol-accent: #34d399; /* protocol accent */
+  --protocol-accent-bg: rgba(52, 211, 153, 0.1); /* protocol accent */
+  --protocol-accent-border: rgba(52, 211, 153, 0.18); /* protocol accent */
+
+  --rt-font: var(--ds-font-sans);
+  --rt-mono: var(--ds-font-mono);
+  --rt-surface: var(--ds-surface-base);
+  --rt-surface-soft: var(--ds-surface-base);
+  --rt-border: var(--ds-border);
+  --rt-border-strong: var(--ds-border-hover);
+  --rt-ink: var(--text-strong);
+  --rt-muted: var(--slate-400);
+  --rt-faint: var(--slate-500);
+  --rt-accent: var(--protocol-accent);
+  --rt-danger: var(--ds-danger);
+  --rt-warn: var(--ds-warning);
+  --rt-indigo: var(--protocol-accent);
+  --rt-radius: var(--ds-radius-md);
+  --rt-radius-sm: var(--ds-radius-sm);
+  --rt-gap: var(--ds-space-3);
+  --rt-pad-y: var(--ds-space-3);
+  --rt-pad-x: var(--ds-space-4);
 
   container-type: size;
   container-name: rt;
@@ -67,13 +69,13 @@
 .router-icon {
   width: clamp(30px, 3.6vh, 36px);
   height: clamp(30px, 3.6vh, 36px);
-  border-radius: 9px;
+  border-radius: var(--ds-radius-sm);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(52, 211, 153, 0.1);
-  border: 1px solid rgba(52, 211, 153, 0.18);
+  background: var(--protocol-accent-bg);
+  border: 1px solid var(--protocol-accent-border);
   color: var(--rt-accent);
 }
 
@@ -111,8 +113,8 @@
 }
 
 .router-body::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 4px;
+  background: var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
 }
 
 /* Market Context Bar */
@@ -167,7 +169,7 @@
 .router-mode-toggle {
   display: flex;
   gap: 2px;
-  background: rgba(2, 8, 18, 0.4);
+  background: var(--ds-input-bg);
   border: 1px solid var(--rt-border);
   border-radius: 8px;
   padding: 3px;
@@ -192,7 +194,7 @@
 }
 
 .router-mode-btn.active {
-  background: rgba(52, 211, 153, 0.14);
+  background: color-mix(in srgb, var(--protocol-accent) 14%, transparent);
   color: var(--rt-accent);
 }
 
@@ -236,8 +238,8 @@
   appearance: none;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  border: 1px solid rgba(52, 211, 153, 0.3);
-  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid color-mix(in srgb, var(--protocol-accent) 30%, transparent);
+  background: var(--protocol-accent-bg);
   color: var(--rt-accent);
   font-size: 0.6rem;
   font-weight: 700;
@@ -248,7 +250,7 @@
 }
 
 .router-max-btn:hover {
-  background: rgba(52, 211, 153, 0.2);
+  background: color-mix(in srgb, var(--protocol-accent) 20%, transparent);
 }
 
 /* Status Messages */
@@ -262,9 +264,9 @@
 .router-error {
   padding: 0.45rem 0.7rem;
   border-radius: var(--rt-radius-sm);
-  background: rgba(248, 113, 113, 0.1);
-  border: 1px solid rgba(248, 113, 113, 0.22);
-  color: #fca5a5;
+  background: var(--ds-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 22%, transparent);
+  color: var(--ds-danger);
   font-size: clamp(0.68rem, 1.3vh, 0.76rem);
 }
 
@@ -295,9 +297,9 @@
   padding: clamp(0.5rem, 1.1vh, 0.7rem) clamp(0.65rem, 1.1vw, 0.9rem);
   border-radius: var(--rt-radius);
   background:
-    radial-gradient(120% 140% at 0% 0%, rgba(52, 211, 153, 0.1), transparent 45%),
+    radial-gradient(120% 140% at 0% 0%, var(--protocol-accent-bg), transparent 45%),
     var(--rt-surface);
-  border: 1px solid rgba(52, 211, 153, 0.2);
+  border: 1px solid color-mix(in srgb, var(--protocol-accent) 20%, transparent);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
@@ -380,8 +382,8 @@
 .router-split-card {
   padding: clamp(0.5rem, 1.1vh, 0.7rem);
   border-radius: var(--rt-radius);
-  border: 1px solid rgba(167, 139, 250, 0.25);
-  background: rgba(167, 139, 250, 0.06);
+  border: 1px solid color-mix(in srgb, var(--ds-info) 25%, transparent);
+  background: var(--ds-info-bg);
 }
 
 .router-split-header {
@@ -397,9 +399,9 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  border-radius: var(--ds-radius-sm);
   background: var(--rt-indigo);
-  color: #0f172a;
+  color: var(--ds-surface-base);
 }
 
 .router-split-improvement {
@@ -447,7 +449,7 @@
   position: relative;
   padding: 0.35rem 0.5rem;
   border-radius: 6px;
-  background: rgba(2, 8, 18, 0.35);
+  background: var(--ds-input-bg);
   overflow: hidden;
 }
 
@@ -456,7 +458,7 @@
   left: 0;
   top: 0;
   bottom: 0;
-  background: rgba(167, 139, 250, 0.1);
+  background: var(--ds-info-bg);
   border-radius: 6px 0 0 6px;
   pointer-events: none;
 }
@@ -520,8 +522,8 @@
 }
 
 .router-route-card.best {
-  border-color: rgba(52, 211, 153, 0.3);
-  background: rgba(52, 211, 153, 0.05);
+  border-color: color-mix(in srgb, var(--protocol-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--protocol-accent) 5%, transparent);
 }
 
 .router-route-header {
@@ -545,9 +547,9 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  border-radius: var(--ds-radius-sm);
   background: var(--rt-accent);
-  color: #06281f;
+  color: var(--ds-btn-primary-text);
 }
 
 .router-badge-diff {
@@ -559,8 +561,8 @@
   font-size: 0.6rem;
   color: var(--rt-muted);
   padding: 0.1rem 0.3rem;
-  border-radius: 4px;
-  background: rgba(148, 163, 184, 0.1);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-neutral-bg);
 }
 
 .router-route-amounts {
@@ -607,8 +609,8 @@
   font-weight: 500;
   color: var(--rt-ink);
   padding: 0.05rem 0.3rem;
-  border-radius: 4px;
-  background: rgba(148, 163, 184, 0.1);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-neutral-bg);
 }
 
 .router-hop-arrow-sm {
@@ -627,7 +629,7 @@
 .router-hop-detail {
   padding: 0.3rem 0.4rem;
   border-radius: 6px;
-  background: rgba(2, 8, 18, 0.35);
+  background: var(--ds-input-bg);
   font-size: 0.65rem;
 }
 
@@ -667,7 +669,7 @@
   text-align: center;
   padding: 0.1rem 0;
   border-radius: 3px;
-  background: rgba(148, 163, 184, 0.06);
+  background: var(--ds-neutral-bg);
 }
 
 .router-hop-depth-tier {
@@ -690,7 +692,7 @@
   font-size: 0.65rem;
   color: var(--rt-muted);
   padding-top: 0.3rem;
-  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  border-top: 1px solid var(--ds-neutral-bg);
 }
 
 .router-route-stats strong {
@@ -712,7 +714,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.35rem 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.07);
+  border-bottom: 1px solid var(--ds-neutral-bg);
 }
 
 .router-cross-row:last-child {
@@ -804,8 +806,8 @@
   flex: 1;
   text-align: center;
   padding: 0.25rem 0.1rem;
-  border-radius: 4px;
-  background: rgba(148, 163, 184, 0.06);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-neutral-bg);
 }
 
 .router-depth-label {
@@ -826,27 +828,27 @@
   font-size: 0.6rem;
   font-weight: 600;
   padding: 0.1rem 0.35rem;
-  border-radius: 4px;
+  border-radius: var(--ds-radius-sm);
   font-family: var(--rt-mono);
 }
 
 .router-badge-impact.impact-low {
-  background: rgba(52, 211, 153, 0.14);
+  background: color-mix(in srgb, var(--protocol-accent) 14%, transparent);
   color: var(--rt-accent);
 }
 
 .router-badge-impact.impact-medium {
-  background: rgba(251, 191, 36, 0.14);
+  background: color-mix(in srgb, var(--ds-warning) 14%, transparent);
   color: var(--rt-warn);
 }
 
 .router-badge-impact.impact-high {
-  background: rgba(251, 146, 60, 0.14);
-  color: #fb923c;
+  background: color-mix(in srgb, var(--amber-500) 14%, transparent);
+  color: var(--amber-500);
 }
 
 .router-badge-impact.impact-severe {
-  background: rgba(248, 113, 113, 0.14);
+  background: color-mix(in srgb, var(--ds-danger) 14%, transparent);
   color: var(--rt-danger);
 }
 
@@ -857,7 +859,7 @@
   color: var(--rt-faint);
   padding: 0 0.2rem;
   border-radius: 3px;
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--ds-neutral-bg);
   margin-left: 0.15rem;
 }
 
@@ -867,7 +869,7 @@
   color: var(--rt-faint);
   padding: 0 0.2rem;
   border-radius: 3px;
-  background: rgba(148, 163, 184, 0.06);
+  background: var(--ds-neutral-bg);
   margin-left: 0.25rem;
 }
 
@@ -882,25 +884,11 @@
   align-self: center;
 }
 
-/* Execute Button */
+/* Execute Button — layout only; visuals from ds-btn */
 .router-execute-btn {
   display: block;
   width: 100%;
-  margin-top: 0.5rem;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: var(--rt-radius-sm);
-  background: var(--rt-accent);
-  color: #06281f;
-  font: inherit;
-  font-size: clamp(0.7rem, 1.3vh, 0.8rem);
-  font-weight: 700;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.router-execute-btn:hover {
-  opacity: 0.9;
+  margin-top: var(--ds-space-2);
 }
 
 /* Multi-hop Notice */
@@ -913,61 +901,38 @@
   font-style: italic;
 }
 
-/* Execution Modal */
-.router-execute-modal {
-  max-width: 400px;
-  width: 90%;
-}
-
+/* Execution Modal content (shell is ds-modal) */
 .router-exec-status {
   text-align: center;
-  padding: 1.25rem;
+  padding: var(--ds-space-4);
   font-size: clamp(0.72rem, 1.35vh, 0.82rem);
   color: var(--rt-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-2);
 }
 
 .router-exec-signing {
-  padding: 1rem;
+  padding: var(--ds-space-2);
   text-align: center;
-}
-
-.router-exec-signing h3 {
-  margin: 0 0 0.5rem;
-  font-size: clamp(0.85rem, 1.6vh, 0.95rem);
-  color: var(--rt-ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ds-space-3);
 }
 
 .router-exec-desc {
   font-size: clamp(0.68rem, 1.3vh, 0.76rem);
   color: var(--rt-muted);
-  margin-bottom: 1rem;
-}
-
-.router-nautilus-btn {
-  display: inline-block;
-  padding: 0.6rem 1.5rem;
-  border: none;
-  border-radius: var(--rt-radius-sm);
-  background: var(--rt-indigo);
-  color: #0f172a;
-  font: inherit;
-  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s;
-  margin-bottom: 1rem;
-}
-
-.router-nautilus-btn:hover {
-  opacity: 0.9;
+  margin: 0;
 }
 
 .router-qr-section {
-  margin-top: 0.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--ds-space-2);
 }
 
 .router-qr-label {
@@ -977,47 +942,24 @@
 }
 
 .router-exec-waiting {
-  margin-top: 0.5rem;
   font-size: clamp(0.68rem, 1.3vh, 0.76rem);
   color: var(--rt-faint);
 }
 
 .router-exec-success {
-  padding: 1rem;
+  padding: var(--ds-space-2);
 }
 
 .router-exec-error {
-  padding: 1rem;
+  padding: var(--ds-space-2);
   text-align: center;
-}
-
-.router-exec-error h3 {
-  margin: 0 0 0.5rem;
-  font-size: clamp(0.85rem, 1.6vh, 0.95rem);
-  color: var(--rt-danger);
 }
 
 .router-exec-error p {
   font-size: clamp(0.68rem, 1.3vh, 0.76rem);
   color: var(--rt-muted);
-  margin-bottom: 1rem;
+  margin: 0;
   word-break: break-word;
-}
-
-.router-exec-close-btn {
-  padding: 0.4rem 1rem;
-  border: 1px solid var(--rt-border-strong);
-  border-radius: var(--rt-radius-sm);
-  background: rgba(148, 163, 184, 0.1);
-  color: var(--rt-ink);
-  font: inherit;
-  font-size: clamp(0.72rem, 1.35vh, 0.82rem);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.router-exec-close-btn:hover {
-  background: rgba(148, 163, 184, 0.18);
 }
 
 /* ============================================================================
@@ -1026,8 +968,8 @@
 
 .arb-snapshot {
   border-radius: var(--rt-radius);
-  border: 1px solid rgba(52, 211, 153, 0.22);
-  background: rgba(52, 211, 153, 0.05);
+  border: 1px solid color-mix(in srgb, var(--protocol-accent) 22%, transparent);
+  background: color-mix(in srgb, var(--protocol-accent) 5%, transparent);
   padding: clamp(0.5rem, 1.1vh, 0.7rem) clamp(0.65rem, 1.1vw, 0.9rem);
 }
 
@@ -1058,7 +1000,7 @@
   display: flex;
   gap: 0.75rem;
   padding: 0.35rem 0;
-  border-bottom: 1px solid rgba(52, 211, 153, 0.1);
+  border-bottom: 1px solid var(--protocol-accent-bg);
   margin-bottom: 0.4rem;
   flex-wrap: wrap;
 }
@@ -1100,7 +1042,7 @@
 .arb-window-card {
   padding: 0.45rem 0.6rem;
   border-radius: var(--rt-radius-sm);
-  background: rgba(2, 8, 18, 0.35);
+  background: var(--ds-input-bg);
   border: 1px solid var(--rt-border);
   transition: border-color 0.15s, background 0.15s;
 }
@@ -1110,8 +1052,8 @@
 }
 
 .arb-window-card.clickable:hover {
-  border-color: rgba(52, 211, 153, 0.35);
-  background: rgba(52, 211, 153, 0.07);
+  border-color: color-mix(in srgb, var(--protocol-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--protocol-accent) 7%, transparent);
 }
 
 .arb-window-header {
@@ -1132,8 +1074,8 @@
   font-size: 0.6rem;
   color: var(--rt-faint);
   padding: 0.1rem 0.3rem;
-  border-radius: 4px;
-  background: rgba(148, 163, 184, 0.1);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-neutral-bg);
 }
 
 .arb-window-discount {
@@ -1143,8 +1085,8 @@
   font-family: var(--rt-mono);
   color: var(--rt-accent);
   padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-  background: rgba(52, 211, 153, 0.12);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-success-bg);
 }
 
 .arb-window-details {
@@ -1177,7 +1119,7 @@
 .arb-window-action {
   margin-top: 0.4rem;
   padding-top: 0.25rem;
-  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  border-top: 1px solid var(--ds-neutral-bg);
   font-size: 0.65rem;
   font-weight: 600;
   color: var(--rt-accent);

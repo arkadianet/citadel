@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-
 /* ============================================================================
    Smart Swap — all component styles
    Matches the Dashboard / SigmaUSD / Dexy visual language: Plus Jakarta Sans,
@@ -9,17 +7,21 @@
    ============================================================================ */
 
 .smart-swap-view {
-  --ssw-font: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --ssw-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  --ssw-surface: rgba(6, 14, 28, 0.72);
-  --ssw-surface-solid: rgba(6, 14, 28, 0.94);
-  --ssw-surface-soft: rgba(10, 20, 38, 0.55);
-  --ssw-field-bg: rgba(2, 8, 18, 0.4);
-  --ssw-border: rgba(148, 163, 184, 0.12);
-  --ssw-border-strong: rgba(148, 163, 184, 0.2);
-  --ssw-faint: #5f7088;
-  --ssw-radius: clamp(8px, 0.9vh, 12px);
-  --ssw-radius-sm: clamp(6px, 0.7vh, 10px);
+  --protocol-accent: #34d399; /* protocol accent */
+  --protocol-accent-bg: rgba(52, 211, 153, 0.1); /* protocol accent */
+  --protocol-accent-border: rgba(52, 211, 153, 0.18); /* protocol accent */
+
+  --ssw-font: var(--ds-font-sans);
+  --ssw-mono: var(--ds-font-mono);
+  --ssw-surface: var(--ds-surface-base);
+  --ssw-surface-solid: var(--ds-surface-elevated);
+  --ssw-surface-soft: var(--ds-surface-base);
+  --ssw-field-bg: var(--ds-input-bg);
+  --ssw-border: var(--ds-border);
+  --ssw-border-strong: var(--ds-border-hover);
+  --ssw-faint: var(--slate-500);
+  --ssw-radius: var(--ds-radius-md);
+  --ssw-radius-sm: var(--ds-radius-sm);
 
   flex: 1;
   min-height: 0;
@@ -29,12 +31,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  padding: clamp(0.65rem, 1.3vh, 0.95rem);
+  padding: var(--ds-space-3);
   border-radius: var(--ssw-radius);
   border: 1px solid var(--ssw-border);
   background: var(--ssw-surface);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(var(--ds-blur));
+  -webkit-backdrop-filter: blur(var(--ds-blur));
   overflow-y: auto;
   scrollbar-gutter: stable;
   font-family: var(--ssw-font);
@@ -45,8 +47,8 @@
 }
 
 .smart-swap-view::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 4px;
+  background: var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
 }
 
 /* ============================================================================
@@ -68,17 +70,17 @@
   border-radius: var(--ssw-radius-sm);
   width: 100%;
   cursor: pointer;
-  color: rgb(var(--text));
+  color: var(--ds-btn-secondary-text);
   font: inherit;
   font-size: clamp(0.72rem, 1.35vh, 0.82rem);
   font-weight: 600;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--ds-transition-fast);
   text-align: left;
   gap: 6px;
 }
 
 .token-selector-trigger:hover:not(:disabled) {
-  border-color: rgba(52, 211, 153, 0.4);
+  border-color: color-mix(in srgb, var(--protocol-accent) 40%, transparent);
 }
 
 .token-selector-trigger:disabled {
@@ -109,7 +111,7 @@
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--ssw-border-strong);
   border-radius: var(--ssw-radius-sm);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 30px var(--ds-modal-scrim);
   max-height: 300px;
   display: flex;
   flex-direction: column;
@@ -121,7 +123,7 @@
   border: none;
   border-bottom: 1px solid var(--ssw-border);
   outline: none;
-  color: rgb(var(--text));
+  color: var(--ds-btn-secondary-text);
   font: inherit;
   font-size: clamp(0.7rem, 1.3vh, 0.8rem);
   padding: clamp(0.4rem, 0.9vh, 0.55rem) clamp(0.55rem, 1vw, 0.7rem);
@@ -145,21 +147,21 @@
   padding: clamp(0.4rem, 0.9vh, 0.55rem) clamp(0.55rem, 1vw, 0.7rem);
   background: transparent;
   border: none;
-  color: rgb(var(--text));
+  color: var(--ds-btn-secondary-text);
   font: inherit;
   font-size: clamp(0.72rem, 1.35vh, 0.82rem);
   cursor: pointer;
   text-align: left;
   gap: 8px;
-  transition: background 0.1s ease;
+  transition: background var(--ds-transition-fast);
 }
 
 .token-selector-item:hover {
-  background: rgba(148, 163, 184, 0.06);
+  background: var(--ds-neutral-bg);
 }
 
 .token-selector-item.active {
-  background: rgba(52, 211, 153, 0.12);
+  background: var(--ds-success-bg);
 }
 
 .token-selector-item-name {
@@ -245,7 +247,7 @@
   background: var(--ssw-field-bg);
   border: 1px solid var(--ssw-border);
   border-radius: var(--ssw-radius-sm);
-  color: rgb(var(--text));
+  color: var(--ds-btn-secondary-text);
   font-size: clamp(0.85rem, 1.7vh, 1rem);
   font-family: var(--ssw-mono);
   font-weight: 600;
@@ -253,7 +255,7 @@
   padding: clamp(0.4rem, 0.9vh, 0.55rem) clamp(0.5rem, 1vw, 0.65rem);
   outline: none;
   min-width: 0;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--ds-transition-fast);
 }
 
 .smart-swap-amount-input:focus {
@@ -276,15 +278,15 @@
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background var(--ds-transition-fast), border-color 0.15s ease;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .smart-swap-max-btn:hover,
 .smart-swap-slippage-btn:hover {
-  background: rgba(52, 211, 153, 0.1);
-  border-color: rgba(52, 211, 153, 0.4);
+  background: var(--protocol-accent-bg);
+  border-color: color-mix(in srgb, var(--protocol-accent) 40%, transparent);
 }
 
 .smart-swap-target-row {
@@ -311,7 +313,7 @@
   flex-direction: column;
   gap: var(--space-xs);
   padding: var(--space-sm);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 30px var(--ds-modal-scrim);
 }
 
 .smart-swap-slippage-label {
@@ -343,19 +345,19 @@
   cursor: pointer;
   text-transform: none;
   letter-spacing: 0;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background var(--ds-transition-fast), border-color 0.15s ease, color 0.15s ease;
 }
 
 .smart-swap-slippage-preset:hover {
-  color: rgb(var(--text));
+  color: var(--ds-btn-secondary-text);
   border-color: var(--ssw-border-strong);
 }
 
 .smart-swap-slippage-options .smart-swap-slippage-btn.active,
 .smart-swap-slippage-preset.active {
-  border-color: rgba(52, 211, 153, 0.4);
+  border-color: color-mix(in srgb, var(--protocol-accent) 40%, transparent);
   color: var(--emerald-400);
-  background: rgba(52, 211, 153, 0.12);
+  background: var(--ds-success-bg);
 }
 
 .smart-swap-slippage-custom {
@@ -368,12 +370,12 @@
   background: var(--ssw-field-bg);
   border: 1px solid var(--ssw-border);
   border-radius: var(--ssw-radius-sm);
-  color: rgb(var(--text));
+  color: var(--ds-btn-secondary-text);
   font-size: clamp(0.6rem, 1.1vh, 0.68rem);
   font-family: var(--ssw-mono);
   outline: none;
   text-align: right;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--ds-transition-fast);
 }
 
 .smart-swap-slippage-custom-input:focus {
@@ -400,9 +402,9 @@
 .smart-swap-warning {
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--ssw-radius-sm);
-  background: rgba(251, 191, 36, 0.1);
-  border: 1px solid rgba(251, 191, 36, 0.25);
-  color: #fbbf24;
+  background: var(--ds-warning-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-warning) 25%, transparent);
+  color: var(--ds-warning);
   font-size: clamp(0.68rem, 1.3vh, 0.78rem);
 }
 
@@ -437,7 +439,7 @@
 .smart-swap-loading-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(6, 14, 28, 0.65);
+  background: var(--ds-surface-base);
   border-radius: var(--ssw-radius-sm);
   display: flex;
   align-items: center;
@@ -458,9 +460,9 @@
 .smart-swap-error {
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--ssw-radius-sm);
-  background: rgba(248, 113, 113, 0.1);
-  border: 1px solid rgba(248, 113, 113, 0.28);
-  color: #fca5a5;
+  background: var(--ds-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 28%, transparent);
+  color: var(--ds-danger);
   font-size: clamp(0.68rem, 1.3vh, 0.78rem);
   display: flex;
   align-items: center;
@@ -470,19 +472,19 @@
 .smart-swap-retry-btn {
   padding: 3px 10px;
   background: transparent;
-  border: 1px solid rgba(248, 113, 113, 0.45);
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 45%, transparent);
   border-radius: var(--ssw-radius-sm);
-  color: #fca5a5;
+  color: var(--ds-danger);
   font-size: clamp(0.6rem, 1.1vh, 0.68rem);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s ease;
+  transition: background var(--ds-transition-fast);
   flex-shrink: 0;
 }
 
 .smart-swap-retry-btn:hover {
-  background: rgba(248, 113, 113, 0.12);
+  background: var(--ds-danger-bg);
 }
 
 .smart-swap-no-routes {
@@ -499,11 +501,11 @@
   gap: var(--space-sm);
   padding: var(--space-lg);
   text-align: center;
-  color: rgb(var(--text));
+  color: var(--ds-btn-secondary-text);
   font-size: clamp(0.72rem, 1.35vh, 0.82rem);
-  border: 1px solid rgba(251, 191, 36, 0.35);
+  border: 1px solid color-mix(in srgb, var(--ds-warning) 35%, transparent);
   border-radius: var(--ssw-radius-sm);
-  background: rgba(251, 191, 36, 0.06);
+  background: var(--ds-warning-bg);
 }
 
 .smart-swap-max-hint p {
@@ -513,7 +515,7 @@
 }
 
 .smart-swap-max-hint strong {
-  color: rgb(var(--text));
+  color: var(--ds-btn-secondary-text);
   font-family: var(--ssw-mono);
   font-weight: 600;
 }
@@ -528,22 +530,22 @@
   background: var(--ssw-field-bg);
   border: 1px solid var(--ssw-border);
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color var(--ds-transition-fast), background var(--ds-transition-fast);
 }
 
 .smart-route-card:hover {
   border-color: var(--ssw-border-strong);
-  background: rgba(8, 18, 34, 0.6);
+  background: var(--ds-surface-base);
 }
 
 .smart-route-card.best {
-  border-color: rgba(52, 211, 153, 0.32);
-  background: rgba(52, 211, 153, 0.05);
+  border-color: color-mix(in srgb, var(--protocol-accent) 32%, transparent);
+  background: color-mix(in srgb, var(--protocol-accent) 5%, transparent);
 }
 
 .smart-route-card.selected {
   border-color: var(--emerald-400);
-  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.25);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--protocol-accent) 25%, transparent);
 }
 
 .smart-route-header {
@@ -568,16 +570,16 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 1px 6px;
-  border-radius: 4px;
-  background: rgba(52, 211, 153, 0.15);
+  border-radius: var(--ds-radius-sm);
+  background: color-mix(in srgb, var(--protocol-accent) 15%, transparent);
   color: var(--emerald-400);
 }
 
 .smart-badge-hops {
   font-size: 10px;
   padding: 1px 6px;
-  border-radius: 4px;
-  background: rgba(148, 163, 184, 0.1);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-neutral-bg);
   color: var(--ssw-faint);
 }
 
@@ -598,8 +600,8 @@
   font-weight: 500;
   color: var(--slate-300);
   padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(148, 163, 184, 0.08);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-neutral-bg);
 }
 
 .smart-route-arrow {
@@ -613,7 +615,7 @@
   font-weight: 700;
   font-family: var(--ssw-mono);
   font-variant-numeric: tabular-nums;
-  color: rgb(var(--text));
+  color: var(--ds-btn-secondary-text);
 }
 
 .smart-route-output-gross {
@@ -642,7 +644,7 @@
   font-size: clamp(0.6rem, 1.1vh, 0.68rem);
   cursor: pointer;
   padding: 2px 0;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--ds-transition-fast);
 }
 
 .smart-route-expand-btn:hover {
@@ -662,7 +664,7 @@
 
 .smart-hop-detail {
   padding: var(--space-xs) var(--space-sm);
-  background: rgba(2, 8, 18, 0.35);
+  background: var(--ds-input-bg);
   border-radius: var(--ssw-radius-sm);
   font-size: clamp(0.6rem, 1.1vh, 0.68rem);
 }
@@ -674,7 +676,7 @@
 }
 
 .smart-hop-label {
-  color: rgb(var(--text));
+  color: var(--ds-btn-secondary-text);
   font-weight: 600;
 }
 
@@ -684,7 +686,7 @@
   color: var(--ssw-faint);
   padding: 0 4px;
   border-radius: 3px;
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--ds-neutral-bg);
   margin-left: 4px;
 }
 
@@ -720,15 +722,15 @@
 }
 
 .impact-medium {
-  color: #fbbf24;
+  color: var(--ds-warning);
 }
 
 .impact-high {
-  color: #fb923c;
+  color: var(--amber-500);
 }
 
 .impact-severe {
-  color: #f87171;
+  color: var(--ds-danger);
 }
 
 /* ============================================================================
@@ -744,17 +746,17 @@
   background: var(--ssw-field-bg);
   border: 1px solid var(--ssw-border);
   border-radius: var(--ssw-radius-sm);
-  color: rgb(var(--text));
+  color: var(--ds-btn-secondary-text);
   font-size: clamp(0.72rem, 1.35vh, 0.82rem);
   cursor: pointer;
   gap: 8px;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color var(--ds-transition-fast), background var(--ds-transition-fast);
   text-align: left;
 }
 
 .smart-route-compact:hover {
   border-color: var(--ssw-border-strong);
-  background: rgba(8, 18, 34, 0.6);
+  background: var(--ds-surface-base);
 }
 
 .smart-route-compact.selected {
@@ -775,7 +777,7 @@
   font-weight: 700;
   font-family: var(--ssw-mono);
   font-variant-numeric: tabular-nums;
-  color: rgb(var(--text));
+  color: var(--ds-btn-secondary-text);
   flex-shrink: 0;
 }
 
@@ -806,11 +808,11 @@
   font-size: clamp(0.6rem, 1.1vh, 0.68rem);
   cursor: pointer;
   padding: 2px 0;
-  transition: color 0.15s ease;
+  transition: color var(--ds-transition-fast);
 }
 
 .smart-route-alternatives-toggle:hover {
-  color: rgb(var(--text));
+  color: var(--ds-btn-secondary-text);
   text-decoration: underline;
 }
 
@@ -821,14 +823,14 @@
 .smart-split-suggestion {
   padding: var(--space-sm);
   border-radius: var(--ssw-radius-sm);
-  background: rgba(52, 211, 153, 0.04);
-  border: 1px solid rgba(52, 211, 153, 0.22);
-  transition: border-color 0.15s ease;
+  background: color-mix(in srgb, var(--protocol-accent) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--protocol-accent) 22%, transparent);
+  transition: border-color var(--ds-transition-fast);
 }
 
 .smart-split-suggestion.active {
-  border-color: rgba(52, 211, 153, 0.5);
-  background: rgba(52, 211, 153, 0.07);
+  border-color: color-mix(in srgb, var(--protocol-accent) 50%, transparent);
+  background: color-mix(in srgb, var(--protocol-accent) 7%, transparent);
 }
 
 .smart-split-header {
@@ -848,23 +850,23 @@
 .smart-split-toggle {
   padding: 3px 10px;
   background: transparent;
-  border: 1px solid rgba(52, 211, 153, 0.4);
+  border: 1px solid color-mix(in srgb, var(--protocol-accent) 40%, transparent);
   border-radius: var(--ssw-radius-sm);
   color: var(--emerald-400);
   font-size: clamp(0.6rem, 1.1vh, 0.68rem);
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background var(--ds-transition-fast), border-color 0.15s ease;
   flex-shrink: 0;
 }
 
 .smart-split-toggle:hover {
-  background: rgba(52, 211, 153, 0.1);
+  background: var(--protocol-accent-bg);
   border-color: var(--emerald-400);
 }
 
 .smart-split-toggle.active {
-  background: rgba(52, 211, 153, 0.14);
+  background: color-mix(in srgb, var(--protocol-accent) 14%, transparent);
   border-color: var(--emerald-400);
 }
 
@@ -901,15 +903,15 @@
   border: 1px solid var(--emerald-400);
   border-radius: var(--ssw-radius-sm);
   background: var(--emerald-400);
-  color: #06170f;
+  color: var(--ds-btn-primary-text);
   font-size: clamp(0.78rem, 1.5vh, 0.9rem);
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background var(--ds-transition-fast);
 }
 
 .smart-swap-confirm-btn:hover:not(:disabled) {
-  background: #22c993;
+  background: var(--protocol-accent);
 }
 
 .smart-swap-confirm-btn:disabled {
@@ -924,7 +926,7 @@
 .smart-swap-mode-toggle {
   display: flex;
   gap: 2px;
-  background: rgba(2, 8, 18, 0.4);
+  background: var(--ds-input-bg);
   border-radius: var(--ssw-radius-sm);
   padding: 2px;
   margin-bottom: var(--space-xs);
@@ -940,7 +942,7 @@
   font-size: clamp(0.72rem, 1.35vh, 0.82rem);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background var(--ds-transition-fast), color 0.15s ease;
 }
 
 .smart-swap-mode-btn:hover {
@@ -948,7 +950,7 @@
 }
 
 .smart-swap-mode-btn.active {
-  background: rgba(52, 211, 153, 0.14);
+  background: color-mix(in srgb, var(--protocol-accent) 14%, transparent);
   color: var(--emerald-400);
 }
 
@@ -960,10 +962,10 @@
   display: flex;
   gap: var(--space-xs);
   padding: var(--space-xs);
-  background: rgba(6, 14, 28, 0.72);
+  background: var(--ds-surface-base);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid var(--ds-border);
   border-radius: 12px;
   margin-bottom: var(--space-md);
 }
@@ -978,15 +980,15 @@
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--ds-transition-base);
 }
 
 .swap-mode-btn:hover {
-  color: rgb(var(--text));
-  background: rgba(148, 163, 184, 0.06);
+  color: var(--ds-btn-secondary-text);
+  background: var(--ds-neutral-bg);
 }
 
 .swap-mode-btn.active {
-  background: rgba(52, 211, 153, 0.1);
+  background: var(--protocol-accent-bg);
   color: var(--emerald-400);
 }
