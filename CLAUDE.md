@@ -23,7 +23,7 @@ cargo tauri build                        # Release build -> target/release/bundl
 ## Architecture
 
 ```
-app/src/commands/        Tauri IPC handlers (~99 commands), one module per protocol
+app/src/commands/        Tauri IPC handlers (~118 commands), one module per protocol
 app/src/lib.rs           App setup, state management, command registration
 frontend/src/api/        Typed Tauri invoke wrappers, one file per protocol
 frontend/src/components/ React UI components ({Name}Tab.tsx + CSS per protocol)
@@ -35,16 +35,19 @@ crates/
   ergo-tx/               EIP-12 tx building, box selection, sigma encoding
   ergopay-core/          Transaction reduction for signing
   ergopay-server/        Local HTTP server for Nautilus signing flow
-  citadel-api/           HTTP API layer and DTOs (alternative to Tauri IPC)
+  citadel-api/           Façade: AppState, DTOs (unused Axum routes still present until Wave 1 delete)
   protocols/
-    amm/                 Spectrum DEX AMM swaps
+    amm/                 Spectrum DEX AMM (swaps, LP, router, arb-scanner)
     dexy/                Dexy oracle-pegged stablecoins
     hodlcoin/            Phoenix HodlCoin
     lending/             Duckpools lending
     mewlock/             MewLock timelocks
     sigmafi/             SigmaFi P2P bonds
     sigmausd/            AgeUSD stablecoin
+    stake_recovery/      Stake key recovery helpers
 ```
+
+**Not shipped / not workspace members:** Rosen Bridge (no `crates/protocols/rosen`). Citadel Timelock (`crates/protocols/citadel-timelock/`) holds design docs only — see `docs/superpowers/specs/2026-07-21-citadel-timelock-design.md`; out of scope for the modular refactor.
 
 ## Key Patterns
 

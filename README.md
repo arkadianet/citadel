@@ -11,7 +11,6 @@ A local-first desktop app for interacting with DeFi protocols on the Ergo blockc
 - **DEX** -- Token swaps via Spectrum AMM pools (N2T)
 - **Lending** -- Duckpools supply, borrow, withdraw, repay
 - **HodlCoin** -- Phoenix HodlCoin mint/burn with bank discovery
-- **Rosen Bridge** -- Cross-chain bridging to Cardano and Bitcoin
 - **SigmaFi Bonds** -- P2P lending: post collateral, fill bond orders, repay/liquidate
 - **MewLock Timelocks** -- Time-locked asset storage with on-chain lock discovery
 
@@ -81,7 +80,6 @@ crates/
     hodlcoin/         Phoenix HodlCoin
     lending/          Duckpools lending
     mewlock/          MewLock timelocks
-    rosen/            Rosen Bridge cross-chain
     sigmafi/          SigmaFi P2P bonds
     sigmausd/         AgeUSD stablecoin
 frontend/src/         React UI + Tauri invoke wrappers
@@ -89,6 +87,8 @@ app/                  Tauri desktop shell
 ```
 
 ## Status
+
+Stake recovery is available in-app. Citadel Timelock is design-only and not wired.
 
 Alpha -- under active development. Transactions use real ERG. Use at your own risk.
 
