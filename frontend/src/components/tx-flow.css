@@ -1,5 +1,17 @@
 /* Shared transaction/modal flow styles (extracted from App.css) */
 
+.text-danger {
+  color: var(--red-400);
+}
+
+.text-warning {
+  color: var(--amber-400);
+}
+
+.text-emerald {
+  color: var(--emerald-400);
+}
+
 /* ============================================================================
    Swap Modal
    ============================================================================ */
