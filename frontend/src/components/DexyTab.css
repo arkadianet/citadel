@@ -5,17 +5,21 @@
    ============================================================================ */
 
 .dexy-tab {
+  --protocol-accent: #34d399; /* protocol accent */
+  --protocol-accent-bg: rgba(52, 211, 153, 0.1); /* protocol accent */
+  --protocol-accent-border: rgba(52, 211, 153, 0.18); /* protocol accent */
+  --text-strong: rgb(var(--text)); /* protocol accent */
   --dexy-font: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --dexy-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  --dexy-surface: rgba(6, 14, 28, 0.72);
-  --dexy-surface-soft: rgba(10, 20, 38, 0.55);
-  --dexy-border: rgba(148, 163, 184, 0.12);
-  --dexy-border-strong: rgba(148, 163, 184, 0.2);
-  --dexy-ink: rgb(241 245 249);
-  --dexy-muted: #8b9bb0;
-  --dexy-faint: #5f7088;
-  --dexy-accent: #34d399;
-  --dexy-gold: #fbbf24;
+  --dexy-mono: var(--ds-font-mono);
+  --dexy-surface: var(--ds-surface-base);
+  --dexy-surface-soft: var(--ds-surface-base);
+  --dexy-border: var(--ds-border);
+  --dexy-border-strong: var(--ds-border-hover);
+  --dexy-ink: var(--text-strong);
+  --dexy-muted: var(--slate-400);
+  --dexy-faint: var(--slate-500);
+  --dexy-accent: var(--protocol-accent);
+  --dexy-gold: var(--ds-warning);
   --dexy-radius: clamp(8px, 0.9vh, 12px);
   --dexy-radius-sm: clamp(6px, 0.7vh, 10px);
   --dexy-gap: clamp(0.4rem, 1.1vh, 0.75rem);
@@ -82,7 +86,7 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 2px solid rgba(2, 8, 18, 0.7);
+  border: 2px solid var(--ds-modal-scrim);
   top: 2px;
   display: flex;
   align-items: center;
@@ -93,13 +97,13 @@
 .icon-gold {
   left: 0;
   z-index: 2;
-  background: linear-gradient(135deg, #fbbf24, #d97706);
+  background: linear-gradient(135deg, var(--ds-warning), var(--amber-500));
 }
 
 .icon-usd {
   left: 12px;
   z-index: 1;
-  background: linear-gradient(135deg, #34d399, #059669);
+  background: linear-gradient(135deg, var(--ds-success), var(--emerald-600));
 }
 
 .icon-gold img,
@@ -174,25 +178,25 @@
 }
 
 .token-card.amber {
-  border-color: rgba(251, 191, 36, 0.22);
+  border-color: color-mix(in srgb, var(--ds-warning) 22%, transparent);
 }
 
 .token-card.emerald {
-  border-color: rgba(52, 211, 153, 0.22);
+  border-color: color-mix(in srgb, var(--ds-success) 22%, transparent);
 }
 
 .token-card-header {
   flex-shrink: 0;
   padding: clamp(0.5rem, 1vh, 0.7rem) clamp(0.6rem, 1vw, 0.8rem);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  border-bottom: 1px solid var(--ds-border);
 }
 
 .token-card.amber .token-card-header {
-  background: rgba(251, 191, 36, 0.08);
+  background: var(--ds-warning-bg);
 }
 
 .token-card.emerald .token-card-header {
-  background: rgba(52, 211, 153, 0.08);
+  background: var(--ds-success-bg);
 }
 
 .token-header-content {
@@ -239,17 +243,17 @@
   letter-spacing: 0.03em;
   padding: 0.16rem 0.45rem;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.12);
+  background: var(--ds-border);
   color: var(--dexy-muted);
 }
 
 .token-card.amber .token-ticker {
-  background: rgba(251, 191, 36, 0.14);
+  background: var(--ds-warning-bg);
   color: var(--dexy-gold);
 }
 
 .token-card.emerald .token-ticker {
-  background: rgba(52, 211, 153, 0.14);
+  background: var(--ds-success-bg);
   color: var(--dexy-accent);
 }
 
@@ -272,11 +276,11 @@
 }
 
 .dexy-token-icon-wrap.gold {
-  background: linear-gradient(135deg, #fbbf24, #d97706);
+  background: linear-gradient(135deg, var(--ds-warning), var(--amber-500));
 }
 
 .dexy-token-icon-wrap.usd {
-  background: linear-gradient(135deg, #34d399, #059669);
+  background: linear-gradient(135deg, var(--ds-success), var(--emerald-600));
 }
 
 .dexy-token-icon-wrap img {
@@ -299,8 +303,8 @@
   gap: 0.15rem;
   padding: 0.35rem 0.5rem;
   border-radius: 7px;
-  background: rgba(2, 8, 18, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.08);
+  background: var(--ds-input-bg);
+  border: 1px solid var(--ds-border);
   min-width: 0;
 }
 
@@ -325,25 +329,25 @@
 }
 
 .token-stat-value.positive { color: var(--dexy-accent); }
-.token-stat-value.negative { color: #f87171; }
+.token-stat-value.negative { color: var(--ds-danger); }
 
 /* ---- Wallet balance ---- */
 
 .wallet-balance-box {
   padding: 0.45rem 0.6rem;
   border-radius: var(--dexy-radius-sm);
-  background: rgba(2, 8, 18, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.08);
+  background: var(--ds-input-bg);
+  border: 1px solid var(--ds-border);
 }
 
 .token-card.amber .wallet-balance-box {
-  background: rgba(251, 191, 36, 0.08);
-  border-color: rgba(251, 191, 36, 0.18);
+  background: var(--ds-warning-bg);
+  border-color: color-mix(in srgb, var(--ds-warning) 18%, transparent);
 }
 
 .token-card.emerald .wallet-balance-box {
-  background: rgba(52, 211, 153, 0.08);
-  border-color: rgba(52, 211, 153, 0.18);
+  background: var(--ds-success-bg);
+  border-color: color-mix(in srgb, var(--ds-success) 18%, transparent);
 }
 
 .wallet-balance-row {
@@ -418,27 +422,27 @@
 
 .action-btn.secondary:hover:not(:disabled) {
   border-color: var(--dexy-border-strong);
-  background: rgba(8, 18, 34, 0.85);
+  background: var(--ds-surface-elevated);
 }
 
 .action-btn.primary.amber {
   background: var(--dexy-gold);
   border-color: var(--dexy-gold);
-  color: #14110a;
+  color: var(--ds-btn-primary-text);
 }
 
 .action-btn.primary.amber:hover:not(:disabled) {
-  background: #f5b013;
+  background: var(--ds-warning);
 }
 
 .action-btn.primary.emerald {
   background: var(--dexy-accent);
   border-color: var(--dexy-accent);
-  color: #06170f;
+  color: var(--ds-btn-primary-text);
 }
 
 .action-btn.primary.emerald:hover:not(:disabled) {
-  background: #22c993;
+  background: var(--emerald-500);
 }
 
 .action-btn:disabled {
@@ -478,33 +482,33 @@
 }
 
 .status-badge.available {
-  background: rgba(52, 211, 153, 0.12);
+  background: var(--ds-success-bg);
   color: var(--dexy-accent);
 }
 
 .status-badge.exhausted {
-  background: rgba(251, 191, 36, 0.12);
+  background: var(--ds-warning-bg);
   color: var(--dexy-gold);
 }
 
 .status-badge.unavailable {
-  background: rgba(148, 163, 184, 0.1);
+  background: var(--ds-neutral-bg);
   color: var(--dexy-faint);
 }
 
 .status-badge.best-path {
-  background: rgba(96, 165, 250, 0.12);
-  color: #60a5fa;
+  background: var(--ds-info-bg);
+  color: var(--ds-info);
 }
 
 .status-badge.best-path.mint-best {
-  background: rgba(52, 211, 153, 0.12);
+  background: var(--ds-success-bg);
   color: var(--dexy-accent);
 }
 
 .status-badge.best-path.swap-best {
-  background: rgba(96, 165, 250, 0.12);
-  color: #60a5fa;
+  background: var(--ds-info-bg);
+  color: var(--ds-info);
 }
 
 .status-badge.best-path.mint-best.dimmed {
@@ -582,20 +586,20 @@
   min-width: 0;
   padding: 0.5rem 0.55rem;
   border-radius: var(--dexy-radius-sm);
-  background: rgba(2, 8, 18, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.08);
+  background: var(--ds-input-bg);
+  border: 1px solid var(--ds-border);
 }
 
 .dexy-holding-card.orange {
-  border-color: rgba(251, 146, 60, 0.2);
+  border-color: color-mix(in srgb, var(--orange-400) 20%, transparent);
 }
 
 .dexy-holding-card.amber {
-  border-color: rgba(251, 191, 36, 0.2);
+  border-color: color-mix(in srgb, var(--ds-warning) 20%, transparent);
 }
 
 .dexy-holding-card.emerald {
-  border-color: rgba(52, 211, 153, 0.2);
+  border-color: color-mix(in srgb, var(--ds-success) 20%, transparent);
 }
 
 .dexy-holding-header {
@@ -629,11 +633,11 @@
 }
 
 .dexy-holding-icon-wrap.gold {
-  background: linear-gradient(135deg, #fbbf24, #d97706);
+  background: linear-gradient(135deg, var(--ds-warning), var(--amber-500));
 }
 
 .dexy-holding-icon-wrap.usd {
-  background: linear-gradient(135deg, #34d399, #059669);
+  background: linear-gradient(135deg, var(--ds-success), var(--emerald-600));
 }
 
 .dexy-holding-icon-wrap img {
@@ -671,7 +675,7 @@
 .dexy-wallet-prompt {
   padding: 0.55rem 0.75rem;
   border-radius: var(--dexy-radius);
-  border: 1px dashed rgba(148, 163, 184, 0.2);
+  border: 1px dashed var(--ds-border-hover);
   color: var(--dexy-faint);
   font-size: clamp(0.7rem, 1.3vh, 0.8rem);
   text-align: center;
@@ -701,15 +705,15 @@
   justify-content: space-between;
   gap: 0.5rem;
   padding: clamp(0.3rem, 0.7vh, 0.45rem) clamp(0.55rem, 1vw, 0.75rem);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  border-bottom: 1px solid var(--ds-border);
 }
 
 .dexy-feed-tabs {
   display: flex;
   gap: 0.2rem;
   padding: 0.15rem;
-  border-radius: 8px;
-  background: rgba(2, 8, 18, 0.35);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-input-bg);
 }
 
 .dexy-feed-tab {
@@ -721,7 +725,7 @@
   font-size: clamp(0.68rem, 1.3vh, 0.78rem);
   font-weight: 600;
   padding: 0.28rem 0.7rem;
-  border-radius: 6px;
+  border-radius: var(--ds-radius-sm);
   cursor: pointer;
 }
 
@@ -730,7 +734,7 @@
 }
 
 .dexy-feed-tab.active {
-  background: rgba(52, 211, 153, 0.14);
+  background: var(--ds-success-bg);
   color: var(--dexy-accent);
 }
 
@@ -746,8 +750,8 @@
 }
 
 .dexy-feed-scroll::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 4px;
+  background: var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
 }
 
 .dexy-feed-state {
@@ -776,7 +780,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid rgba(148, 163, 184, 0.08);
+  border-right: 1px solid var(--ds-border);
 }
 
 .dexy-feed-col:last-child {
@@ -789,8 +793,8 @@
   align-items: center;
   gap: 0.4rem;
   padding: 0.4rem 0.65rem;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
-  background: rgba(2, 8, 18, 0.28);
+  border-bottom: 1px solid var(--ds-border);
+  background: var(--ds-input-bg);
   font-size: clamp(0.68rem, 1.25vh, 0.78rem);
   font-weight: 650;
   color: var(--dexy-ink);
@@ -816,7 +820,7 @@
   }
   .dexy-feed-col {
     border-right: none;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    border-bottom: 1px solid var(--ds-border);
   }
   .dexy-feed-col:last-child {
     border-bottom: none;
@@ -831,7 +835,7 @@
   gap: 0.45rem;
   padding: clamp(0.45rem, 1vh, 0.58rem) clamp(0.55rem, 1vw, 0.75rem);
   border: 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.07);
+  border-bottom: 1px solid var(--ds-border);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -844,7 +848,7 @@
 }
 
 .dexy-activity-row:hover {
-  background: rgba(148, 163, 184, 0.06);
+  background: var(--ds-neutral-bg);
 }
 
 .dexy-activity-row:focus-visible {
@@ -863,18 +867,18 @@
 }
 
 .activity-op-icon.mint {
-  background: rgba(52, 211, 153, 0.14);
+  background: var(--ds-success-bg);
   color: var(--dexy-accent);
 }
 
 .activity-op-icon.redeem {
-  background: rgba(251, 191, 36, 0.14);
+  background: var(--ds-warning-bg);
   color: var(--dexy-gold);
 }
 
 .activity-op-icon.swap {
-  background: rgba(96, 165, 250, 0.14);
-  color: #60a5fa;
+  background: var(--ds-info-bg);
+  color: var(--ds-info);
 }
 
 .activity-info {
@@ -952,11 +956,11 @@
 }
 
 .activity-token-icon-wrap.gold {
-  background: linear-gradient(135deg, #fbbf24, #d97706);
+  background: linear-gradient(135deg, var(--ds-warning), var(--amber-500));
 }
 
 .activity-token-icon-wrap.usd {
-  background: linear-gradient(135deg, #34d399, #059669);
+  background: linear-gradient(135deg, var(--ds-success), var(--emerald-600));
 }
 
 .activity-token-icon-wrap img {
@@ -985,8 +989,8 @@
 }
 
 .dexy-liquidity-body::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 4px;
+  background: var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
 }
 
 .dexy-variant-selector {
@@ -1015,19 +1019,19 @@
 
 .dexy-variant-btn:hover {
   color: var(--dexy-ink);
-  background: rgba(8, 18, 34, 0.85);
+  background: var(--ds-surface-elevated);
 }
 
 .dexy-variant-btn.active.gold {
   color: var(--dexy-gold);
-  border-color: rgba(251, 191, 36, 0.4);
-  background: rgba(251, 191, 36, 0.1);
+  border-color: color-mix(in srgb, var(--ds-warning) 40%, transparent);
+  background: var(--ds-warning-bg);
 }
 
 .dexy-variant-btn.active.usd {
   color: var(--dexy-accent);
-  border-color: rgba(52, 211, 153, 0.4);
-  background: rgba(52, 211, 153, 0.1);
+  border-color: color-mix(in srgb, var(--ds-success) 40%, transparent);
+  background: var(--ds-success-bg);
 }
 
 .dexy-variant-icon {
@@ -1116,7 +1120,7 @@
   padding: 0.5rem 0.65rem;
   border-radius: var(--dexy-radius-sm);
   border: 1px solid var(--dexy-border);
-  background: rgba(2, 8, 18, 0.4);
+  background: var(--ds-input-bg);
   color: var(--dexy-ink);
   font-family: var(--dexy-mono);
   font-size: clamp(0.78rem, 1.5vh, 0.9rem);
@@ -1135,23 +1139,23 @@
   padding: 0.12rem 0.5rem;
   font-size: 0.62rem;
   font-weight: 700;
-  background: rgba(52, 211, 153, 0.16);
+  background: var(--ds-success-bg);
   color: var(--dexy-accent);
-  border: 1px solid rgba(52, 211, 153, 0.4);
+  border: 1px solid color-mix(in srgb, var(--ds-success) 40%, transparent);
   border-radius: 999px;
   cursor: pointer;
   transition: background 0.15s ease;
 }
 
 .dexy-max-btn:hover {
-  background: rgba(52, 211, 153, 0.28);
+  background: color-mix(in srgb, var(--ds-success) 28%, transparent);
 }
 
 .dexy-lp-preview {
   padding: 0.55rem 0.65rem;
   border-radius: var(--dexy-radius-sm);
-  background: rgba(2, 8, 18, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.08);
+  background: var(--ds-input-bg);
+  border: 1px solid var(--ds-border);
 }
 
 .preview-row {
@@ -1174,7 +1178,7 @@
 }
 
 .dexy-lp-error {
-  color: #f87171;
+  color: var(--ds-danger);
   font-size: clamp(0.65rem, 1.2vh, 0.74rem);
 }
 
@@ -1182,8 +1186,8 @@
   padding: 0.55rem 0.7rem;
   margin-bottom: 0.6rem;
   border-radius: var(--dexy-radius-sm);
-  background: rgba(251, 191, 36, 0.1);
-  border: 1px solid rgba(251, 191, 36, 0.25);
+  background: var(--ds-warning-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-warning) 25%, transparent);
   color: var(--dexy-gold);
   font-size: clamp(0.68rem, 1.3vh, 0.78rem);
 }
@@ -1194,7 +1198,7 @@
   border: 1px solid var(--dexy-accent);
   border-radius: var(--dexy-radius-sm);
   background: var(--dexy-accent);
-  color: #06170f;
+  color: var(--ds-btn-primary-text);
   font: inherit;
   font-size: clamp(0.75rem, 1.4vh, 0.85rem);
   font-weight: 700;
@@ -1203,7 +1207,7 @@
 }
 
 .dexy-action-btn:hover:not(:disabled) {
-  background: #22c993;
+  background: var(--emerald-500);
 }
 
 .dexy-action-btn:disabled {
