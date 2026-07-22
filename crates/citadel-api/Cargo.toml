@@ -9,6 +9,7 @@ description = "Citadel application façade (AppState, DTOs, services)"
 [dependencies]
 citadel-core = { workspace = true }
 ergo-node-client = { workspace = true }
+ergopay-core = { workspace = true }
 ergopay-server = { workspace = true }
 sigmausd = { workspace = true }
 dexy = { workspace = true }
@@ -26,3 +27,4 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 hex = { workspace = true }
+futures = "0.3.31"
