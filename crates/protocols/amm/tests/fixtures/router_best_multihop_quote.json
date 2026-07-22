@@ -1,0 +1,53 @@
+{
+  "min_output": 231,
+  "route": {
+    "effective_rate": 2.33e-7,
+    "hops": [
+      {
+        "fee_amount": 3000000,
+        "fee_denom": 1000,
+        "fee_num": 997,
+        "input_amount": 1000000000,
+        "output_amount": 493,
+        "pool_display_name": "ERG/GORT",
+        "pool_id": "p1",
+        "pool_type": "N2T",
+        "price_impact": 1.3999999999999992,
+        "reserves_in": 100000000000,
+        "reserves_out": 50000,
+        "token_in": "ERG",
+        "token_in_decimals": 9,
+        "token_in_name": "ERG",
+        "token_out": "gort",
+        "token_out_decimals": 2,
+        "token_out_name": "GORT"
+      },
+      {
+        "fee_amount": 2,
+        "fee_denom": 1000,
+        "fee_num": 995,
+        "input_amount": 493,
+        "output_amount": 233,
+        "pool_display_name": "GORT/SigUSD",
+        "pool_id": "t2t_1",
+        "pool_type": "T2T",
+        "price_impact": 5.476673427991885,
+        "reserves_in": 10000,
+        "reserves_out": 5000,
+        "token_in": "gort",
+        "token_in_decimals": 2,
+        "token_in_name": "GORT",
+        "token_out": "sigusd",
+        "token_out_decimals": 2,
+        "token_out_name": "SigUSD"
+      }
+    ],
+    "net_output": 233,
+    "total_fees": 3000002,
+    "total_input": 1000000000,
+    "total_miner_fees": 2200000,
+    "total_output": 233,
+    "total_price_impact": 6.799999999999992
+  },
+  "slippage_percent": 0.5
+}

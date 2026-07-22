@@ -1,0 +1,10 @@
+{
+  "citadel_fee_nano": 0,
+  "input_amount": 1000000000,
+  "input_token": "ERG",
+  "min_output": 1,
+  "miner_fee": 1100000,
+  "output_amount": 9871,
+  "output_token": "TestToken",
+  "total_erg_cost": 1002100000
+}
