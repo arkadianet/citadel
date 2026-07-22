@@ -1,6 +1,7 @@
 pub mod dexy;
 pub mod error;
 pub mod hodlcoin;
+pub mod lending;
 pub mod mewlock;
 pub mod sigmafi;
 pub mod sigmausd;
