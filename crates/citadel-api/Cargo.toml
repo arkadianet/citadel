@@ -17,6 +17,8 @@ amm = { workspace = true }
 hodlcoin = { workspace = true }
 mewlock = { workspace = true }
 sigmafi = { workspace = true }
+stake-recovery = { workspace = true }
+ergo-lib = { workspace = true }
 ergo-tx = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
