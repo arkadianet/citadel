@@ -5,17 +5,21 @@
    ============================================================================ */
 
 .hodl-tab {
+  --protocol-accent: #fbbf24; /* protocol accent */
+  --protocol-accent-bg: rgba(251, 191, 36, 0.12); /* protocol accent */
+  --protocol-accent-border: rgba(251, 191, 36, 0.28); /* protocol accent */
+  --text-strong: rgb(var(--text)); /* protocol accent */
   --hodl-font: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --hodl-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  --hodl-surface: rgba(6, 14, 28, 0.72);
-  --hodl-surface-soft: rgba(10, 20, 38, 0.55);
-  --hodl-border: rgba(148, 163, 184, 0.12);
-  --hodl-border-strong: rgba(148, 163, 184, 0.2);
-  --hodl-ink: rgb(241 245 249);
-  --hodl-muted: #8b9bb0;
-  --hodl-faint: #5f7088;
-  --hodl-accent: #fb923c;
-  --hodl-green: #34d399;
+  --hodl-mono: var(--ds-font-mono);
+  --hodl-surface: var(--ds-surface-base);
+  --hodl-surface-soft: var(--ds-surface-base);
+  --hodl-border: var(--ds-border);
+  --hodl-border-strong: var(--ds-border-hover);
+  --hodl-ink: var(--text-strong);
+  --hodl-muted: var(--slate-400);
+  --hodl-faint: var(--slate-500);
+  --hodl-accent: var(--protocol-accent);
+  --hodl-green: var(--ds-success);
   --hodl-radius: clamp(8px, 0.9vh, 12px);
   --hodl-radius-sm: clamp(6px, 0.7vh, 10px);
   --hodl-gap: clamp(0.4rem, 1.1vh, 0.75rem);
@@ -72,13 +76,13 @@
 .hodl-icon {
   width: clamp(30px, 3.6vh, 36px);
   height: clamp(30px, 3.6vh, 36px);
-  border-radius: 9px;
+  border-radius: var(--ds-radius-sm);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(251, 146, 60, 0.12);
-  border: 1px solid rgba(251, 146, 60, 0.22);
+  background: color-mix(in srgb, var(--orange-400) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--orange-400) 22%, transparent);
   color: var(--hodl-accent);
 }
 
@@ -134,8 +138,8 @@
 }
 
 .hodl-body::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 4px;
+  background: var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
 }
 
 .hodl-state {
@@ -150,7 +154,7 @@
   width: clamp(14px, 1.8vh, 18px);
   height: clamp(14px, 1.8vh, 18px);
   border-radius: 50%;
-  border: 2px solid rgba(251, 146, 60, 0.18);
+  border: 2px solid color-mix(in srgb, var(--orange-400) 18%, transparent);
   border-top-color: var(--hodl-accent);
   animation: hodl-spin 0.85s linear infinite;
   flex-shrink: 0;
@@ -182,7 +186,7 @@
   flex-direction: column;
   min-width: 0;
   border-radius: var(--hodl-radius);
-  border: 1px solid rgba(251, 146, 60, 0.22);
+  border: 1px solid color-mix(in srgb, var(--orange-400) 22%, transparent);
   background: var(--hodl-surface);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -196,8 +200,8 @@
   justify-content: space-between;
   gap: 0.5rem;
   padding: clamp(0.5rem, 1vh, 0.7rem) clamp(0.6rem, 1vw, 0.8rem);
-  background: rgba(251, 146, 60, 0.08);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  background: color-mix(in srgb, var(--orange-400) 8%, transparent);
+  border-bottom: 1px solid var(--ds-border);
 }
 
 .hodl-bank-name {
@@ -215,7 +219,7 @@
   width: clamp(28px, 3vh, 34px);
   height: clamp(28px, 3vh, 34px);
   border-radius: 50%;
-  background: linear-gradient(135deg, #fb923c, #c2410c);
+  background: linear-gradient(135deg, var(--orange-400), var(--orange-500));
   color: white;
   font-weight: 700;
   font-size: clamp(0.72rem, 1.4vh, 0.82rem);
@@ -258,7 +262,7 @@
   letter-spacing: 0.03em;
   padding: 0.16rem 0.45rem;
   border-radius: 999px;
-  background: rgba(251, 146, 60, 0.14);
+  background: color-mix(in srgb, var(--orange-400) 14%, transparent);
   color: var(--hodl-accent);
 }
 
@@ -287,8 +291,8 @@
   gap: 0.15rem;
   padding: 0.35rem 0.5rem;
   border-radius: 7px;
-  background: rgba(2, 8, 18, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.08);
+  background: var(--ds-input-bg);
+  border: 1px solid var(--ds-border);
   min-width: 0;
 }
 
@@ -323,8 +327,8 @@
   gap: 0.5rem;
   padding: 0.45rem 0.6rem;
   border-radius: var(--hodl-radius-sm);
-  background: rgba(251, 146, 60, 0.08);
-  border: 1px solid rgba(251, 146, 60, 0.18);
+  background: color-mix(in srgb, var(--orange-400) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--orange-400) 18%, transparent);
 }
 
 .hodl-balance-label {
@@ -359,7 +363,7 @@
   border-radius: var(--hodl-radius-sm);
   border: 1px solid var(--hodl-accent);
   background: var(--hodl-accent);
-  color: #1a0f04;
+  color: var(--ds-btn-primary-text);
   font: inherit;
   font-size: clamp(0.68rem, 1.3vh, 0.78rem);
   font-weight: 700;
@@ -374,7 +378,7 @@
 }
 
 .action-btn.hodl-primary:hover:not(:disabled) {
-  background: #fda856;
+  background: var(--orange-400);
 }
 
 .action-btn.hodl-primary:disabled {
