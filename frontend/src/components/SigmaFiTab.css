@@ -6,19 +6,23 @@
    ============================================================================ */
 
 .sf-page {
+  --protocol-accent: #f472b6; /* protocol accent */
+  --protocol-accent-bg: rgba(244, 114, 182, 0.12); /* protocol accent */
+  --protocol-accent-border: rgba(244, 114, 182, 0.28); /* protocol accent */
+  --text-strong: rgb(var(--text)); /* protocol accent */
   --sf-font: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --sf-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  --sf-surface: rgba(6, 14, 28, 0.72);
-  --sf-surface-soft: rgba(10, 20, 38, 0.55);
-  --sf-border: rgba(148, 163, 184, 0.12);
-  --sf-border-strong: rgba(148, 163, 184, 0.2);
-  --sf-ink: rgb(241 245 249);
-  --sf-muted: #8b9bb0;
-  --sf-faint: #5f7088;
-  --sf-accent: #f472b6;
-  --sf-success: #34d399;
-  --sf-warning: #fbbf24;
-  --sf-danger: #f87171;
+  --sf-mono: var(--ds-font-mono);
+  --sf-surface: var(--ds-surface-base);
+  --sf-surface-soft: var(--ds-surface-base);
+  --sf-border: var(--ds-border);
+  --sf-border-strong: var(--ds-border-hover);
+  --sf-ink: var(--text-strong);
+  --sf-muted: var(--slate-400);
+  --sf-faint: var(--slate-500);
+  --sf-accent: var(--protocol-accent);
+  --sf-success: var(--ds-success);
+  --sf-warning: var(--ds-warning);
+  --sf-danger: var(--ds-danger);
   --sf-radius: clamp(8px, 0.9vh, 12px);
   --sf-radius-sm: clamp(6px, 0.7vh, 10px);
   --sf-gap: clamp(0.4rem, 1.1vh, 0.75rem);
@@ -61,7 +65,7 @@
   width: clamp(14px, 1.8vh, 18px);
   height: clamp(14px, 1.8vh, 18px);
   border-radius: 50%;
-  border: 2px solid rgba(244, 114, 182, 0.18);
+  border: 2px solid color-mix(in srgb, var(--protocol-accent) 18%, transparent);
   border-top-color: var(--sf-accent);
   animation: sf-spin 0.85s linear infinite;
   flex-shrink: 0;
@@ -99,7 +103,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--sf-accent), #db2777);
+  background: linear-gradient(135deg, var(--sf-accent), var(--protocol-accent));
   color: white;
 }
 
@@ -148,7 +152,7 @@
   border-radius: var(--sf-radius-sm);
   border: 1px solid var(--sf-accent);
   background: var(--sf-accent);
-  color: #1a0a14;
+  color: var(--ds-btn-primary-text);
   font: inherit;
   font-size: clamp(0.68rem, 1.3vh, 0.78rem);
   font-weight: 700;
@@ -158,8 +162,8 @@
 }
 
 .sf-create-btn:hover {
-  background: #f386ac;
-  border-color: #f386ac;
+  background: var(--protocol-accent);
+  border-color: var(--protocol-accent);
   transform: translateY(-1px);
 }
 
@@ -214,7 +218,7 @@
 .sf-refresh-btn:hover:not(:disabled) {
   border-color: var(--sf-border-strong);
   color: var(--sf-ink);
-  background: rgba(8, 18, 34, 0.85);
+  background: var(--ds-surface-elevated);
 }
 
 .sf-refresh-btn:disabled {
@@ -229,8 +233,8 @@
 .sf-error {
   padding: clamp(0.45rem, 1vh, 0.6rem) clamp(0.6rem, 1vw, 0.8rem);
   border-radius: var(--sf-radius-sm);
-  background: rgba(248, 113, 113, 0.1);
-  border: 1px solid rgba(248, 113, 113, 0.22);
+  background: var(--ds-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 22%, transparent);
   color: var(--sf-danger);
   font-size: clamp(0.72rem, 1.35vh, 0.82rem);
   flex-shrink: 0;
@@ -256,8 +260,8 @@
 }
 
 .sf-body::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 4px;
+  background: var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
 }
 
 /* ============================================================================
@@ -298,8 +302,8 @@
 }
 
 .sf-sort-btn.active {
-  background: rgba(244, 114, 182, 0.14);
-  border-color: rgba(244, 114, 182, 0.32);
+  background: color-mix(in srgb, var(--protocol-accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--protocol-accent) 32%, transparent);
   color: var(--sf-accent);
 }
 
@@ -371,11 +375,11 @@
 }
 
 .sigmafi-card.own {
-  border-color: rgba(52, 211, 153, 0.28);
+  border-color: color-mix(in srgb, var(--ds-success) 28%, transparent);
 }
 
 .sigmafi-card.past-due {
-  border-color: rgba(248, 113, 113, 0.4);
+  border-color: color-mix(in srgb, var(--ds-danger) 40%, transparent);
 }
 
 /* Card header */
@@ -385,12 +389,12 @@
   justify-content: space-between;
   gap: 0.5rem;
   padding: clamp(0.5rem, 1vh, 0.65rem) clamp(0.6rem, 1vw, 0.8rem);
-  background: rgba(244, 114, 182, 0.06);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  background: color-mix(in srgb, var(--protocol-accent) 6%, transparent);
+  border-bottom: 1px solid var(--ds-border);
 }
 
 .sigmafi-card.past-due .sigmafi-card-header {
-  background: rgba(248, 113, 113, 0.08);
+  background: var(--ds-danger-bg);
 }
 
 .sigmafi-card-header-left {
@@ -405,7 +409,7 @@
   border-radius: 999px;
   font-size: clamp(0.6rem, 1.15vh, 0.68rem);
   font-weight: 700;
-  background: rgba(244, 114, 182, 0.14);
+  background: color-mix(in srgb, var(--protocol-accent) 14%, transparent);
   color: var(--sf-accent);
   white-space: nowrap;
 }
@@ -417,7 +421,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  background: rgba(52, 211, 153, 0.14);
+  background: var(--ds-success-bg);
   color: var(--sf-success);
   white-space: nowrap;
 }
@@ -433,12 +437,12 @@
 }
 
 .sigmafi-status-badge.active {
-  background: rgba(52, 211, 153, 0.14);
+  background: var(--ds-success-bg);
   color: var(--sf-success);
 }
 
 .sigmafi-status-badge.danger {
-  background: rgba(248, 113, 113, 0.14);
+  background: var(--ds-danger-bg);
   color: var(--sf-danger);
 }
 
@@ -492,7 +496,7 @@
   display: flex;
   gap: 0.4rem;
   padding: clamp(0.5rem, 1vh, 0.65rem) clamp(0.6rem, 1vw, 0.8rem);
-  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  border-top: 1px solid var(--ds-border);
 }
 
 .sigmafi-action-btn {
@@ -514,22 +518,22 @@
 .sigmafi-action-btn.primary {
   background: var(--sf-accent);
   border-color: var(--sf-accent);
-  color: #1a0a14;
+  color: var(--ds-btn-primary-text);
 }
 
 .sigmafi-action-btn.primary:hover:not(:disabled) {
-  background: #f386ac;
-  border-color: #f386ac;
+  background: var(--protocol-accent);
+  border-color: var(--protocol-accent);
 }
 
 .sigmafi-action-btn.danger {
-  background: rgba(248, 113, 113, 0.12);
+  background: var(--ds-danger-bg);
   color: var(--sf-danger);
-  border-color: rgba(248, 113, 113, 0.3);
+  border-color: color-mix(in srgb, var(--ds-danger) 30%, transparent);
 }
 
 .sigmafi-action-btn.danger:hover:not(:disabled) {
-  background: rgba(248, 113, 113, 0.2);
+  background: color-mix(in srgb, var(--ds-danger) 20%, transparent);
 }
 
 .sigmafi-action-btn:disabled {
