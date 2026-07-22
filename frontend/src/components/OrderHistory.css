@@ -1,0 +1,128 @@
+/* OrderHistory — extracted from App.css */
+
+/* =============================================================================
+   Order History
+   ============================================================================= */
+
+.order-history {
+  background: var(--glass-display);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-sm);
+  flex-shrink: 1;
+  min-height: 0;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.order-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-xs);
+}
+
+.order-history-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.order-history-loading,
+.order-history-empty {
+  text-align: center;
+  padding: var(--space-xs) var(--space-sm);
+  color: var(--text-secondary);
+}
+
+.order-history-hint {
+  font-size: 0.8rem;
+  opacity: 0.6;
+  margin-top: var(--space-xs);
+}
+
+.order-table-container {
+  overflow-x: auto;
+}
+
+.order-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.order-table th {
+  text-align: left;
+  padding: var(--space-xs) var(--space-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+  border-bottom: 1px solid var(--glass-border);
+  white-space: nowrap;
+}
+
+.order-table td {
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid rgba(var(--border), 0.3);
+  white-space: nowrap;
+}
+
+.order-table tr:last-child td {
+  border-bottom: none;
+}
+
+.order-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.order-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--emerald-400);
+  font-size: 0.8rem;
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.order-link:hover {
+  text-decoration: underline;
+}
+
+/* Order type badges */
+.order-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.order-badge-proxy {
+  background: color-mix(in srgb, var(--blue-500) 15%, transparent);
+  color: var(--blue-500);
+  border: 1px solid color-mix(in srgb, var(--blue-500) 30%, transparent);
+}
+
+.order-badge-direct {
+  background: color-mix(in srgb, var(--emerald-500) 15%, transparent);
+  color: var(--emerald-400);
+  border: 1px solid color-mix(in srgb, var(--emerald-500) 30%, transparent);
+}
+
+/* Order status text */
+.order-status-pending {
+  color: var(--blue-500);
+  font-size: 0.8rem;
+}
+
+.order-status-confirming {
+  color: #eab308;
+  font-size: 0.8rem;
+}

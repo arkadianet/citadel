@@ -22,6 +22,7 @@ import { StakeRecoveryTab } from './components/StakeRecoveryTab'
 import { Button } from './components/ui'
 import { ExplorerNavProvider, type ExplorerTarget } from './contexts/ExplorerNavContext'
 import './App.css'
+import './components/tx-flow.css'
 
 interface NodeStatus {
   connected: boolean

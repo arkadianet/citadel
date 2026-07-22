@@ -1,0 +1,58 @@
+/* TxSuccess — extracted from App.css */
+
+/* ============================================================================
+   TX Success Box
+   ============================================================================ */
+
+.tx-success-box {
+  margin-top: var(--space-md);
+  background: color-mix(in srgb, var(--slate-900) 80%, transparent);
+  border: 1px solid var(--slate-700);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.tx-success-id {
+  font-family: var(--ds-font-mono);
+  font-variant-numeric: var(--ds-numeric);
+  font-size: 0.8rem;
+  color: var(--slate-400);
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.tx-success-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.tx-success-copy,
+.tx-success-link {
+  font-size: var(--text-xs);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--ds-transition-fast);
+}
+
+.tx-success-copy {
+  background: rgba(var(--border), 0.5);
+  color: rgb(var(--text));
+  border: 1px solid var(--slate-700);
+}
+
+.tx-success-copy:hover {
+  background: rgba(var(--border), 0.8);
+}
+
+.tx-success-link {
+  background: color-mix(in srgb, var(--emerald-500) 15%, transparent);
+  color: var(--emerald-400);
+  border: 1px solid color-mix(in srgb, var(--emerald-500) 30%, transparent);
+}
+
+.tx-success-link:hover {
+  background: color-mix(in srgb, var(--emerald-500) 25%, transparent);
+}

@@ -10,6 +10,7 @@ import { formatErg } from '../utils/format'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
 import { SwapRefundModal } from './SwapRefundModal'
 import { Button, Spinner } from './ui'
+import './OrderHistory.css'
 
 interface OrderHistoryProps {
   walletAddress: string | null

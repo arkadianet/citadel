@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useExplorerNav } from '../contexts/ExplorerNavContext'
+import './TxSuccess.css'
 
 interface TxSuccessProps {
   txId: string

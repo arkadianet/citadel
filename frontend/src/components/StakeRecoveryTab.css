@@ -164,3 +164,12 @@
 .recovery-step2-actions .ds-btn {
   flex: 1 1 auto;
 }
+
+/* Migrated from App.css */
+/* Card grid — responsive auto-fill */
+.view-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-md);
+}
+
