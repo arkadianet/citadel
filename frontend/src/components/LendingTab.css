@@ -6,19 +6,23 @@
    ============================================================================ */
 
 .lending-tab {
+  --protocol-accent: #34d399; /* protocol accent */
+  --protocol-accent-bg: rgba(52, 211, 153, 0.1); /* protocol accent */
+  --protocol-accent-border: rgba(52, 211, 153, 0.18); /* protocol accent */
+  --text-strong: rgb(var(--text)); /* protocol accent */
   --lend-font: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --lend-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  --lend-surface: rgba(6, 14, 28, 0.72);
-  --lend-surface-soft: rgba(10, 20, 38, 0.55);
-  --lend-border: rgba(148, 163, 184, 0.12);
-  --lend-border-strong: rgba(148, 163, 184, 0.2);
-  --lend-ink: rgb(241 245 249);
-  --lend-muted: #8b9bb0;
-  --lend-faint: #5f7088;
-  --lend-accent: #34d399;
-  --lend-gold: #fbbf24;
-  --lend-orange: #fb923c;
-  --lend-blue: #60a5fa;
+  --lend-mono: var(--ds-font-mono);
+  --lend-surface: var(--ds-surface-base);
+  --lend-surface-soft: var(--ds-surface-base);
+  --lend-border: var(--ds-border);
+  --lend-border-strong: var(--ds-border-hover);
+  --lend-ink: var(--text-strong);
+  --lend-muted: var(--slate-400);
+  --lend-faint: var(--slate-500);
+  --lend-accent: var(--protocol-accent);
+  --lend-gold: var(--ds-warning);
+  --lend-orange: var(--orange-400);
+  --lend-blue: var(--ds-info);
   --lend-radius: clamp(8px, 0.9vh, 12px);
   --lend-radius-sm: clamp(6px, 0.7vh, 10px);
   --lend-gap: clamp(0.4rem, 1.1vh, 0.75rem);
@@ -115,21 +119,21 @@
 }
 
 .lending-body::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 4px;
+  background: var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
 }
 
 /* Protocol icon (PageHeader or custom header) */
 .lending-icon {
   width: clamp(30px, 3.6vh, 36px);
   height: clamp(30px, 3.6vh, 36px);
-  border-radius: 9px;
+  border-radius: var(--ds-radius-sm);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(52, 211, 153, 0.1);
-  border: 1px solid rgba(52, 211, 153, 0.18);
+  background: var(--ds-success-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-success) 18%, transparent);
   color: var(--lend-accent);
   overflow: hidden;
 }
@@ -165,7 +169,7 @@
   width: clamp(24px, 3vh, 32px);
   height: clamp(24px, 3vh, 32px);
   border-radius: 50%;
-  border: 2px solid rgba(52, 211, 153, 0.15);
+  border: 2px solid var(--ds-success-bg);
   border-top-color: var(--lend-accent);
   animation: lend-spin 0.85s linear infinite;
 }
@@ -174,7 +178,7 @@
   width: clamp(14px, 1.8vh, 18px);
   height: clamp(14px, 1.8vh, 18px);
   border-radius: 50%;
-  border: 2px solid rgba(52, 211, 153, 0.15);
+  border: 2px solid var(--ds-success-bg);
   border-top-color: var(--lend-accent);
   animation: lend-spin 0.85s linear infinite;
   flex-shrink: 0;
@@ -196,14 +200,14 @@
 }
 
 .lending-tab .message.error {
-  background: rgba(248, 113, 113, 0.1);
-  border: 1px solid rgba(248, 113, 113, 0.22);
-  color: #f87171;
+  background: var(--ds-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 22%, transparent);
+  color: var(--ds-danger);
 }
 
 .lending-tab .message.warning {
-  background: rgba(251, 191, 36, 0.1);
-  border: 1px solid rgba(251, 191, 36, 0.22);
+  background: var(--ds-warning-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-warning) 22%, transparent);
   color: var(--lend-gold);
 }
 
@@ -229,9 +233,9 @@
 }
 
 .lending-tab .link-button:hover {
-  border-color: rgba(52, 211, 153, 0.28);
+  border-color: color-mix(in srgb, var(--ds-success) 28%, transparent);
   color: var(--lend-accent);
-  background: rgba(52, 211, 153, 0.08);
+  background: var(--ds-success-bg);
 }
 
 .lending-tab .link-button svg {
@@ -249,7 +253,7 @@
   border-radius: var(--lend-radius-sm);
   border: 1px solid var(--lend-accent);
   background: var(--lend-accent);
-  color: #06170f;
+  color: var(--ds-btn-primary-text);
   font: inherit;
   font-size: clamp(0.68rem, 1.3vh, 0.78rem);
   font-weight: 700;
@@ -258,8 +262,8 @@
 }
 
 .lending-tab .connect-btn:hover {
-  background: #22c993;
-  border-color: #22c993;
+  background: var(--emerald-500);
+  border-color: var(--emerald-500);
 }
 
 .lending-tab .connect-btn svg {
@@ -292,8 +296,8 @@
 }
 
 .lending-tab > .lending-markets-grid::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 4px;
+  background: var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
 }
 
 @media (max-width: 640px) {
@@ -320,25 +324,25 @@
 }
 
 .lending-tab .market-card.erg {
-  border-color: rgba(251, 146, 60, 0.22);
+  border-color: color-mix(in srgb, var(--orange-400) 22%, transparent);
 }
 
 .lending-tab .market-card.token {
-  border-color: rgba(96, 165, 250, 0.22);
+  border-color: color-mix(in srgb, var(--ds-info) 22%, transparent);
 }
 
 .lending-tab .market-card-header {
   flex-shrink: 0;
   padding: clamp(0.5rem, 1vh, 0.7rem) clamp(0.6rem, 1vw, 0.8rem);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  border-bottom: 1px solid var(--ds-border);
 }
 
 .lending-tab .market-card.erg .market-card-header {
-  background: rgba(251, 146, 60, 0.08);
+  background: color-mix(in srgb, var(--orange-400) 8%, transparent);
 }
 
 .lending-tab .market-card.token .market-card-header {
-  background: rgba(96, 165, 250, 0.08);
+  background: var(--ds-info-bg);
 }
 
 .lending-tab .market-header-content {
@@ -367,18 +371,18 @@
   font-size: clamp(0.72rem, 1.4vh, 0.82rem);
   flex-shrink: 0;
   overflow: hidden;
-  background: rgba(2, 8, 18, 0.45);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  background: var(--ds-input-bg);
+  border: 1px solid var(--ds-neutral-bg);
 }
 
 .lending-tab .market-card.erg .market-icon {
-  background: rgba(251, 146, 60, 0.14);
-  border-color: rgba(251, 146, 60, 0.22);
+  background: color-mix(in srgb, var(--orange-400) 14%, transparent);
+  border-color: color-mix(in srgb, var(--orange-400) 22%, transparent);
 }
 
 .lending-tab .market-card.token .market-icon {
-  background: rgba(96, 165, 250, 0.14);
-  border-color: rgba(96, 165, 250, 0.22);
+  background: var(--ds-info-bg);
+  border-color: color-mix(in srgb, var(--ds-info) 22%, transparent);
 }
 
 .lending-tab .market-icon img {
@@ -417,17 +421,17 @@
   letter-spacing: 0.03em;
   padding: 0.16rem 0.45rem;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.12);
+  background: var(--ds-border);
   color: var(--lend-muted);
 }
 
 .lending-tab .market-card.erg .market-ticker {
-  background: rgba(251, 146, 60, 0.14);
+  background: color-mix(in srgb, var(--orange-400) 14%, transparent);
   color: var(--lend-orange);
 }
 
 .lending-tab .market-card.token .market-ticker {
-  background: rgba(96, 165, 250, 0.14);
+  background: var(--ds-info-bg);
   color: var(--lend-blue);
 }
 
@@ -453,8 +457,8 @@
   gap: 0.15rem;
   padding: 0.35rem 0.5rem;
   border-radius: 7px;
-  background: rgba(2, 8, 18, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.08);
+  background: var(--ds-input-bg);
+  border: 1px solid var(--ds-border);
   min-width: 0;
 }
 
@@ -489,7 +493,7 @@
 }
 
 .lending-tab .stat-value.negative {
-  color: #f87171;
+  color: var(--ds-danger);
 }
 
 /* Wallet balance row */
@@ -500,8 +504,8 @@
   gap: 0.5rem;
   padding: 0.45rem 0.6rem;
   border-radius: var(--lend-radius-sm);
-  background: rgba(2, 8, 18, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.08);
+  background: var(--ds-input-bg);
+  border: 1px solid var(--ds-border);
   font-size: clamp(0.62rem, 1.15vh, 0.72rem);
 }
 
@@ -520,27 +524,27 @@
 .lending-tab .user-position-box {
   padding: 0.5rem 0.6rem;
   border-radius: var(--lend-radius-sm);
-  background: rgba(2, 8, 18, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.08);
+  background: var(--ds-input-bg);
+  border: 1px solid var(--ds-border);
   flex-shrink: 0;
 }
 
 .lending-tab .user-position-box.lend {
   border-left: 3px solid var(--lend-accent);
-  background: rgba(52, 211, 153, 0.08);
-  border-color: rgba(52, 211, 153, 0.18);
+  background: var(--ds-success-bg);
+  border-color: color-mix(in srgb, var(--ds-success) 18%, transparent);
 }
 
 .lending-tab .user-position-box.borrow {
   border-left: 3px solid var(--lend-gold);
-  background: rgba(251, 191, 36, 0.08);
-  border-color: rgba(251, 191, 36, 0.18);
+  background: var(--ds-warning-bg);
+  border-color: color-mix(in srgb, var(--ds-warning) 18%, transparent);
 }
 
 .lending-tab .user-position-box.borrow.red {
-  border-left-color: #f87171;
-  background: rgba(248, 113, 113, 0.08);
-  border-color: rgba(248, 113, 113, 0.22);
+  border-left-color: var(--ds-danger);
+  background: var(--ds-danger-bg);
+  border-color: color-mix(in srgb, var(--ds-danger) 22%, transparent);
 }
 
 .lending-tab .position-row {
@@ -558,7 +562,7 @@
 .lending-tab .position-row.profit {
   margin-top: 0.35rem;
   padding-top: 0.35rem;
-  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  border-top: 1px solid var(--ds-neutral-bg);
 }
 
 .lending-tab .position-label {
@@ -587,11 +591,11 @@
 }
 
 .lending-tab .position-value.health-red {
-  color: #f87171;
+  color: var(--ds-danger);
 }
 
 .lending-tab .health-warning {
-  color: #f87171;
+  color: var(--ds-danger);
   font-weight: 700;
 }
 
@@ -603,8 +607,8 @@
   gap: 0.35rem;
   padding: 0.4rem 0.55rem;
   border-radius: var(--lend-radius-sm);
-  background: rgba(2, 8, 18, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.08);
+  background: var(--ds-input-bg);
+  border: 1px solid var(--ds-border);
 }
 
 .lending-tab .collateral-label {
@@ -619,8 +623,8 @@
   gap: 0.3rem;
   padding: 0.15rem 0.45rem;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.1);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: var(--ds-neutral-bg);
+  border: 1px solid var(--ds-border);
   font-size: clamp(0.58rem, 1.05vh, 0.64rem);
   color: var(--lend-muted);
 }
@@ -683,12 +687,12 @@
 .lending-tab .action-btn.primary {
   background: var(--lend-accent);
   border-color: var(--lend-accent);
-  color: #06170f;
+  color: var(--ds-btn-primary-text);
 }
 
 .lending-tab .action-btn.primary:hover:not(:disabled) {
-  background: #22c993;
-  border-color: #22c993;
+  background: var(--emerald-500);
+  border-color: var(--emerald-500);
 }
 
 .lending-tab .action-btn.secondary {
@@ -697,7 +701,7 @@
 
 .lending-tab .action-btn.secondary:hover:not(:disabled) {
   border-color: var(--lend-border-strong);
-  background: rgba(8, 18, 34, 0.85);
+  background: var(--ds-surface-elevated);
 }
 
 .lending-tab .action-btn.tertiary {
@@ -709,7 +713,7 @@
 .lending-tab .action-btn.tertiary:hover:not(:disabled) {
   border-color: var(--lend-border-strong);
   color: var(--lend-ink);
-  background: rgba(148, 163, 184, 0.06);
+  background: var(--ds-neutral-bg);
 }
 
 .lending-tab .action-btn:disabled {
@@ -725,7 +729,7 @@
 .lending-tab .btn-badge {
   font-size: clamp(0.52rem, 0.95vh, 0.58rem);
   padding: 0.1rem 0.35rem;
-  background: rgba(148, 163, 184, 0.14);
+  background: var(--ds-border);
   border-radius: 999px;
   margin-left: 0.25rem;
   text-transform: uppercase;
@@ -757,8 +761,8 @@
   align-items: center;
   gap: 0.55rem;
   padding: clamp(0.45rem, 1vh, 0.6rem) clamp(0.6rem, 1vw, 0.8rem);
-  background: rgba(251, 191, 36, 0.08);
-  border: 1px solid rgba(251, 191, 36, 0.22);
+  background: var(--ds-warning-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-warning) 22%, transparent);
   border-radius: var(--lend-radius);
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
@@ -766,8 +770,8 @@
 }
 
 .lending-tab .stuck-boxes-banner:hover {
-  background: rgba(251, 191, 36, 0.12);
-  border-color: rgba(251, 191, 36, 0.32);
+  background: var(--ds-warning-bg);
+  border-color: color-mix(in srgb, var(--ds-warning) 32%, transparent);
 }
 
 .lending-tab .stuck-boxes-banner:focus-visible {
@@ -795,7 +799,7 @@
 .lending-footer {
   margin-top: auto;
   padding-top: clamp(0.35rem, 0.8vh, 0.55rem);
-  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  border-top: 1px solid var(--ds-border);
   text-align: center;
   flex-shrink: 0;
 }
@@ -837,12 +841,12 @@
 .lending-tab .btn-primary {
   background: var(--lend-accent);
   border-color: var(--lend-accent);
-  color: #06170f;
+  color: var(--ds-btn-primary-text);
 }
 
 .lending-tab .btn-primary:hover:not(:disabled) {
-  background: #22c993;
-  border-color: #22c993;
+  background: var(--emerald-500);
+  border-color: var(--emerald-500);
 }
 
 .lending-tab .btn-primary:disabled {
@@ -858,7 +862,7 @@
 
 .lending-tab .btn-secondary:hover:not(:disabled) {
   border-color: var(--lend-border-strong);
-  background: rgba(8, 18, 34, 0.85);
+  background: var(--ds-surface-elevated);
 }
 
 .lending-tab .btn-sm {
@@ -873,7 +877,7 @@
 .lending-tab .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(2, 8, 18, 0.72);
+  background: var(--ds-surface-base);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
@@ -889,7 +893,7 @@
   border-radius: var(--lend-radius);
   background: var(--lend-surface);
   border: 1px solid var(--lend-border);
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--glass-inner-edge);
   overflow: hidden;
   max-height: 90vh;
   display: flex;
@@ -916,7 +920,7 @@
   justify-content: space-between;
   gap: 0.5rem;
   padding: clamp(0.55rem, 1.1vh, 0.75rem) clamp(0.65rem, 1.1vw, 0.85rem);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  border-bottom: 1px solid var(--ds-border);
   flex-shrink: 0;
 }
 
@@ -932,8 +936,8 @@
   width: clamp(28px, 2.8vh, 32px);
   height: clamp(28px, 2.8vh, 32px);
   border-radius: var(--lend-radius-sm);
-  background: rgba(148, 163, 184, 0.08);
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: var(--ds-border);
+  border: 1px solid var(--ds-border);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -943,7 +947,7 @@
 }
 
 .lending-tab .close-btn:hover {
-  background: rgba(148, 163, 184, 0.14);
+  background: var(--ds-border);
   color: var(--lend-ink);
   border-color: var(--lend-border-strong);
 }
@@ -999,7 +1003,7 @@
   padding: clamp(0.45rem, 1vh, 0.6rem);
   border-radius: var(--lend-radius-sm);
   border: 1px solid var(--lend-border);
-  background: rgba(2, 8, 18, 0.35);
+  background: var(--ds-input-bg);
   cursor: pointer;
   text-align: left;
   transition: border-color 0.15s ease, background 0.15s ease;
@@ -1009,8 +1013,8 @@
 }
 
 .lending-tab .discovered-box-item:hover:not(:disabled) {
-  border-color: rgba(52, 211, 153, 0.28);
-  background: rgba(52, 211, 153, 0.06);
+  border-color: color-mix(in srgb, var(--ds-success) 28%, transparent);
+  background: var(--ds-success-bg);
 }
 
 .lending-tab .discovered-box-item:disabled {
@@ -1019,7 +1023,7 @@
 }
 
 .lending-tab .discovered-box-item.refundable {
-  border-color: rgba(52, 211, 153, 0.22);
+  border-color: color-mix(in srgb, var(--ds-success) 22%, transparent);
 }
 
 .lending-tab .discovered-box-header {
@@ -1042,12 +1046,12 @@
 }
 
 .lending-tab .discovered-box-status.ready {
-  background: rgba(52, 211, 153, 0.12);
+  background: var(--ds-success-bg);
   color: var(--lend-accent);
 }
 
 .lending-tab .discovered-box-status.waiting {
-  background: rgba(251, 191, 36, 0.12);
+  background: var(--ds-warning-bg);
   color: var(--lend-gold);
 }
 
