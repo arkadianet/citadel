@@ -6,16 +6,20 @@
    ============================================================================ */
 
 .dashboard {
+  --protocol-accent: #34d399; /* protocol accent */
+  --protocol-accent-bg: rgba(52, 211, 153, 0.1); /* protocol accent */
+  --protocol-accent-border: rgba(52, 211, 153, 0.18); /* protocol accent */
+  --text-strong: rgb(var(--text)); /* protocol accent */
   --dash-font: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --dash-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  --dash-surface: rgba(6, 14, 28, 0.72);
-  --dash-surface-soft: rgba(10, 20, 38, 0.55);
-  --dash-border: rgba(148, 163, 184, 0.12);
-  --dash-border-strong: rgba(148, 163, 184, 0.2);
-  --dash-ink: rgb(241 245 249);
-  --dash-muted: #8b9bb0;
-  --dash-faint: #5f7088;
-  --dash-accent: #34d399;
+  --dash-mono: var(--ds-font-mono);
+  --dash-surface: var(--ds-surface-base);
+  --dash-surface-soft: var(--ds-surface-base);
+  --dash-border: var(--ds-border);
+  --dash-border-strong: var(--ds-border-hover);
+  --dash-ink: var(--text-strong);
+  --dash-muted: var(--slate-400);
+  --dash-faint: var(--slate-500);
+  --dash-accent: var(--protocol-accent);
   --dash-radius: clamp(8px, 0.9vh, 12px);
   --dash-radius-sm: clamp(6px, 0.7vh, 10px);
   --dash-gap: clamp(0.4rem, 1.1vh, 0.75rem);
@@ -91,7 +95,7 @@
   height: 6px;
   border-radius: 50%;
   background: var(--dash-accent);
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-success) 18%, transparent);
 }
 
 .dash-empty-wrap {
@@ -123,7 +127,7 @@
   border-radius: var(--dash-radius);
   border: 1px solid var(--dash-border);
   background:
-    radial-gradient(120% 140% at 0% 0%, rgba(52, 211, 153, 0.1), transparent 45%),
+    radial-gradient(120% 140% at 0% 0%, var(--ds-success-bg), transparent 45%),
     var(--dash-surface);
   backdrop-filter: blur(16px) saturate(1.1);
   -webkit-backdrop-filter: blur(16px) saturate(1.1);
@@ -164,8 +168,8 @@
 }
 
 .dash-holdings::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 4px;
+  background: var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
 }
 
 .dash-holding {
@@ -177,8 +181,8 @@
   max-width: 180px;
   padding: 0.4rem 0.5rem;
   border-radius: var(--dash-radius-sm);
-  border: 1px solid rgba(148, 163, 184, 0.1);
-  background: rgba(2, 8, 18, 0.35);
+  border: 1px solid var(--ds-neutral-bg);
+  background: var(--ds-input-bg);
 }
 
 .dash-holding-icon {
@@ -198,13 +202,13 @@
 }
 
 .dash-holding-icon--erg {
-  background: rgba(251, 146, 60, 0.18);
-  color: #fb923c;
+  background: color-mix(in srgb, var(--orange-400) 18%, transparent);
+  color: var(--orange-400);
 }
 
 .dash-holding-icon--token {
-  background: rgba(148, 163, 184, 0.14);
-  color: #94a3b8;
+  background: var(--ds-border);
+  color: var(--slate-400);
 }
 
 .dash-holding-body {
@@ -276,7 +280,7 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.75);
+  color: var(--ds-border-hover);
   padding-left: 0.1rem;
 }
 
@@ -286,26 +290,26 @@
   justify-content: space-between;
   gap: 0.55rem;
   padding: 0.35rem 0.55rem;
-  border-radius: 6px;
+  border-radius: var(--ds-radius-sm);
   border: 1px solid transparent;
 }
 
 .dash-alert--warn {
-  background: rgba(251, 191, 36, 0.08);
-  border-color: rgba(251, 191, 36, 0.18);
-  color: #fcd34d;
+  background: var(--ds-warning-bg);
+  border-color: color-mix(in srgb, var(--ds-warning) 18%, transparent);
+  color: var(--ds-warning);
 }
 
 .dash-alert--danger {
-  background: rgba(248, 113, 113, 0.08);
-  border-color: rgba(248, 113, 113, 0.18);
-  color: #fca5a5;
+  background: var(--ds-danger-bg);
+  border-color: color-mix(in srgb, var(--ds-danger) 18%, transparent);
+  color: var(--ds-danger);
 }
 
 .dash-alert--info {
-  background: rgba(96, 165, 250, 0.08);
-  border-color: rgba(96, 165, 250, 0.18);
-  color: #93c5fd;
+  background: var(--ds-info-bg);
+  border-color: color-mix(in srgb, var(--ds-info) 18%, transparent);
+  color: var(--ds-info);
 }
 
 .dash-alert-body {
@@ -329,7 +333,7 @@
   font-family: var(--dash-mono, ui-monospace, monospace);
   padding: 0.08rem 0.35rem;
   border-radius: 999px;
-  background: rgba(2, 8, 18, 0.35);
+  background: var(--ds-input-bg);
   border: 1px solid currentColor;
   opacity: 0.85;
 }
@@ -346,19 +350,19 @@
   appearance: none;
   flex-shrink: 0;
   align-self: center;
-  border: 1px solid rgba(147, 197, 253, 0.35);
-  background: rgba(2, 8, 18, 0.35);
-  color: #dbeafe;
+  border: 1px solid color-mix(in srgb, var(--ds-info) 35%, transparent);
+  background: var(--ds-input-bg);
+  color: var(--ds-info);
   font: inherit;
   font-size: clamp(0.6rem, 1.1vh, 0.68rem);
   font-weight: 600;
   padding: 0.22rem 0.5rem;
-  border-radius: 6px;
+  border-radius: var(--ds-radius-sm);
   cursor: pointer;
 }
 
 .dash-alert-btn:hover {
-  background: rgba(2, 8, 18, 0.55);
+  background: color-mix(in srgb, var(--ds-input-bg) 55%, transparent);
 }
 
 /* Protocol launchpad */
@@ -391,7 +395,7 @@
 
 .dash-protocol-tile:hover {
   border-color: color-mix(in srgb, var(--tile-accent) 45%, var(--dash-border));
-  background: rgba(8, 18, 34, 0.82);
+  background: color-mix(in srgb, var(--ds-surface-base) 82%, transparent);
 }
 
 .dash-protocol-tile:focus-visible {
@@ -416,7 +420,7 @@
   flex-shrink: 0;
   font-weight: 700;
   font-size: 0.75rem;
-  color: #fff;
+  color: var(--text-strong);
   background: var(--tile-accent);
 }
 
@@ -483,7 +487,7 @@
   justify-content: space-between;
   gap: 0.5rem;
   padding: clamp(0.45rem, 1vh, 0.65rem) clamp(0.65rem, 1vw, 0.85rem);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  border-bottom: 1px solid var(--ds-border);
 }
 
 .dash-panel-head--tabs {
@@ -503,8 +507,8 @@
 }
 
 .dash-panel-scroll::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 4px;
+  background: var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
 }
 
 .dash-status-stack {
@@ -517,8 +521,8 @@
 .dash-status-card {
   padding: clamp(0.55rem, 1.1vh, 0.75rem);
   border-radius: var(--dash-radius-sm);
-  border: 1px solid rgba(148, 163, 184, 0.1);
-  background: rgba(2, 8, 18, 0.28);
+  border: 1px solid var(--ds-neutral-bg);
+  background: var(--ds-input-bg);
 }
 
 .dash-status-header {
@@ -554,17 +558,17 @@
 
 .dash-rr--healthy {
   color: var(--dash-accent);
-  background: rgba(52, 211, 153, 0.12);
+  background: var(--ds-success-bg);
 }
 
 .dash-rr--caution {
-  color: #fbbf24;
-  background: rgba(251, 191, 36, 0.12);
+  color: var(--ds-warning);
+  background: var(--ds-warning-bg);
 }
 
 .dash-rr--critical {
-  color: #f87171;
-  background: rgba(248, 113, 113, 0.12);
+  color: var(--ds-danger);
+  background: var(--ds-danger-bg);
 }
 
 .dash-ops {
@@ -579,8 +583,8 @@
   gap: 0.28rem;
   padding: 0.45rem 0.5rem;
   border-radius: 7px;
-  background: rgba(2, 8, 18, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.08);
+  background: var(--ds-input-bg);
+  border: 1px solid var(--ds-border);
 }
 
 .dash-op-head {
@@ -611,13 +615,13 @@
 }
 
 .dash-badge.open {
-  background: rgba(52, 211, 153, 0.14);
+  background: var(--ds-success-bg);
   color: var(--dash-accent);
 }
 
 .dash-badge.closed {
-  background: rgba(248, 113, 113, 0.14);
-  color: #f87171;
+  background: var(--ds-danger-bg);
+  color: var(--ds-danger);
 }
 
 .dash-op-stat {
@@ -630,8 +634,8 @@
   display: flex;
   gap: 0.2rem;
   padding: 0.15rem;
-  border-radius: 8px;
-  background: rgba(2, 8, 18, 0.35);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-input-bg);
 }
 
 .dash-feed-tab {
@@ -643,7 +647,7 @@
   font-size: clamp(0.68rem, 1.3vh, 0.78rem);
   font-weight: 600;
   padding: 0.28rem 0.7rem;
-  border-radius: 6px;
+  border-radius: var(--ds-radius-sm);
   cursor: pointer;
 }
 
@@ -652,7 +656,7 @@
 }
 
 .dash-feed-tab.active {
-  background: rgba(52, 211, 153, 0.14);
+  background: var(--ds-success-bg);
   color: var(--dash-accent);
 }
 
@@ -684,7 +688,7 @@
   gap: 0.45rem;
   padding: clamp(0.45rem, 1vh, 0.58rem) clamp(0.55rem, 1vw, 0.75rem);
   border: 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.07);
+  border-bottom: 1px solid var(--ds-border);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -697,7 +701,7 @@
 }
 
 .dash-feed-row:hover {
-  background: rgba(148, 163, 184, 0.06);
+  background: var(--ds-neutral-bg);
 }
 
 .dash-feed-row:focus-visible {
@@ -715,23 +719,23 @@
 }
 
 .dash-feed-icon.mint {
-  background: rgba(52, 211, 153, 0.14);
+  background: var(--ds-success-bg);
   color: var(--dash-accent);
 }
 
 .dash-feed-icon.redeem {
-  background: rgba(251, 191, 36, 0.14);
-  color: #fbbf24;
+  background: var(--ds-warning-bg);
+  color: var(--ds-warning);
 }
 
 .dash-feed-icon.swap {
-  background: rgba(167, 139, 250, 0.14);
-  color: #a78bfa;
+  background: color-mix(in srgb, var(--protocol-accent) 14%, transparent);
+  color: var(--protocol-accent);
 }
 
 .dash-feed-icon.send {
-  background: rgba(248, 113, 113, 0.14);
-  color: #f87171;
+  background: var(--ds-danger-bg);
+  color: var(--ds-danger);
 }
 
 .dash-feed-info {
@@ -786,7 +790,7 @@
 }
 
 .dash-feed-amounts .amt.positive { color: var(--dash-accent); }
-.dash-feed-amounts .amt.negative { color: #fbbf24; }
+.dash-feed-amounts .amt.negative { color: var(--ds-warning); }
 .dash-feed-amounts .amt.muted { color: var(--dash-faint); }
 
 .dash-feed-time {
@@ -798,7 +802,7 @@
 }
 
 .dash-pending {
-  color: #fbbf24;
+  color: var(--ds-warning);
   font-weight: 600;
 }
 
