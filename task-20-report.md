@@ -77,3 +77,23 @@ Step 4 — Phase B deferred until App.css diet + kit cleanup pass done-check.
 | `cd frontend && npm run build` | **pass** (`tsc -b` + vite) |
 
 **progress.md:** not marked complete (reviewer).
+
+## Fix follow-up — pure chrome App.css — 2026-07-22
+
+Reviewer Important: prior diet left modal/message/spinner/node-list in `App.css` (680 LOC). Completed A4 chrome-only strip.
+
+**Commit:** `refactor(ui): reduce App.css to app chrome` (follow-up extract)
+
+### Changes
+- `frontend/src/App.css` **680 → 358** LOC — only `:root`, resets, `.app`/`.app-body`/`.main*`, header/logo/wallet/settings-btn chrome, `.mono`.
+- Extracted leftover shell rules to `frontend/src/components/AppShell.css` (legacy modal shell, messages, spinner-small/tiny, settings node-discovery list); imported from `App.tsx`.
+- Moved `.text-danger`/`.text-warning`/`.text-emerald` into `tx-flow.css`.
+
+### Verify
+| Check | Result |
+|-------|--------|
+| `wc -l frontend/src/App.css` | **358** (was 1775 → 680 → 358) |
+| `App.css` `#`/`rgba` hits | **26** (was 71 → 38 → 26; mostly `:root` palette) |
+| `cd frontend && npm run build` | **pass** (`tsc -b` + vite) |
+
+**progress.md:** not marked complete (reviewer).
