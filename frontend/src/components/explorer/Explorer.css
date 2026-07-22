@@ -6,16 +6,20 @@
    ============================================================================ */
 
 .explorer-tab {
+  --protocol-accent: #34d399; /* protocol accent */
+  --protocol-accent-bg: rgba(52, 211, 153, 0.1); /* protocol accent */
+  --protocol-accent-border: rgba(52, 211, 153, 0.18); /* protocol accent */
+  --text-strong: rgb(var(--text)); /* protocol accent */
   --ex-font: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --ex-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  --ex-surface: rgba(6, 14, 28, 0.72);
-  --ex-surface-soft: rgba(10, 20, 38, 0.55);
-  --ex-border: rgba(148, 163, 184, 0.12);
-  --ex-border-strong: rgba(148, 163, 184, 0.2);
-  --ex-ink: rgb(241 245 249);
-  --ex-muted: #8b9bb0;
-  --ex-faint: #5f7088;
-  --ex-accent: #34d399;
+  --ex-mono: var(--ds-font-mono);
+  --ex-surface: var(--ds-surface-base);
+  --ex-surface-soft: var(--ds-surface-base);
+  --ex-border: var(--ds-border);
+  --ex-border-strong: var(--ds-border-hover);
+  --ex-ink: var(--text-strong);
+  --ex-muted: var(--slate-400);
+  --ex-faint: var(--slate-500);
+  --ex-accent: var(--protocol-accent);
   --ex-radius: clamp(8px, 0.9vh, 12px);
   --ex-radius-sm: clamp(6px, 0.7vh, 10px);
   --ex-gap: clamp(0.4rem, 1.1vh, 0.75rem);
@@ -90,7 +94,7 @@
 }
 
 .explorer-back-btn:hover {
-  background: rgba(8, 18, 34, 0.85);
+  background: var(--ds-surface-elevated);
   color: var(--ex-ink);
   border-color: var(--ex-border-strong);
 }
@@ -112,11 +116,11 @@
 
 .explorer-nav-btn:hover {
   color: var(--ex-ink);
-  background: rgba(148, 163, 184, 0.06);
+  background: var(--ds-neutral-bg);
 }
 
 .explorer-nav-btn.active {
-  background: rgba(52, 211, 153, 0.14);
+  background: var(--ds-success-bg);
   color: var(--ex-accent);
 }
 
@@ -137,8 +141,8 @@
 
 .explorer-remote-btn:hover {
   color: var(--ex-accent);
-  border-color: rgba(52, 211, 153, 0.28);
-  background: rgba(52, 211, 153, 0.06);
+  border-color: color-mix(in srgb, var(--ds-success) 28%, transparent);
+  background: var(--ds-success-bg);
 }
 
 /* ============================================================================
@@ -161,7 +165,7 @@
   padding: clamp(0.35rem, 0.8vh, 0.45rem) 2.2rem clamp(0.35rem, 0.8vh, 0.45rem) clamp(0.6rem, 1vw, 0.75rem);
   border: 1px solid var(--ex-border);
   border-radius: var(--ex-radius-sm);
-  background: rgba(2, 8, 18, 0.35);
+  background: var(--ds-input-bg);
   color: var(--ex-ink);
   font: inherit;
   font-size: clamp(0.7rem, 1.3vh, 0.8rem);
@@ -170,8 +174,8 @@
 }
 
 .explorer-search-input:focus {
-  border-color: rgba(52, 211, 153, 0.4);
-  background: rgba(2, 8, 18, 0.5);
+  border-color: color-mix(in srgb, var(--ds-success) 40%, transparent);
+  background: var(--ds-input-bg);
 }
 
 .explorer-search-input::placeholder {
@@ -190,7 +194,7 @@
   height: 26px;
   margin: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--ds-radius-sm);
   background: none;
   color: var(--ex-muted);
   cursor: pointer;
@@ -210,7 +214,7 @@
   right: 0;
   top: calc(100% + 4px);
   font-size: clamp(0.6rem, 1.1vh, 0.68rem);
-  color: #f87171;
+  color: var(--ds-danger);
   white-space: nowrap;
 }
 
@@ -232,8 +236,8 @@
 }
 
 .explorer-content::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 4px;
+  background: var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
 }
 
 /* Page-level wrappers — consistent vertical rhythm */
@@ -315,7 +319,7 @@
   font-weight: 700;
   padding: 0.16rem 0.55rem;
   border-radius: 999px;
-  background: rgba(52, 211, 153, 0.12);
+  background: var(--ds-success-bg);
   color: var(--ex-accent);
 }
 
@@ -337,7 +341,7 @@
   align-items: baseline;
   gap: clamp(0.6rem, 1.2vw, 1rem);
   padding: clamp(0.4rem, 0.9vh, 0.55rem) clamp(0.65rem, 1.1vw, 0.85rem);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.07);
+  border-bottom: 1px solid var(--ds-border);
   font-size: clamp(0.72rem, 1.35vh, 0.82rem);
 }
 
@@ -391,7 +395,7 @@
   letter-spacing: 0.05em;
   color: var(--ex-faint);
   border-bottom: 1px solid var(--ex-border);
-  background: rgba(6, 14, 28, 0.92);
+  background: color-mix(in srgb, var(--ds-surface-base) 92%, transparent);
   position: sticky;
   top: 0;
   z-index: 1;
@@ -408,7 +412,7 @@
 
 .explorer-table td {
   padding: clamp(0.38rem, 0.85vh, 0.5rem) clamp(0.6rem, 1vw, 0.8rem);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+  border-bottom: 1px solid var(--ds-neutral-bg);
   color: var(--ex-ink);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -425,7 +429,7 @@
 }
 
 .explorer-table-row:hover {
-  background: rgba(148, 163, 184, 0.06);
+  background: var(--ds-neutral-bg);
 }
 
 .block-height {
@@ -472,15 +476,15 @@
 }
 
 .pagination-page-btn:hover {
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--ds-border);
   color: var(--ex-ink);
 }
 
 .pagination-page-btn.active {
-  background: rgba(52, 211, 153, 0.14);
+  background: var(--ds-success-bg);
   color: var(--ex-accent);
   font-weight: 700;
-  border-color: rgba(52, 211, 153, 0.28);
+  border-color: color-mix(in srgb, var(--ds-success) 28%, transparent);
 }
 
 .pagination-ellipsis {
@@ -505,10 +509,10 @@
 
 .explorer-error {
   padding: clamp(0.55rem, 1.1vh, 0.75rem) clamp(0.7rem, 1.1vw, 0.9rem);
-  background: rgba(248, 113, 113, 0.1);
-  border: 1px solid rgba(248, 113, 113, 0.22);
+  background: var(--ds-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 22%, transparent);
   border-radius: var(--ex-radius-sm);
-  color: #f87171;
+  color: var(--ds-danger);
   font-size: clamp(0.72rem, 1.35vh, 0.82rem);
 }
 
@@ -541,8 +545,8 @@
 /* Box cards (inputs/outputs) */
 .explorer-box-card {
   border-radius: var(--ex-radius-sm);
-  border: 1px solid rgba(148, 163, 184, 0.08);
-  background: rgba(2, 8, 18, 0.35);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-input-bg);
   padding: clamp(0.45rem, 1vh, 0.6rem) clamp(0.55rem, 1vw, 0.7rem);
 }
 
@@ -586,7 +590,7 @@
   font-size: clamp(0.6rem, 1.1vh, 0.66rem);
   padding: 0.15rem 0.45rem;
   border-radius: 999px;
-  background: rgba(52, 211, 153, 0.1);
+  background: var(--ds-success-bg);
   color: var(--ex-accent);
   cursor: pointer;
 }
@@ -613,15 +617,15 @@
   gap: 0.35rem;
   padding: 0.3rem 0.6rem;
   border-radius: var(--ex-radius-sm);
-  border: 1px solid rgba(148, 163, 184, 0.08);
-  background: rgba(2, 8, 18, 0.35);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-input-bg);
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .explorer-token-chip:hover {
-  border-color: rgba(52, 211, 153, 0.3);
-  background: rgba(52, 211, 153, 0.06);
+  border-color: color-mix(in srgb, var(--ds-success) 30%, transparent);
+  background: var(--ds-success-bg);
 }
 
 .token-chip-id {
@@ -699,7 +703,7 @@
 }
 
 .explorer-tab .text-warning {
-  color: #fbbf24;
+  color: var(--ds-warning);
 }
 
 .explorer-tab .ml-2 {
@@ -710,7 +714,7 @@
   display: inline-block;
   width: 12px;
   height: 12px;
-  border: 2px solid rgba(148, 163, 184, 0.15);
+  border: 2px solid var(--ds-border);
   border-top-color: var(--ex-accent);
   border-radius: 50%;
   animation: ex-spin 0.7s linear infinite;
@@ -727,12 +731,12 @@
 
 .explorer-tab .skeleton-bar {
   height: 12px;
-  border-radius: 4px;
+  border-radius: var(--ds-radius-sm);
   background: linear-gradient(
     90deg,
-    rgba(148, 163, 184, 0.08) 25%,
-    rgba(148, 163, 184, 0.16) 50%,
-    rgba(148, 163, 184, 0.08) 75%
+    var(--ds-border) 25%,
+    var(--ds-border-hover) 50%,
+    var(--ds-border) 75%
   );
   background-size: 200% 100%;
   animation: ex-shimmer 1.5s ease-in-out infinite;
@@ -767,7 +771,7 @@
   display: flex;
   gap: clamp(0.6rem, 1vw, 0.85rem);
   padding: clamp(0.5rem, 1vh, 0.65rem) clamp(0.65rem, 1vw, 0.85rem);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+  border-bottom: 1px solid var(--ds-neutral-bg);
 }
 
 .explorer-tab .skeleton-table-row:last-child {
@@ -779,7 +783,7 @@
   align-items: center;
   gap: clamp(0.6rem, 1vw, 0.85rem);
   padding: clamp(0.45rem, 0.95vh, 0.6rem) clamp(0.65rem, 1vw, 0.85rem);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+  border-bottom: 1px solid var(--ds-neutral-bg);
 }
 
 .explorer-tab .skeleton-card-row:last-child {
@@ -802,8 +806,8 @@
   gap: 0.15rem;
   padding: clamp(0.5rem, 1vh, 0.7rem) clamp(0.6rem, 1vw, 0.8rem);
   border-radius: var(--ex-radius-sm);
-  border: 1px solid rgba(148, 163, 184, 0.08);
-  background: rgba(2, 8, 18, 0.35);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-input-bg);
 }
 
 .dashboard-stat-label {
@@ -825,8 +829,8 @@
 
 /* Status badge colors */
 .status-badge-green { color: var(--ex-accent); }
-.status-badge-amber { color: #fbbf24; }
-.status-badge-red { color: #f87171; }
+.status-badge-amber { color: var(--ds-warning); }
+.status-badge-red { color: var(--ds-danger); }
 
 /* ============================================================================
    Transaction Type Badges
@@ -842,22 +846,22 @@
 }
 
 .tx-type-reward {
-  background: rgba(96, 165, 250, 0.12);
-  color: #60a5fa;
+  background: var(--ds-info-bg);
+  color: var(--ds-info);
 }
 
 .tx-type-dex {
-  background: rgba(52, 211, 153, 0.12);
+  background: var(--ds-success-bg);
   color: var(--ex-accent);
 }
 
 .tx-type-sigmausd {
-  background: rgba(251, 191, 36, 0.12);
-  color: #fbbf24;
+  background: var(--ds-warning-bg);
+  color: var(--ds-warning);
 }
 
 .tx-type-transfer {
-  background: rgba(148, 163, 184, 0.1);
+  background: var(--ds-neutral-bg);
   color: var(--ex-muted);
 }
 
@@ -874,17 +878,17 @@
 }
 
 .conf-badge-red {
-  background: rgba(248, 113, 113, 0.12);
-  color: #f87171;
+  background: var(--ds-danger-bg);
+  color: var(--ds-danger);
 }
 
 .conf-badge-amber {
-  background: rgba(251, 191, 36, 0.12);
-  color: #fbbf24;
+  background: var(--ds-warning-bg);
+  color: var(--ds-warning);
 }
 
 .conf-badge-green {
-  background: rgba(52, 211, 153, 0.12);
+  background: var(--ds-success-bg);
   color: var(--ex-accent);
 }
 
@@ -907,7 +911,7 @@
   background: var(--ex-surface);
   border: 1px solid var(--ex-border-strong);
   border-radius: var(--ex-radius-sm);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 12px 28px transparent;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   z-index: 20;
