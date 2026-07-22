@@ -1,3 +1,4 @@
+pub mod amm;
 pub mod dexy;
 pub mod error;
 pub mod hodlcoin;

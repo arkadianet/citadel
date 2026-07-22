@@ -1,46 +1,19 @@
-use citadel_api::dto::{AmmPoolDto, AmmPoolsResponse, SwapQuoteResponse};
+//! Spectrum AMM Tauri IPC — thin wrappers over `citadel_api::services::amm`.
+
+use citadel_api::dto::{AmmPoolsResponse, SwapQuoteResponse};
+use citadel_api::services::amm::{
+    self as amm_svc, AmmLpBuildResponse, AmmLpDepositPreviewResponse, AmmLpRedeemPreviewResponse,
+    ArbChainBuildResponse, ArbChainSubmitResponse, ArbLegSignResponse, CircularArbSnapshot,
+    DepthTiers, DirectSwapBuildResponse, DirectSwapPreviewResponse, MempoolSwapDto,
+    OracleArbSnapshot, PendingOrderDto, PoolCreatePreviewResponse, SplitAllocationInput,
+    SplitChainBuildResponse, SwapBuildResponse, SwapChainBuildResponse, SwapPreviewResponse,
+};
 use citadel_api::AppState;
-use ergo_node_client::NodeClient;
-use serde::{Deserialize, Serialize};
 use tauri::State;
-
-use super::StrErr;
-
-async fn find_pool(client: &NodeClient, pool_id: &str) -> Result<amm::AmmPool, String> {
-    amm::discover_pools(client)
-        .await
-        .str_err()?
-        .into_iter()
-        .find(|p| p.pool_id == pool_id)
-        .ok_or_else(|| format!("Pool not found: {}", pool_id))
-}
-
-fn parse_swap_input(input_type: &str, amount: u64, token_id: Option<String>) -> Result<amm::SwapInput, String> {
-    match input_type {
-        "erg" => Ok(amm::SwapInput::Erg { amount }),
-        "token" => Ok(amm::SwapInput::Token {
-            token_id: token_id.ok_or("token_id required for token input")?,
-            amount,
-        }),
-        _ => Err("Invalid input_type. Use 'erg' or 'token'".to_string()),
-    }
-}
 
 #[tauri::command]
 pub async fn get_amm_pools(state: State<'_, AppState>) -> Result<AmmPoolsResponse, String> {
-    let client = state.require_node_client().await?;
-
-    let pools = amm::discover_pools(&client)
-        .await
-        .str_err()?;
-
-    let pool_dtos: Vec<AmmPoolDto> = pools.into_iter().map(Into::into).collect();
-    let count = pool_dtos.len();
-
-    Ok(AmmPoolsResponse {
-        pools: pool_dtos,
-        count,
-    })
+    amm_svc::get_amm_pools(&state).await
 }
 
 #[tauri::command]
@@ -51,84 +24,7 @@ pub async fn get_amm_quote(
     amount: u64,
     token_id: Option<String>,
 ) -> Result<SwapQuoteResponse, String> {
-    if amount == 0 {
-        return Err("Amount must be greater than 0".to_string());
-    }
-
-    let client = state.require_node_client().await?;
-
-    let pool = find_pool(&client, &pool_id).await?;
-
-    let input = parse_swap_input(&input_type, amount, token_id.clone())?;
-
-    match amm::quote_swap(&pool, &input) {
-        Some(quote) => Ok(quote.into()),
-        None => {
-            // Token → ERG that would drain below min box: surface the max size.
-            if matches!(pool.pool_type, amm::PoolType::N2T) && input_type == "token" {
-                if let Some(erg) = pool.erg_reserves {
-                    if let Some(max_in) = amm::max_token_in_for_erg_out(
-                        pool.token_y.amount,
-                        erg,
-                        pool.fee_num,
-                        pool.fee_denom,
-                    ) {
-                        if max_in > 0 && max_in < amount {
-                            let max_out = amm::calculate_token_to_erg_output(
-                                pool.token_y.amount,
-                                erg,
-                                max_in,
-                                pool.fee_num,
-                                pool.fee_denom,
-                            );
-                            return Err(format!(
-                                "Amount too large for pool (would leave below min ERG). \
-                                 Max swap: {} {} → {} nanoERG",
-                                max_in,
-                                pool.token_y.name.as_deref().unwrap_or("token"),
-                                max_out
-                            ));
-                        }
-                    }
-                }
-            }
-            Err("Cannot calculate quote for this swap".to_string())
-        }
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub struct SwapPreviewResponse {
-    pub output_amount: u64,
-    pub output_token_id: String,
-    pub output_token_name: Option<String>,
-    pub output_decimals: Option<u8>,
-    pub min_output: u64,
-    pub price_impact: f64,
-    pub fee_amount: u64,
-    pub effective_rate: f64,
-    pub execution_fee_nano: u64,
-    pub miner_fee_nano: u64,
-    pub citadel_fee_nano: u64,
-    pub total_erg_cost_nano: u64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct SwapBuildResponse {
-    pub unsigned_tx: serde_json::Value,
-    pub summary: SwapTxSummaryDto,
-}
-
-#[derive(Debug, Serialize)]
-pub struct SwapTxSummaryDto {
-    pub input_amount: u64,
-    pub input_token: String,
-    pub min_output: u64,
-    pub output_token: String,
-    pub execution_fee: u64,
-    pub miner_fee: u64,
-    pub citadel_fee_nano: u64,
-    pub total_erg_cost: u64,
+    amm_svc::get_amm_quote(&state, &pool_id, &input_type, amount, token_id).await
 }
 
 #[tauri::command]
@@ -141,52 +37,16 @@ pub async fn preview_swap(
     slippage: Option<f64>,
     nitro: Option<f64>,
 ) -> Result<SwapPreviewResponse, String> {
-    if amount == 0 {
-        return Err("Amount must be greater than 0".to_string());
-    }
-
-    let client = state.require_node_client().await?;
-
-    let pool = find_pool(&client, &pool_id).await?;
-
-    let input = parse_swap_input(&input_type, amount, token_id)?;
-
-    let quote = amm::quote_swap(&pool, &input).ok_or("Cannot calculate quote for this swap")?;
-
-    let slippage_pct = slippage.unwrap_or(0.5);
-    let min_output = amm::calculator::apply_slippage(quote.output.amount, slippage_pct);
-
-    // Fee constants must match tx_builder.rs
-    let base_execution_fee: u64 = 2_000_000; // 0.002 ERG
-    let nitro_mult = nitro.unwrap_or(1.2_f64).max(1.0);
-    let execution_fee_nano: u64 = (base_execution_fee as f64 * nitro_mult) as u64;
-    let proxy_box_value: u64 = 4_000_000;
-    let miner_fee_nano: u64 = 1_100_000;
-    let citadel_fee_nano = ergo_tx::resolved_dev_fee_config().budget() as u64;
-
-    let total_erg_cost_nano = match &input {
-        amm::SwapInput::Erg { amount: erg_amt } => {
-            erg_amt + execution_fee_nano + proxy_box_value + miner_fee_nano + citadel_fee_nano
-        }
-        amm::SwapInput::Token { .. } => {
-            execution_fee_nano + proxy_box_value + miner_fee_nano + citadel_fee_nano
-        }
-    };
-
-    Ok(SwapPreviewResponse {
-        output_amount: quote.output.amount,
-        output_token_id: quote.output.token_id,
-        output_token_name: quote.output.name,
-        output_decimals: quote.output.decimals,
-        min_output,
-        price_impact: quote.price_impact,
-        fee_amount: quote.fee_amount,
-        effective_rate: quote.effective_rate,
-        execution_fee_nano,
-        miner_fee_nano,
-        citadel_fee_nano,
-        total_erg_cost_nano,
-    })
+    amm_svc::preview_swap(
+        &state,
+        &pool_id,
+        &input_type,
+        amount,
+        token_id,
+        slippage,
+        nitro,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -203,96 +63,23 @@ pub async fn build_swap_tx(
     execution_fee_nano: Option<u64>,
     recipient_address: Option<String>,
 ) -> Result<SwapBuildResponse, String> {
-    if amount == 0 {
-        return Err("Amount must be greater than 0".to_string());
-    }
-
-    let client = state.require_node_client().await?;
-
-    let pool = find_pool(&client, &pool_id).await?;
-
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
-    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
-    let user_pk = super::extract_p2pk_pubkey(&user_ergo_tree)?;
-
-    let input = parse_swap_input(&input_type, amount, token_id)?;
-
-    let request = amm::SwapRequest {
-        pool_id: pool.pool_id.clone(),
-        input,
+    let user_pk = super::extract_p2pk_pubkey(&parsed_utxos[0].ergo_tree)?;
+    amm_svc::build_swap_tx(
+        &state,
+        &pool_id,
+        &input_type,
+        amount,
+        token_id,
         min_output,
-        redeemer_address: user_address,
-    };
-
-    let recipient_tree = match &recipient_address {
-        Some(addr) if !addr.is_empty() => {
-            Some(ergo_tx::address_to_ergo_tree(addr).str_err()?)
-        }
-        _ => None,
-    };
-
-    let result = amm::build_swap_order_eip12(
-        &request,
-        &pool,
-        &parsed_utxos,
-        &user_ergo_tree,
-        &user_pk,
+        user_address,
+        parsed_utxos,
+        user_pk,
         current_height,
         execution_fee_nano,
-        recipient_tree.as_deref(),
+        recipient_address,
     )
-    .str_err()?;
-
-    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
-        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
-
-    Ok(SwapBuildResponse {
-        unsigned_tx: unsigned_tx_json,
-        summary: SwapTxSummaryDto {
-            input_amount: result.summary.input_amount,
-            input_token: result.summary.input_token,
-            min_output: result.summary.min_output,
-            output_token: result.summary.output_token,
-            execution_fee: result.summary.execution_fee,
-            miner_fee: result.summary.miner_fee,
-            citadel_fee_nano: result.summary.citadel_fee_nano,
-            total_erg_cost: result.summary.total_erg_cost,
-        },
-    })
-}
-
-
-#[derive(Debug, Serialize)]
-pub struct DirectSwapPreviewResponse {
-    pub output_amount: u64,
-    pub output_token_id: String,
-    pub output_token_name: Option<String>,
-    pub output_decimals: Option<u8>,
-    pub min_output: u64,
-    pub price_impact: f64,
-    pub fee_amount: u64,
-    pub effective_rate: f64,
-    pub miner_fee_nano: u64,
-    pub citadel_fee_nano: u64,
-    pub total_erg_cost_nano: u64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct DirectSwapBuildResponse {
-    pub unsigned_tx: serde_json::Value,
-    pub summary: DirectSwapSummaryDto,
-}
-
-#[derive(Debug, Serialize)]
-pub struct DirectSwapSummaryDto {
-    pub input_amount: u64,
-    pub input_token: String,
-    pub output_amount: u64,
-    pub min_output: u64,
-    pub output_token: String,
-    pub miner_fee: u64,
-    pub citadel_fee_nano: u64,
-    pub total_erg_cost: u64,
+    .await
 }
 
 /// No execution fee -- direct swaps have no bot involved.
@@ -305,45 +92,7 @@ pub async fn preview_direct_swap(
     token_id: Option<String>,
     slippage: Option<f64>,
 ) -> Result<DirectSwapPreviewResponse, String> {
-    if amount == 0 {
-        return Err("Amount must be greater than 0".to_string());
-    }
-
-    let client = state.require_node_client().await?;
-
-    let pool = find_pool(&client, &pool_id).await?;
-
-    let input = parse_swap_input(&input_type, amount, token_id)?;
-
-    let quote = amm::quote_swap(&pool, &input).ok_or("Cannot calculate quote for this swap")?;
-
-    let slippage_pct = slippage.unwrap_or(0.5);
-    let min_output = amm::calculator::apply_slippage(quote.output.amount, slippage_pct);
-
-    let miner_fee_nano: u64 = 1_100_000;
-    let citadel_fee_nano = ergo_tx::resolved_dev_fee_config().budget() as u64;
-    let min_box_value: u64 = 1_000_000;
-
-    let total_erg_cost_nano = match &input {
-        amm::SwapInput::Erg { amount: erg_amt } => {
-            erg_amt + min_box_value + miner_fee_nano + citadel_fee_nano
-        }
-        amm::SwapInput::Token { .. } => miner_fee_nano + citadel_fee_nano,
-    };
-
-    Ok(DirectSwapPreviewResponse {
-        output_amount: quote.output.amount,
-        output_token_id: quote.output.token_id,
-        output_token_name: quote.output.name,
-        output_decimals: quote.output.decimals,
-        min_output,
-        price_impact: quote.price_impact,
-        fee_amount: quote.fee_amount,
-        effective_rate: quote.effective_rate,
-        miner_fee_nano,
-        citadel_fee_nano,
-        total_erg_cost_nano,
-    })
+    amm_svc::preview_direct_swap(&state, &pool_id, &input_type, amount, token_id, slippage).await
 }
 
 #[tauri::command]
@@ -361,233 +110,32 @@ pub async fn build_direct_swap_tx(
     // Optional custom miner fee in nanoERG. None = network default.
     miner_fee_nano: Option<u64>,
 ) -> Result<DirectSwapBuildResponse, String> {
-    if amount == 0 {
-        return Err("Amount must be greater than 0".to_string());
-    }
-
-    let client = state.require_node_client().await?;
-
-    let pool = find_pool(&client, &pool_id).await?;
-
-    let pool_box = client
-        .get_eip12_box_by_id(&pool.box_id)
-        .await
-        .map_err(|e| format!("Failed to fetch pool box: {}", e))?;
-
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
-    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
-
-    let input = parse_swap_input(&input_type, amount, token_id)?;
-
-    let recipient_tree = match &recipient_address {
-        Some(addr) if !addr.is_empty() => {
-            Some(ergo_tx::address_to_ergo_tree(addr).str_err()?)
-        }
-        _ => None,
-    };
-
-    let result = amm::build_direct_swap_eip12(
-        &pool_box,
-        &pool,
-        &input,
+    amm_svc::build_direct_swap_tx(
+        &state,
+        &pool_id,
+        &input_type,
+        amount,
+        token_id,
         min_output,
-        &parsed_utxos,
-        &user_ergo_tree,
+        parsed_utxos,
         current_height,
-        recipient_tree.as_deref(),
+        recipient_address,
         miner_fee_nano,
     )
-    .str_err()?;
-
-    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
-        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
-
-    Ok(DirectSwapBuildResponse {
-        unsigned_tx: unsigned_tx_json,
-        summary: DirectSwapSummaryDto {
-            input_amount: result.summary.input_amount,
-            input_token: result.summary.input_token,
-            output_amount: result.summary.output_amount,
-            min_output: result.summary.min_output,
-            output_token: result.summary.output_token,
-            miner_fee: result.summary.miner_fee,
-            citadel_fee_nano: result.summary.citadel_fee_nano,
-            total_erg_cost: result.summary.total_erg_cost,
-        },
-    })
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PendingOrderDto {
-    pub box_id: String,
-    pub tx_id: String,
-    pub pool_id: String,
-    pub input: serde_json::Value,
-    pub min_output: u64,
-    pub input_decimals: u8,
-    pub output_decimals: u8,
-    pub redeemer_address: String,
-    pub created_height: u32,
-    pub value_nano_erg: u64,
-    pub order_type: String,
-    pub method: String,
-}
-
-impl PendingOrderDto {
-    fn from_order(o: &amm::PendingSwapOrder) -> Self {
-        let order_type = match o.order_type {
-            amm::SwapOrderType::N2tSwapSell => "n2t_swap_sell",
-            amm::SwapOrderType::N2tSwapBuy => "n2t_swap_buy",
-        };
-        // For N2T: sell = ERG(9) -> token(?), buy = token(?) -> ERG(9)
-        let (input_decimals, output_decimals) = match o.order_type {
-            amm::SwapOrderType::N2tSwapSell => (9u8, 0u8),
-            amm::SwapOrderType::N2tSwapBuy => (0u8, 9u8),
-        };
-        Self {
-            box_id: o.box_id.clone(),
-            tx_id: o.tx_id.clone(),
-            pool_id: o.pool_id.clone(),
-            input: serde_json::to_value(&o.input).unwrap_or_default(),
-            min_output: o.min_output,
-            input_decimals,
-            output_decimals,
-            redeemer_address: o.redeemer_address.clone(),
-            created_height: o.created_height,
-            value_nano_erg: o.value_nano_erg,
-            order_type: order_type.to_string(),
-            method: "proxy".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MempoolSwapDto {
-    pub tx_id: String,
-    pub pool_id: String,
-    pub receiving_erg: u64,
-    /// (token_id, amount, decimals)
-    pub receiving_tokens: Vec<(String, u64, u8)>,
-}
-
-impl MempoolSwapDto {
-    fn from_swap(s: &amm::MempoolSwap) -> Self {
-        Self {
-            tx_id: s.tx_id.clone(),
-            pool_id: s.pool_id.clone(),
-            receiving_erg: s.receiving_erg,
-            receiving_tokens: s
-                .receiving_tokens
-                .iter()
-                .map(|(id, amt)| (id.clone(), *amt, 0u8))
-                .collect(),
-        }
-    }
+    .await
 }
 
 #[tauri::command]
 pub async fn get_pending_orders(
     state: State<'_, AppState>,
 ) -> Result<Vec<PendingOrderDto>, String> {
-    let client = state.require_node_client().await?;
-    let wallet = state.wallet().await.ok_or("Wallet not connected")?;
-
-    // Scan recent history per wallet address (orders may live under any index).
-    let mut orders = Vec::new();
-    let mut seen_box = std::collections::HashSet::new();
-    for addr in &wallet.addresses {
-        let Some(tree) = ergo_node_client::address_to_ergo_tree(addr) else {
-            continue;
-        };
-        let batch = amm::find_pending_orders(&client, addr, &tree, 50)
-            .await
-            .str_err()?;
-        for o in batch {
-            if seen_box.insert(o.box_id.clone()) {
-                orders.push(o);
-            }
-        }
-    }
-
-    let mut dtos: Vec<PendingOrderDto> = orders.iter().map(PendingOrderDto::from_order).collect();
-
-    let mut token_cache: std::collections::HashMap<String, u8> = std::collections::HashMap::new();
-    for dto in &mut dtos {
-        // For N2T sell: input=ERG(9), output=token(?). For buy: input=token(?), output=ERG(9).
-        let token_id = match dto.order_type.as_str() {
-            "n2t_swap_buy" => dto
-                .input
-                .get("tokenId")
-                .and_then(|v| v.as_str())
-                .map(String::from),
-            _ => None,
-        };
-        if let Some(tid) = token_id {
-            let decimals = if let Some(&d) = token_cache.get(&tid) {
-                d
-            } else {
-                let d = client
-                    .get_token_info(&tid)
-                    .await
-                    .ok()
-                    .and_then(|ti| ti.decimals)
-                    .unwrap_or(0) as u8;
-                token_cache.insert(tid, d);
-                d
-            };
-            dto.input_decimals = decimals;
-        }
-        // For sell orders, output_decimals stays 0 -- the frontend
-        // formats min_output via pool data when available
-    }
-
-    Ok(dtos)
+    amm_svc::get_pending_orders(&state).await
 }
 
 #[tauri::command]
 pub async fn get_mempool_swaps(state: State<'_, AppState>) -> Result<Vec<MempoolSwapDto>, String> {
-    let client = state.require_node_client().await?;
-    let wallet = state.wallet().await.ok_or("Wallet not connected")?;
-
-    let mut swaps = Vec::new();
-    let mut seen_tx = std::collections::HashSet::new();
-    for addr in &wallet.addresses {
-        let Some(tree) = ergo_node_client::address_to_ergo_tree(addr) else {
-            continue;
-        };
-        let batch = amm::find_mempool_swaps(&client, addr, &tree)
-            .await
-            .str_err()?;
-        for s in batch {
-            if seen_tx.insert(s.tx_id.clone()) {
-                swaps.push(s);
-            }
-        }
-    }
-
-    let mut dtos: Vec<MempoolSwapDto> = swaps.iter().map(MempoolSwapDto::from_swap).collect();
-
-    let mut token_cache: std::collections::HashMap<String, u8> = std::collections::HashMap::new();
-    for dto in &mut dtos {
-        for (tid, _, decimals) in &mut dto.receiving_tokens {
-            *decimals = if let Some(&d) = token_cache.get(tid.as_str()) {
-                d
-            } else {
-                let d = client
-                    .get_token_info(tid)
-                    .await
-                    .ok()
-                    .and_then(|ti| ti.decimals)
-                    .unwrap_or(0) as u8;
-                token_cache.insert(tid.clone(), d);
-                d
-            };
-        }
-    }
-
-    Ok(dtos)
+    amm_svc::get_mempool_swaps(&state).await
 }
 
 #[tauri::command]
@@ -596,67 +144,7 @@ pub async fn build_swap_refund_tx(
     box_id: String,
     user_ergo_tree: String,
 ) -> Result<SwapBuildResponse, String> {
-    let client = state.require_node_client().await?;
-
-    let proxy_input = client
-        .get_eip12_box_by_id(&box_id)
-        .await
-        .map_err(|e| format!("Cannot fetch proxy box: {}. It may have been spent.", e))?;
-
-    let current_height = client.current_height().await.str_err()? as i32;
-
-    let result = amm::build_refund_tx_eip12(&proxy_input, &user_ergo_tree, current_height, &[])
-        .str_err()?;
-
-    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
-        .map_err(|e| format!("Failed to serialize tx: {}", e))?;
-
-    Ok(SwapBuildResponse {
-        unsigned_tx: unsigned_tx_json,
-        summary: SwapTxSummaryDto {
-            input_amount: result.summary.refunded_erg,
-            input_token: "Refund".to_string(),
-            min_output: result.summary.refunded_erg,
-            output_token: "ERG".to_string(),
-            execution_fee: 0,
-            miner_fee: result.summary.miner_fee,
-            citadel_fee_nano: 0,
-            total_erg_cost: result.summary.miner_fee,
-        },
-    })
-}
-
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AmmLpDepositPreviewResponse {
-    pub lp_reward: u64,
-    pub erg_amount: u64,
-    pub token_amount: u64,
-    pub token_name: Option<String>,
-    pub token_decimals: Option<u8>,
-    pub pool_share_percent: f64,
-    pub miner_fee_nano: u64,
-    pub total_erg_cost_nano: u64,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AmmLpRedeemPreviewResponse {
-    pub erg_output: u64,
-    pub token_output: u64,
-    pub token_name: Option<String>,
-    pub token_decimals: Option<u8>,
-    pub lp_amount: u64,
-    pub miner_fee_nano: u64,
-    pub total_erg_cost_nano: u64,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AmmLpBuildResponse {
-    pub unsigned_tx: serde_json::Value,
-    pub summary: serde_json::Value,
+    amm_svc::build_swap_refund_tx(&state, box_id, user_ergo_tree).await
 }
 
 #[tauri::command]
@@ -666,65 +154,7 @@ pub async fn preview_amm_lp_deposit(
     input_type: String,
     amount: u64,
 ) -> Result<AmmLpDepositPreviewResponse, String> {
-    if amount == 0 {
-        return Err("Amount must be greater than 0".to_string());
-    }
-
-    let client = state.require_node_client().await?;
-
-    let pool = find_pool(&client, &pool_id).await?;
-
-    let erg_reserves = pool
-        .erg_reserves
-        .ok_or("Only N2T pools supported for LP operations")?;
-
-    let (erg_amount, token_amount) = match input_type.as_str() {
-        "erg" => {
-            let token_needed = amm::calculator::calculate_deposit_token_needed(
-                erg_reserves,
-                pool.token_y.amount,
-                amount,
-            );
-            (amount, token_needed)
-        }
-        "token" => {
-            let erg_needed = amm::calculator::calculate_deposit_erg_needed(
-                erg_reserves,
-                pool.token_y.amount,
-                amount,
-            );
-            (erg_needed, amount)
-        }
-        _ => return Err("Invalid input_type. Use 'erg' or 'token'".to_string()),
-    };
-
-    let lp_reward = amm::calculator::calculate_lp_reward(
-        erg_reserves,
-        pool.token_y.amount,
-        pool.lp_circulating,
-        erg_amount,
-        token_amount,
-    );
-
-    let pool_share_percent = if pool.lp_circulating + lp_reward > 0 {
-        (lp_reward as f64) / ((pool.lp_circulating + lp_reward) as f64) * 100.0
-    } else {
-        0.0
-    };
-
-    let miner_fee_nano: u64 = 1_100_000;
-    let total_erg_cost_nano = erg_amount + miner_fee_nano;
-
-    Ok(AmmLpDepositPreviewResponse {
-        lp_reward,
-        erg_amount,
-        token_amount,
-        token_name: pool.token_y.name.clone(),
-        token_decimals: pool.token_y.decimals,
-        pool_share_percent,
-        miner_fee_nano,
-        total_erg_cost_nano,
-    })
+    amm_svc::preview_amm_lp_deposit(&state, &pool_id, &input_type, amount).await
 }
 
 #[tauri::command]
@@ -737,38 +167,16 @@ pub async fn build_amm_lp_deposit_tx(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<AmmLpBuildResponse, String> {
-    let client = state.require_node_client().await?;
-
-    let pool = find_pool(&client, &pool_id).await?;
-
-    let pool_box = client
-        .get_eip12_box_by_id(&pool.box_id)
-        .await
-        .map_err(|e| format!("Failed to fetch pool box: {}", e))?;
-
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
-    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
-
-    let result = amm::build_lp_deposit_eip12(
-        &pool_box,
-        &pool,
+    amm_svc::build_amm_lp_deposit_tx(
+        &state,
+        &pool_id,
         erg_amount,
         token_amount,
-        &parsed_utxos,
-        &user_ergo_tree,
+        parsed_utxos,
         current_height,
     )
-    .str_err()?;
-
-    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
-        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
-    let summary_json = serde_json::to_value(&result.summary)
-        .map_err(|e| format!("Failed to serialize summary: {}", e))?;
-
-    Ok(AmmLpBuildResponse {
-        unsigned_tx: unsigned_tx_json,
-        summary: summary_json,
-    })
+    .await
 }
 
 /// Proxy order -- Spectrum bots detect and execute the deposit.
@@ -782,36 +190,18 @@ pub async fn build_amm_lp_deposit_order(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<AmmLpBuildResponse, String> {
-    let client = state.require_node_client().await?;
-
-    let pool = find_pool(&client, &pool_id).await?;
-
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
-    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
-
-    let user_pk = super::extract_p2pk_pubkey(&user_ergo_tree)?;
-
-    let result = amm::build_lp_deposit_order_eip12(
-        &pool,
+    let user_pk = super::extract_p2pk_pubkey(&parsed_utxos[0].ergo_tree)?;
+    amm_svc::build_amm_lp_deposit_order(
+        &state,
+        &pool_id,
         erg_amount,
         token_amount,
-        &parsed_utxos,
-        &user_ergo_tree,
-        &user_pk,
+        parsed_utxos,
+        user_pk,
         current_height,
-        None,
     )
-    .str_err()?;
-
-    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
-        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
-    let summary_json = serde_json::to_value(&result.summary)
-        .map_err(|e| format!("Failed to serialize summary: {}", e))?;
-
-    Ok(AmmLpBuildResponse {
-        unsigned_tx: unsigned_tx_json,
-        summary: summary_json,
-    })
+    .await
 }
 
 #[tauri::command]
@@ -820,38 +210,7 @@ pub async fn preview_amm_lp_redeem(
     pool_id: String,
     lp_amount: u64,
 ) -> Result<AmmLpRedeemPreviewResponse, String> {
-    if lp_amount == 0 {
-        return Err("LP amount must be greater than 0".to_string());
-    }
-
-    let client = state.require_node_client().await?;
-
-    let pool = find_pool(&client, &pool_id).await?;
-
-    let erg_reserves = pool
-        .erg_reserves
-        .ok_or("Only N2T pools supported for LP operations")?;
-
-    let (erg_output, token_output) = amm::calculator::calculate_redeem_shares(
-        erg_reserves,
-        pool.token_y.amount,
-        pool.lp_circulating,
-        lp_amount,
-    );
-
-    let miner_fee_nano: u64 = 1_100_000;
-    // User only needs ERG for miner fee; redeemed ERG comes from the pool
-    let total_erg_cost_nano = miner_fee_nano;
-
-    Ok(AmmLpRedeemPreviewResponse {
-        erg_output,
-        token_output,
-        token_name: pool.token_y.name.clone(),
-        token_decimals: pool.token_y.decimals,
-        lp_amount,
-        miner_fee_nano,
-        total_erg_cost_nano,
-    })
+    amm_svc::preview_amm_lp_redeem(&state, &pool_id, lp_amount).await
 }
 
 #[tauri::command]
@@ -863,37 +222,8 @@ pub async fn build_amm_lp_redeem_tx(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<AmmLpBuildResponse, String> {
-    let client = state.require_node_client().await?;
-
-    let pool = find_pool(&client, &pool_id).await?;
-
-    let pool_box = client
-        .get_eip12_box_by_id(&pool.box_id)
-        .await
-        .map_err(|e| format!("Failed to fetch pool box: {}", e))?;
-
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
-    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
-
-    let result = amm::build_lp_redeem_eip12(
-        &pool_box,
-        &pool,
-        lp_amount,
-        &parsed_utxos,
-        &user_ergo_tree,
-        current_height,
-    )
-    .str_err()?;
-
-    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
-        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
-    let summary_json = serde_json::to_value(&result.summary)
-        .map_err(|e| format!("Failed to serialize summary: {}", e))?;
-
-    Ok(AmmLpBuildResponse {
-        unsigned_tx: unsigned_tx_json,
-        summary: summary_json,
-    })
+    amm_svc::build_amm_lp_redeem_tx(&state, &pool_id, lp_amount, parsed_utxos, current_height).await
 }
 
 /// Proxy order -- Spectrum bots detect and execute the redemption.
@@ -906,46 +236,17 @@ pub async fn build_amm_lp_redeem_order(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<AmmLpBuildResponse, String> {
-    let client = state.require_node_client().await?;
-
-    let pool = find_pool(&client, &pool_id).await?;
-
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
-    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
-
-    let user_pk = super::extract_p2pk_pubkey(&user_ergo_tree)?;
-
-    let result = amm::build_lp_redeem_order_eip12(
-        &pool,
+    let user_pk = super::extract_p2pk_pubkey(&parsed_utxos[0].ergo_tree)?;
+    amm_svc::build_amm_lp_redeem_order(
+        &state,
+        &pool_id,
         lp_amount,
-        &parsed_utxos,
-        &user_ergo_tree,
-        &user_pk,
+        parsed_utxos,
+        user_pk,
         current_height,
-        None,
     )
-    .str_err()?;
-
-    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
-        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
-    let summary_json = serde_json::to_value(&result.summary)
-        .map_err(|e| format!("Failed to serialize summary: {}", e))?;
-
-    Ok(AmmLpBuildResponse {
-        unsigned_tx: unsigned_tx_json,
-        summary: summary_json,
-    })
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PoolCreatePreviewResponse {
-    pub pool_type: String,
-    pub lp_share: u64,
-    pub fee_percent: f64,
-    pub fee_num: i32,
-    pub miner_fee_nano: u64,
-    pub total_erg_cost_nano: u64,
+    .await
 }
 
 #[tauri::command]
@@ -957,42 +258,14 @@ pub async fn preview_pool_create(
     y_amount: u64,
     fee_percent: f64,
 ) -> Result<PoolCreatePreviewResponse, String> {
-    // Tauri macro requires all args used
-    let _ = (&x_token_id, &y_token_id);
-
-    let fee_num = ((1.0 - fee_percent / 100.0) * amm::constants::fees::DEFAULT_FEE_DENOM as f64)
-        .round() as i32;
-    if fee_num <= 0 || fee_num >= amm::constants::fees::DEFAULT_FEE_DENOM {
-        return Err("Fee must be between 0% and 100% (exclusive)".to_string());
-    }
-
-    let lp_share = amm::calculator::calculate_initial_lp_share(x_amount, y_amount);
-    if lp_share == 0 {
-        return Err("Initial LP share would be 0. Increase deposit amounts.".to_string());
-    }
-
-    let tx_fee = 1_100_000u64;
-    let min_box_value = 1_000_000u64;
-
-    let pool_type_enum = match pool_type.as_str() {
-        "N2T" => amm::state::PoolType::N2T,
-        "T2T" => amm::state::PoolType::T2T,
-        _ => return Err(format!("Invalid pool type: {}", pool_type)),
-    };
-
-    let total_erg_cost = match pool_type_enum {
-        amm::state::PoolType::N2T => x_amount + tx_fee * 2 + min_box_value,
-        amm::state::PoolType::T2T => min_box_value * 2 + tx_fee * 2,
-    };
-
-    Ok(PoolCreatePreviewResponse {
+    amm_svc::preview_pool_create(
         pool_type,
-        lp_share,
+        x_token_id,
+        x_amount,
+        y_token_id,
+        y_amount,
         fee_percent,
-        fee_num,
-        miner_fee_nano: tx_fee * 2,
-        total_erg_cost_nano: total_erg_cost,
-    })
+    )
 }
 
 /// LP token ID equals the first input box_id (Ergo minting rule).
@@ -1007,44 +280,17 @@ pub async fn build_pool_bootstrap_tx(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<AmmLpBuildResponse, String> {
-    let pool_type_enum = match pool_type.as_str() {
-        "N2T" => amm::state::PoolType::N2T,
-        "T2T" => amm::state::PoolType::T2T,
-        _ => return Err(format!("Invalid pool type: {}", pool_type)),
-    };
-
-    let fee_num = ((1.0 - fee_percent / 100.0) * amm::constants::fees::DEFAULT_FEE_DENOM as f64)
-        .round() as i32;
-
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
-    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
-
-    let params = amm::pool_setup::PoolSetupParams {
-        pool_type: pool_type_enum,
+    amm_svc::build_pool_bootstrap_tx(
+        pool_type,
         x_token_id,
         x_amount,
         y_token_id,
         y_amount,
-        fee_num,
-    };
-
-    let result = amm::pool_setup::build_pool_bootstrap_eip12(
-        &params,
-        &parsed_utxos,
-        &user_ergo_tree,
+        fee_percent,
+        parsed_utxos,
         current_height,
     )
-    .str_err()?;
-
-    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
-        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
-    let summary_json = serde_json::to_value(&result.summary)
-        .map_err(|e| format!("Failed to serialize summary: {}", e))?;
-
-    Ok(AmmLpBuildResponse {
-        unsigned_tx: unsigned_tx_json,
-        summary: summary_json,
-    })
 }
 
 /// TX1: takes the bootstrap box (TX0 output) and creates the on-chain pool box.
@@ -1061,45 +307,18 @@ pub async fn build_pool_create_tx(
     user_lp_share: u64,
     current_height: i32,
 ) -> Result<AmmLpBuildResponse, String> {
-    let pool_type_enum = match pool_type.as_str() {
-        "N2T" => amm::state::PoolType::N2T,
-        "T2T" => amm::state::PoolType::T2T,
-        _ => return Err(format!("Invalid pool type: {}", pool_type)),
-    };
-
-    let bootstrap: ergo_tx::Eip12InputBox = serde_json::from_value(bootstrap_box)
-        .map_err(|e| format!("Failed to parse bootstrap box: {}", e))?;
-
-    let user_ergo_tree = bootstrap.ergo_tree.clone();
-
-    let params = amm::pool_setup::PoolSetupParams {
-        pool_type: pool_type_enum,
+    amm_svc::build_pool_create_tx(
+        bootstrap_box,
+        pool_type,
         x_token_id,
         x_amount,
         y_token_id,
         y_amount,
         fee_num,
-    };
-
-    let result = amm::pool_setup::build_pool_create_eip12(
-        &bootstrap,
-        &params,
-        &lp_token_id,
+        lp_token_id,
         user_lp_share,
-        &user_ergo_tree,
         current_height,
     )
-    .str_err()?;
-
-    let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
-        .map_err(|e| format!("Failed to serialize transaction: {}", e))?;
-    let summary_json = serde_json::to_value(&result.summary)
-        .map_err(|e| format!("Failed to serialize summary: {}", e))?;
-
-    Ok(AmmLpBuildResponse {
-        unsigned_tx: unsigned_tx_json,
-        summary: summary_json,
-    })
 }
 
 #[tauri::command]
@@ -1113,67 +332,17 @@ pub async fn find_swap_routes(
     slippage: Option<f64>,
     min_rate: Option<f64>,
 ) -> Result<serde_json::Value, String> {
-    if input_amount == 0 {
-        return Err("Amount must be greater than 0".to_string());
-    }
-
-    let client = state.require_node_client().await?;
-    let pools = amm::discover_pools(&client)
-        .await
-        .str_err()?;
-
-    let mut graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
-    // The requested pair is always routable even if its pools sit below the
-    // liquidity floor -- price impact on the quote conveys thinness.
-    amm::ensure_direct_pair_edges(&mut graph, &pools, &source_token, &target_token);
-    let max_hops = max_hops.unwrap_or(3);
-    let max_routes = max_routes.unwrap_or(5);
-    let slippage_pct = slippage.unwrap_or(0.5);
-
-    let routes = amm::find_best_routes(
-        &graph,
+    amm_svc::find_swap_routes(
+        &state,
         &source_token,
         &target_token,
         input_amount,
         max_hops,
         max_routes,
-    );
-
-    let route_quotes: Vec<amm::RouteQuote> = routes
-        .into_iter()
-        .map(|r| amm::make_route_quote(r, slippage_pct))
-        .collect();
-
-    let depth_tiers = amm::calculate_all_depth_tiers(&graph, &source_token);
-
-    // min_rate excludes routes below a price floor (e.g. oracle rate) from the split
-    let min_rate_filter = min_rate.map(|r| (r, 2u8)); // SigUSD decimals = 2
-    let split = amm::optimize_split_detailed(
-        &graph,
-        &source_token,
-        &target_token,
-        input_amount,
-        max_hops,
-        3,
-        min_rate_filter,
-    );
-
-    let max_swap = amm::max_swap_hint_if_needed(
-        &graph,
-        &source_token,
-        &target_token,
-        input_amount,
-        max_hops,
-    );
-
-    let response = serde_json::json!({
-        "routes": route_quotes,
-        "depth_tiers": depth_tiers,
-        "split": split,
-        "max_swap": max_swap,
-    });
-
-    Ok(response)
+        slippage,
+        min_rate,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -1185,39 +354,15 @@ pub async fn find_split_route(
     max_splits: Option<usize>,
     slippage: Option<f64>,
 ) -> Result<serde_json::Value, String> {
-    if input_amount == 0 {
-        return Err("Amount must be greater than 0".to_string());
-    }
-
-    let client = state.require_node_client().await?;
-    let pools = amm::discover_pools(&client)
-        .await
-        .str_err()?;
-
-    let mut graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
-    amm::ensure_direct_pair_edges(&mut graph, &pools, &source_token, &target_token);
-    let max_hops = 3;
-    let max_splits = max_splits.unwrap_or(2);
-    let _slippage_pct = slippage.unwrap_or(0.5);
-
-    let paths = amm::find_paths(&graph, &source_token, &target_token, max_hops);
-
-    let mut quoted: Vec<(usize, u64)> = paths
-        .iter()
-        .enumerate()
-        .filter_map(|(i, p)| amm::quote_route(p, input_amount).map(|r| (i, r.total_output)))
-        .collect();
-    quoted.sort_by(|a, b| b.1.cmp(&a.1));
-    quoted.truncate(max_splits);
-
-    let top_paths: Vec<Vec<amm::PoolEdge>> = quoted
-        .iter()
-        .map(|(i, _)| paths[*i].clone())
-        .collect();
-
-    let split = amm::optimize_split(&top_paths, input_amount, max_splits);
-
-    serde_json::to_value(&split).str_err()
+    amm_svc::find_split_route(
+        &state,
+        &source_token,
+        &target_token,
+        input_amount,
+        max_splits,
+        slippage,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -1225,72 +370,23 @@ pub async fn compare_sigusd_options(
     state: State<'_, AppState>,
     input_erg_nano: u64,
 ) -> Result<serde_json::Value, String> {
-    if input_erg_nano == 0 {
-        return Err("Amount must be greater than 0".to_string());
-    }
-
-    let client = state.require_node_client().await?;
-
-    let pools = amm::discover_pools(&client)
-        .await
-        .str_err()?;
-    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
-
-    let sigmausd_params = fetch_sigmausd_params(&state).await.ok();
-
-    let sigusd_token_id = sigmausd::constants::mainnet::SIGUSD_TOKEN_ID;
-
-    let comparison = amm::compare_acquisition(
-        &graph,
-        sigusd_token_id,
-        "SigUSD",
-        input_erg_nano,
-        sigmausd_params.as_ref(),
-    );
-
-    serde_json::to_value(&comparison).str_err()
+    amm_svc::compare_sigusd_options(&state, input_erg_nano).await
 }
 
 #[tauri::command]
 pub async fn get_liquidity_depth(
     state: State<'_, AppState>,
     source_token: String,
-) -> Result<Vec<amm::DepthTiers>, String> {
-    let client = state.require_node_client().await?;
-    let pools = amm::discover_pools(&client)
-        .await
-        .str_err()?;
-
-    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
-    Ok(amm::calculate_all_depth_tiers(&graph, &source_token))
+) -> Result<Vec<DepthTiers>, String> {
+    amm_svc::get_liquidity_depth(&state, &source_token).await
 }
 
 #[tauri::command]
 pub async fn get_sigusd_arb_snapshot(
     state: State<'_, AppState>,
     oracle_rate_usd_per_erg: f64,
-) -> Result<amm::OracleArbSnapshot, String> {
-    if oracle_rate_usd_per_erg <= 0.0 {
-        return Err("Oracle rate must be positive".to_string());
-    }
-
-    let client = state.require_node_client().await?;
-    let pools = amm::discover_pools(&client)
-        .await
-        .str_err()?;
-
-    // Use lower liquidity threshold (1 ERG) and higher per-pair limit (10)
-    // for arb snapshot to include small pools that offer above-oracle rates.
-    // The regular router uses 10 ERG minimum and 3 per pair for performance.
-    let graph = amm::build_pool_graph_with_limit(&pools, 1_000_000_000, 10);
-    let sigusd_token_id = sigmausd::constants::mainnet::SIGUSD_TOKEN_ID;
-
-    Ok(amm::calculate_oracle_arb_snapshot(
-        &graph,
-        sigusd_token_id,
-        oracle_rate_usd_per_erg,
-        2, // SigUSD decimals
-    ))
+) -> Result<OracleArbSnapshot, String> {
+    amm_svc::get_sigusd_arb_snapshot(&state, oracle_rate_usd_per_erg).await
 }
 
 #[tauri::command]
@@ -1303,99 +399,24 @@ pub async fn find_swap_routes_by_output(
     max_routes: Option<usize>,
     slippage: Option<f64>,
 ) -> Result<serde_json::Value, String> {
-    if desired_output == 0 {
-        return Err("Amount must be greater than 0".to_string());
-    }
-
-    let client = state.require_node_client().await?;
-    let pools = amm::discover_pools(&client)
-        .await
-        .str_err()?;
-
-    let mut graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
-    amm::ensure_direct_pair_edges(&mut graph, &pools, &source_token, &target_token);
-    let max_hops = max_hops.unwrap_or(3);
-    let max_routes = max_routes.unwrap_or(5);
-    let slippage_pct = slippage.unwrap_or(0.5);
-
-    let routes = amm::find_best_routes_by_output(
-        &graph,
+    amm_svc::find_swap_routes_by_output(
+        &state,
         &source_token,
         &target_token,
         desired_output,
         max_hops,
         max_routes,
-    );
-
-    let route_quotes: Vec<amm::RouteQuote> = routes
-        .into_iter()
-        .map(|r| amm::make_route_quote(r, slippage_pct))
-        .collect();
-
-    let depth_tiers = amm::calculate_all_depth_tiers(&graph, &source_token);
-
-    let response = serde_json::json!({
-        "routes": route_quotes,
-        "depth_tiers": depth_tiers,
-    });
-
-    Ok(response)
-}
-
-async fn fetch_sigmausd_params(
-    state: &State<'_, AppState>,
-) -> Result<amm::SigmaUsdParams, String> {
-    let client = state.require_node_client().await?;
-    let capabilities = client.require_capabilities().await?;
-    let config = state.config().await;
-    let nft_ids = sigmausd::constants::NftIds::for_network(config.network)
-        .ok_or("SigmaUSD not available on this network")?;
-
-    let sigmausd_state = sigmausd::fetch_sigmausd_state(&client, &capabilities, &nft_ids)
-        .await
-        .str_err()?;
-
-    Ok(amm::SigmaUsdParams {
-        sigusd_price_nano: sigmausd_state.sigusd_price_nano,
-        can_mint: sigmausd_state.can_mint_sigusd,
-        reserve_ratio_pct: sigmausd_state.reserve_ratio_pct,
-    })
+        slippage,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn scan_circular_arbs(
     state: State<'_, AppState>,
     max_hops: Option<usize>,
-) -> Result<amm::CircularArbSnapshot, String> {
-    let client = state.require_node_client().await?;
-    let pools = amm::discover_pools(&client)
-        .await
-        .str_err()?;
-
-    let graph = amm::build_pool_graph(&pools, amm::DEFAULT_MIN_LIQUIDITY_NANO);
-    let max_hops = max_hops.unwrap_or(4);
-    // Min profit: 0.0001 ERG = 100_000 nanoERG
-    Ok(amm::find_circular_arbs(&graph, max_hops, 100_000))
-}
-
-// =============================================================================
-// Arb chain execution (pre-built 0-conf sequential legs)
-// =============================================================================
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ArbChainLegDto {
-    pub pool_id: String,
-    pub tx_id: String,
-    pub unsigned_tx: serde_json::Value,
-    pub summary: amm::DirectSwapSummary,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ArbChainBuildResponse {
-    pub legs: Vec<ArbChainLegDto>,
-    pub projected_profit_nano: i64,
+) -> Result<CircularArbSnapshot, String> {
+    amm_svc::scan_circular_arbs(&state, max_hops).await
 }
 
 /// Build a full arb chain over `pool_ids` (hop order). Pools are re-fetched
@@ -1409,61 +430,16 @@ pub async fn build_arb_chain_tx(
     current_height: i32,
     min_profit_nano: Option<i64>,
 ) -> Result<ArbChainBuildResponse, String> {
-    let client = state.require_node_client().await?;
-
-    let all_pools = amm::discover_pools(&client).await.str_err()?;
-    let mut pools: Vec<(amm::AmmPool, ergo_tx::Eip12InputBox)> = Vec::with_capacity(pool_ids.len());
-    for pool_id in &pool_ids {
-        let pool = all_pools
-            .iter()
-            .find(|p| &p.pool_id == pool_id)
-            .cloned()
-            .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
-        let pool_box = client
-            .get_eip12_box_by_id(&pool.box_id)
-            .await
-            .map_err(|e| format!("Failed to fetch pool box: {}", e))?;
-        pools.push((pool, pool_box));
-    }
-
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
-    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
-
-    let build = amm::build_arb_chain(
-        &pools,
+    amm_svc::build_arb_chain_tx(
+        &state,
+        pool_ids,
         input_nano,
-        &parsed_utxos,
-        &user_ergo_tree,
+        parsed_utxos,
         current_height,
-        min_profit_nano.unwrap_or(0),
+        min_profit_nano,
     )
-    .str_err()?;
-
-    let legs = build
-        .legs
-        .into_iter()
-        .map(|leg| {
-            Ok(ArbChainLegDto {
-                pool_id: leg.pool_id,
-                tx_id: leg.tx_id,
-                unsigned_tx: serde_json::to_value(&leg.unsigned_tx)
-                    .map_err(|e| format!("Failed to serialize leg tx: {}", e))?,
-                summary: leg.summary,
-            })
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-
-    Ok(ArbChainBuildResponse {
-        legs,
-        projected_profit_nano: build.projected_profit_nano,
-    })
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ArbLegSignResponse {
-    pub request_id: String,
-    pub nautilus_url: String,
+    .await
 }
 
 /// Start a sign-only Nautilus request for one arb leg. The signed tx is
@@ -1474,23 +450,7 @@ pub async fn start_arb_leg_sign(
     unsigned_tx: serde_json::Value,
     message: String,
 ) -> Result<ArbLegSignResponse, String> {
-    let server = state.ergopay_server().await.str_err()?;
-    let request_id = server.create_sign_only_request(unsigned_tx, message).await;
-    let nautilus_url = server.get_nautilus_url(&request_id);
-    Ok(ArbLegSignResponse {
-        request_id,
-        nautilus_url,
-    })
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ArbChainSubmitResponse {
-    /// Tx ids of successfully broadcast legs, in order.
-    pub tx_ids: Vec<String>,
-    /// Index of the first leg that failed to broadcast (if any).
-    pub failed_leg: Option<usize>,
-    pub error: Option<String>,
+    amm_svc::start_arb_leg_sign(&state, unsigned_tx, message).await
 }
 
 /// Broadcast the signed legs in order. Stops at the first rejection so the
@@ -1500,47 +460,7 @@ pub async fn submit_arb_chain(
     state: State<'_, AppState>,
     request_ids: Vec<String>,
 ) -> Result<ArbChainSubmitResponse, String> {
-    let client = state.require_node_client().await?;
-    let server = state.ergopay_server().await.str_err()?;
-
-    // Collect all signed txs first -- refuse to broadcast a partial chain.
-    let mut signed_txs = Vec::with_capacity(request_ids.len());
-    for (idx, request_id) in request_ids.iter().enumerate() {
-        let signed = server
-            .get_signed_tx(request_id)
-            .await
-            .ok_or_else(|| format!("Leg {} is not signed yet", idx + 1))?;
-        signed_txs.push(signed);
-    }
-
-    let mut tx_ids = Vec::with_capacity(signed_txs.len());
-    for (idx, signed_tx) in signed_txs.iter().enumerate() {
-        match client.submit_transaction(signed_tx).await {
-            Ok(tx_id) => tx_ids.push(tx_id),
-            Err(e) => {
-                return Ok(ArbChainSubmitResponse {
-                    tx_ids,
-                    failed_leg: Some(idx),
-                    error: Some(format!("Leg {} rejected: {}", idx + 1, e)),
-                });
-            }
-        }
-    }
-
-    Ok(ArbChainSubmitResponse {
-        tx_ids,
-        failed_leg: None,
-        error: None,
-    })
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SwapChainBuildResponse {
-    pub legs: Vec<ArbChainLegDto>,
-    /// Token the chain ends in (null = ERG).
-    pub final_token: Option<String>,
-    pub final_output: u64,
+    amm_svc::submit_arb_chain(&state, request_ids).await
 }
 
 /// Build a multi-hop swap chain over `pool_ids` (hop order) starting from
@@ -1555,84 +475,16 @@ pub async fn build_swap_chain_tx(
     user_utxos: Vec<serde_json::Value>,
     current_height: i32,
 ) -> Result<SwapChainBuildResponse, String> {
-    let client = state.require_node_client().await?;
-
-    let all_pools = amm::discover_pools(&client).await.str_err()?;
-    let mut pools: Vec<(amm::AmmPool, ergo_tx::Eip12InputBox)> = Vec::with_capacity(pool_ids.len());
-    for pool_id in &pool_ids {
-        let pool = all_pools
-            .iter()
-            .find(|p| &p.pool_id == pool_id)
-            .cloned()
-            .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
-        let pool_box = client
-            .get_eip12_box_by_id(&pool.box_id)
-            .await
-            .map_err(|e| format!("Failed to fetch pool box: {}", e))?;
-        pools.push((pool, pool_box));
-    }
-
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
-    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
-
-    // Frontend sends "ERG" for the native side; the builder wants None.
-    let source = source_token.filter(|t| t != "ERG");
-
-    let build = amm::build_swap_chain(
-        &pools,
-        source,
+    amm_svc::build_swap_chain_tx(
+        &state,
+        pool_ids,
+        source_token,
         input_amount,
-        &parsed_utxos,
-        &user_ergo_tree,
+        parsed_utxos,
         current_height,
     )
-    .str_err()?;
-
-    let legs = build
-        .legs
-        .into_iter()
-        .map(|leg| {
-            Ok(ArbChainLegDto {
-                pool_id: leg.pool_id,
-                tx_id: leg.tx_id,
-                unsigned_tx: serde_json::to_value(&leg.unsigned_tx)
-                    .map_err(|e| format!("Failed to serialize leg tx: {}", e))?,
-                summary: leg.summary,
-            })
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-
-    Ok(SwapChainBuildResponse {
-        legs,
-        final_token: build.final_token,
-        final_output: build.final_output,
-    })
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SplitAllocationInput {
-    pub pool_ids: Vec<String>,
-    pub source_token: Option<String>,
-    pub input_amount: u64,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SplitAllocationSummaryDto {
-    pub input_amount: u64,
-    pub output_amount: u64,
-    pub final_token: Option<String>,
-    pub leg_count: usize,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SplitChainBuildResponse {
-    pub legs: Vec<ArbChainLegDto>,
-    pub allocations: Vec<SplitAllocationSummaryDto>,
-    pub total_output: u64,
-    pub final_token: Option<String>,
+    .await
 }
 
 /// Pre-build a split as a flat list of 0-conf chained legs across allocations.
@@ -1645,76 +497,13 @@ pub async fn build_split_chains_tx(
     current_height: i32,
     min_total_output: Option<u64>,
 ) -> Result<SplitChainBuildResponse, String> {
-    let client = state.require_node_client().await?;
-
-    let all_pools = amm::discover_pools(&client).await.str_err()?;
-    let mut specs: Vec<amm::SplitChainSpec> = Vec::with_capacity(allocations.len());
-
-    for alloc in &allocations {
-        let mut pools: Vec<(amm::AmmPool, ergo_tx::Eip12InputBox)> =
-            Vec::with_capacity(alloc.pool_ids.len());
-        for pool_id in &alloc.pool_ids {
-            let pool = all_pools
-                .iter()
-                .find(|p| &p.pool_id == pool_id)
-                .cloned()
-                .ok_or_else(|| format!("Pool not found: {}", pool_id))?;
-            let pool_box = client
-                .get_eip12_box_by_id(&pool.box_id)
-                .await
-                .map_err(|e| format!("Failed to fetch pool box: {}", e))?;
-            pools.push((pool, pool_box));
-        }
-        let source = alloc
-            .source_token
-            .clone()
-            .filter(|t| t != "ERG");
-        specs.push(amm::SplitChainSpec {
-            pools,
-            source_token: source,
-            input_amount: alloc.input_amount,
-        });
-    }
-
     let parsed_utxos = super::parse_eip12_utxos(user_utxos)?;
-    let user_ergo_tree = parsed_utxos[0].ergo_tree.clone();
-
-    let build = amm::build_split_chains(
-        &specs,
-        &parsed_utxos,
-        &user_ergo_tree,
+    amm_svc::build_split_chains_tx(
+        &state,
+        allocations,
+        parsed_utxos,
         current_height,
         min_total_output,
     )
-    .str_err()?;
-
-    let legs = build
-        .legs
-        .into_iter()
-        .map(|leg| {
-            Ok(ArbChainLegDto {
-                pool_id: leg.pool_id,
-                tx_id: leg.tx_id,
-                unsigned_tx: serde_json::to_value(&leg.unsigned_tx)
-                    .map_err(|e| format!("Failed to serialize leg tx: {}", e))?,
-                summary: leg.summary,
-            })
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-
-    Ok(SplitChainBuildResponse {
-        legs,
-        allocations: build
-            .allocations
-            .into_iter()
-            .map(|a| SplitAllocationSummaryDto {
-                input_amount: a.input_amount,
-                output_amount: a.output_amount,
-                final_token: a.final_token,
-                leg_count: a.leg_count,
-            })
-            .collect(),
-        total_output: build.total_output,
-        final_token: build.final_token,
-    })
+    .await
 }
