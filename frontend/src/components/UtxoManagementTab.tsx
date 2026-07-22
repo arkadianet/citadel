@@ -14,7 +14,13 @@ import type {
   RestructureBuildResponse,
 } from '../api/utxoManagement'
 import { getCachedTokenInfo } from '../api/tokenCache'
-import { TX_FEE_NANO, MIN_BOX_VALUE_NANO, DEV_FEE_NANO, WALLET_TX_FEES_NANO } from '../constants'
+import {
+  TX_FEE_NANO,
+  MIN_BOX_VALUE_NANO,
+  DEV_FEE_NANO,
+  WALLET_TX_FEES_NANO,
+  MAX_RESTRUCTURE_OUTPUTS,
+} from '../constants'
 import { formatErg, formatTokenAmount, truncateAddress } from '../utils/format'
 import { isNftLikeToken } from '../utils/eip4'
 import { TxSuccess } from './TxSuccess'
@@ -245,6 +251,8 @@ export function UtxoManagementTab({
   const [poolAssignAmount, setPoolAssignAmount] = useState('')
   const [draggingTokenId, setDraggingTokenId] = useState<string | null>(null)
   const [dropTargetSlotId, setDropTargetSlotId] = useState<string | null>(null)
+  /** Output highlighted for bulk assign (Add all / Add remaining). */
+  const [activeOutputSlotId, setActiveOutputSlotId] = useState<string | null>(null)
 
   const [resolvedNames, setResolvedNames] = useState<Map<string, string>>(new Map())
 
@@ -697,7 +705,7 @@ export function UtxoManagementTab({
   const restructureIsValid = useMemo(() => {
     if (subTab !== 'restructure') return false
     if (selectedBoxIds.size < 1) return false
-    if (restructureSlots.length < 1 || restructureSlots.length > 30) return false
+    if (restructureSlots.length < 1 || restructureSlots.length > MAX_RESTRUCTURE_OUTPUTS) return false
     for (const slot of restructureSlots) {
       const parsed = parseFloat(slot.erg.replace(/,/g, ''))
       if (isNaN(parsed) || Math.floor(parsed * 1e9) < MIN_BOX_VALUE_NANO) return false
@@ -749,6 +757,7 @@ export function UtxoManagementTab({
     setPoolAssignAmount('')
     setDraggingTokenId(null)
     setDropTargetSlotId(null)
+    setActiveOutputSlotId(null)
   }, [])
 
   // When restructure selection changes, seed default ERG split if slots empty/blank
@@ -764,8 +773,16 @@ export function UtxoManagementTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only seed when selection size changes
   }, [subTab, selectedBoxIds.size])
 
+  // Drop stale active output if the slot was removed
+  useEffect(() => {
+    if (!activeOutputSlotId) return
+    if (!restructureSlots.some(s => s.id === activeOutputSlotId)) {
+      setActiveOutputSlotId(null)
+    }
+  }, [restructureSlots, activeOutputSlotId])
+
   const addRestructureSlot = () => {
-    if (restructureSlots.length >= 30) return
+    if (restructureSlots.length >= MAX_RESTRUCTURE_OUTPUTS) return
     setRestructureSlots(prev => {
       const next = [...prev, newRestructureSlot(nanoToErgInput(MIN_BOX_VALUE_NANO))]
       // Pin the new slot at min; last other absorbs remainder
@@ -781,6 +798,7 @@ export function UtxoManagementTab({
       // Pin first remaining; last output absorbs freed ERG
       return redistributeErg(next, next[0].id, restructureAvailableNano)
     })
+    if (activeOutputSlotId === id) setActiveOutputSlotId(null)
   }
 
   const updateRestructureErg = (id: string, erg: string) => {
@@ -867,8 +885,64 @@ export function UtxoManagementTab({
   )
 
   const handleOutputSlotClick = (slotId: string) => {
+    setActiveOutputSlotId(slotId)
     if (!poolSelectedTokenId || !poolAssignAmount) return
     assignTokenToSlotById(poolSelectedTokenId, slotId, poolAssignAmount)
+  }
+
+  /** Put every input token (full amounts) on the active output; clears other slots' tokens. */
+  const addAllTokensToActive = () => {
+    if (!activeOutputSlotId || restructureInputTokens.length === 0) return
+    const targetId = activeOutputSlotId
+    const assignments: RestructureTokenAssign[] = restructureInputTokens.map(t => ({
+      tokenId: t.token_id,
+      amount: rawToDisplayAmount(t.amount, t.decimals),
+    }))
+    setRestructureSlots(prev =>
+      prev.map(s => {
+        if (s.id === targetId) return { ...s, tokens: assignments }
+        return { ...s, tokens: [] }
+      }),
+    )
+    setPoolSelectedTokenId(null)
+    setPoolAssignAmount('')
+  }
+
+  /** Assign only unassigned pool remainders onto the active output. */
+  const addRemainingTokensToActive = () => {
+    if (!activeOutputSlotId || restructureRemainingTokens.length === 0) return
+    const targetId = activeOutputSlotId
+    const toAdd = restructureRemainingTokens
+    setRestructureSlots(prev =>
+      prev.map(s => {
+        if (s.id !== targetId) return s
+        let tokens = [...s.tokens]
+        for (const rem of toAdd) {
+          const existing = tokens.find(t => t.tokenId === rem.token_id)
+          if (existing) {
+            const prevParsed = parseFloat(existing.amount.replace(/,/g, '')) || 0
+            const nextAmt = rawToDisplayAmount(
+              Math.floor(prevParsed * Math.pow(10, rem.decimals)) + rem.remaining,
+              rem.decimals,
+            )
+            tokens = tokens.map(t =>
+              t.tokenId === rem.token_id ? { ...t, amount: nextAmt } : t,
+            )
+          } else {
+            tokens = [
+              ...tokens,
+              {
+                tokenId: rem.token_id,
+                amount: rawToDisplayAmount(rem.remaining, rem.decimals),
+              },
+            ]
+          }
+        }
+        return { ...s, tokens }
+      }),
+    )
+    setPoolSelectedTokenId(null)
+    setPoolAssignAmount('')
   }
 
   const evenSplitErg = () => {
@@ -964,6 +1038,7 @@ export function UtxoManagementTab({
     setPoolAssignAmount('')
     setDraggingTokenId(null)
     setDropTargetSlotId(null)
+    setActiveOutputSlotId(null)
     setSearchQuery('')
     setBoardFilter('all')
   }
@@ -1608,7 +1683,8 @@ export function UtxoManagementTab({
               <p>
                 Select inputs, set ERG on outputs (editing one auto-fills the last other so totals
                 match after the miner fee), then assign tokens from the pool — click a token then
-                an output, or drag onto an output. Leftover tokens return as change.
+                an output, or drag onto an output. Select an output and use Add all / Add remaining
+                for bulk assign. Leftover tokens return as change.
               </p>
             </div>
           )}
@@ -1984,6 +2060,41 @@ export function UtxoManagementTab({
                           )
                         })}
                       </div>
+                      <div className="utxo-pool-bulk-bar">
+                        <button
+                          type="button"
+                          className="utxo-toolbar-btn"
+                          onClick={addAllTokensToActive}
+                          disabled={!activeOutputSlotId || restructureInputTokens.length === 0}
+                          title={
+                            activeOutputSlotId
+                              ? 'Move full amounts of every input token onto the selected output'
+                              : 'Select an output first'
+                          }
+                        >
+                          Add all
+                        </button>
+                        <button
+                          type="button"
+                          className="utxo-toolbar-btn"
+                          onClick={addRemainingTokensToActive}
+                          disabled={!activeOutputSlotId || restructureRemainingTokens.length === 0}
+                          title={
+                            activeOutputSlotId
+                              ? 'Assign unassigned pool remainders onto the selected output'
+                              : 'Select an output first'
+                          }
+                        >
+                          Add remaining
+                        </button>
+                        <span className="utxo-pool-bulk-hint">
+                          {activeOutputSlotId
+                            ? `Target: Out ${
+                                restructureSlots.findIndex(s => s.id === activeOutputSlotId) + 1
+                              }`
+                            : 'Select an output to assign'}
+                        </span>
+                      </div>
                       {poolSelectedTokenId && (
                         <div className="utxo-pool-assign-bar">
                           <label htmlFor="utxo-pool-amt">Amount</label>
@@ -2029,7 +2140,7 @@ export function UtxoManagementTab({
                         type="button"
                         className="utxo-toolbar-btn"
                         onClick={addRestructureSlot}
-                        disabled={restructureSlots.length >= 30}
+                        disabled={restructureSlots.length >= MAX_RESTRUCTURE_OUTPUTS}
                       >
                         + Add
                       </button>
@@ -2050,6 +2161,7 @@ export function UtxoManagementTab({
                   <div className="utxo-restructure-slots">
                     {restructureSlots.map((slot, idx) => {
                       const isDropTarget = dropTargetSlotId === slot.id
+                      const isActiveTarget = activeOutputSlotId === slot.id
                       const isAssignTarget = !!poolSelectedTokenId
                       const slotNano = parseErgToNano(slot.erg)
                       const underMin =
@@ -2061,6 +2173,7 @@ export function UtxoManagementTab({
                             `utxo-restructure-slot` +
                             (isDropTarget ? ' drop-hover' : '') +
                             (isAssignTarget ? ' assign-ready' : '') +
+                            (isActiveTarget ? ' active-target' : '') +
                             (underMin ? ' under-min' : '')
                           }
                           onClick={e => {
@@ -2090,6 +2203,7 @@ export function UtxoManagementTab({
                               draggingTokenId
                             setDropTargetSlotId(null)
                             setDraggingTokenId(null)
+                            setActiveOutputSlotId(slot.id)
                             if (!tid) return
                             const rem = restructureRemainingTokens.find(t => t.token_id === tid)
                             const amt =
@@ -2104,7 +2218,10 @@ export function UtxoManagementTab({
                           <div className="utxo-restructure-slot-head">
                             <span className="utxo-restructure-slot-label">
                               Out {idx + 1}
-                              {idx === restructureSlots.length - 1 && restructureSlots.length > 1
+                              {isActiveTarget ? ' · target' : ''}
+                              {!isActiveTarget
+                                && idx === restructureSlots.length - 1
+                                && restructureSlots.length > 1
                                 ? ' · remainder'
                                 : ''}
                             </span>
@@ -2142,7 +2259,9 @@ export function UtxoManagementTab({
                               <p className="utxo-restructure-drop-hint">
                                 {poolSelectedTokenId
                                   ? 'Click to assign selected token'
-                                  : 'Drop tokens here'}
+                                  : isActiveTarget
+                                    ? 'Active assign target'
+                                    : 'Click to select · drop tokens'}
                               </p>
                             ) : (
                               <ul className="utxo-restructure-token-chips">
