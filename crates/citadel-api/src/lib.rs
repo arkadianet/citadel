@@ -1,11 +1,8 @@
-//! Citadel-api: HTTP API layer for Citadel
+//! Citadel façade: AppState, DTOs, and (Wave 2+) use-case services.
 //!
-//! Provides a RESTful API for the frontend to interact with the backend.
+//! Tauri IPC is the sole app door. ErgoPay local HTTP lives in `ergopay-server`.
 
 pub mod dto;
-pub mod routes;
-pub mod server;
 pub mod state;
 
-pub use server::*;
 pub use state::{ApiError, AppState, WalletState};

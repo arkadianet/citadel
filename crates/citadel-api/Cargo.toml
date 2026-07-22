@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "HTTP API layer for Citadel"
+description = "Citadel application façade (AppState, DTOs, services)"
 
 [dependencies]
 citadel-core = { workspace = true }
@@ -16,9 +16,6 @@ lending = { workspace = true }
 amm = { workspace = true }
 ergo-tx = { workspace = true }
 tokio = { workspace = true }
-axum = { workspace = true }
-tower = { workspace = true }
-tower-http = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
