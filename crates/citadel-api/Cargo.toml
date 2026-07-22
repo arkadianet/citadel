@@ -16,6 +16,7 @@ lending = { workspace = true }
 amm = { workspace = true }
 hodlcoin = { workspace = true }
 mewlock = { workspace = true }
+sigmafi = { workspace = true }
 ergo-tx = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
