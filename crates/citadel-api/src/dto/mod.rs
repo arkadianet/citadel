@@ -1,5 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+pub mod lending;
+
+pub use lending::{
+    BorrowBuildRequest, BorrowPositionInfo, CollateralOptionInfo, LendBuildRequest,
+    LendPositionInfo, LendingBuildResponse, LendingTxSummary, MarketsResponse, PoolInfo,
+    PositionsResponse, RefundBuildRequest, RepayBuildRequest, WithdrawBuildRequest,
+};
+
 /// Serialize a u64 as a JSON string (e.g. `"9223372036854774807"`) and accept
 /// either string or number on the way back. Needed for fields that can exceed
 /// JS `Number.MAX_SAFE_INTEGER` (2^53 − 1 ≈ 9.0e15) — which is routinely the

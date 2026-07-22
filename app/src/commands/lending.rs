@@ -1,4 +1,4 @@
-use citadel_api::routes::lending::{
+use citadel_api::dto::lending::{
     BorrowBuildRequest, BorrowPositionInfo, CollateralOptionInfo, LendBuildRequest,
     LendPositionInfo, LendingBuildResponse, LendingTxSummary, MarketsResponse, PoolInfo,
     PositionsResponse, RefundBuildRequest, RepayBuildRequest, WithdrawBuildRequest,
