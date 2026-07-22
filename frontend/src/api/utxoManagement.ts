@@ -125,5 +125,3 @@ export async function getUtxoMgmtTxStatus(requestId: string): Promise<TxStatusRe
     requestId,
   })
 }
-
-export type { SignResponse, TxStatusResponse }
