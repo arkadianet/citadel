@@ -8,6 +8,8 @@ import { invoke } from '@tauri-apps/api/core'
 
 import type { SignResponse, TxStatusResponse } from './types'
 
+export type { SignResponse, TxStatusResponse } from './types'
+
 // =============================================================================
 // Type Definitions
 // =============================================================================
@@ -123,3 +125,5 @@ export async function getUtxoMgmtTxStatus(requestId: string): Promise<TxStatusRe
     requestId,
   })
 }
+
+export type { SignResponse, TxStatusResponse }

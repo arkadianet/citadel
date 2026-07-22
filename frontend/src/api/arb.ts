@@ -7,6 +7,8 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { Route } from './router'
 
+export type { SignResponse, TxStatusResponse } from './types'
+
 export interface CircularArb {
   path_label: string
   hops: number
@@ -140,6 +142,8 @@ export async function buildSplitChains(
   })
 }
 
+// Distinct from SignResponse: camelCase fields, Nautilus-only (no ergopay_url), sign-without-broadcast.
+/** Sign-only arb leg: camelCase + no ergopay_url — not interchangeable with SignResponse. */
 export interface ArbLegSignResponse {
   requestId: string
   nautilusUrl: string

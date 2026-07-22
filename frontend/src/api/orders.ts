@@ -8,6 +8,8 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { SwapBuildResponse } from './amm'
 
+export type { SignResponse, TxStatusResponse } from './types'
+
 // =============================================================================
 // Type Definitions
 // =============================================================================

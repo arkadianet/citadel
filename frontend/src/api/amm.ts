@@ -10,6 +10,7 @@
 
 import { invoke } from '@tauri-apps/api/core'
 
+export type { SignResponse, TxStatusResponse } from './types'
 
 // =============================================================================
 // Type Definitions
