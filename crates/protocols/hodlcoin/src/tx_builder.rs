@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::calculator;
 use crate::constants::{self, MIN_BOX_VALUE, MIN_CHANGE_VALUE, MIN_MINER_FEE};
 use crate::state::{HodlBankState, HodlError};
@@ -210,13 +208,12 @@ pub fn build_burn_tx_eip12(
     );
 
     let dev_fee_ergo_tree = extract_dev_fee_tree(bank_box)?;
-    let dev_fee_output = Eip12Output {
-        value: burn_result.dev_fee.to_string(),
-        ergo_tree: dev_fee_ergo_tree,
-        assets: vec![],
-        creation_height: current_height,
-        additional_registers: HashMap::new(),
-    };
+    let dev_fee_output = Eip12Output::change(
+        burn_result.dev_fee,
+        dev_fee_ergo_tree,
+        vec![],
+        current_height,
+    );
 
     let fee_output = Eip12Output::fee(MIN_MINER_FEE as i64, current_height);
 

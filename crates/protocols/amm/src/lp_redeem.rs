@@ -8,8 +8,6 @@
 //! N2T pools: 3 tokens [NFT, LP, token_y], ERG is X reserve.
 //! T2T pools: 4 tokens [NFT, LP, token_x, token_y], ERG unchanged.
 
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 
 use crate::calculator;
@@ -190,13 +188,12 @@ fn build_n2t_lp_redeem(
     }];
     user_assets.extend(change_tokens);
 
-    let user_output = Eip12Output {
-        value: user_erg.to_string(),
-        ergo_tree: user_ergo_tree.to_string(),
-        assets: user_assets,
-        creation_height: current_height,
-        additional_registers: HashMap::new(),
-    };
+    let user_output = Eip12Output::change(
+        user_erg as i64,
+        user_ergo_tree,
+        user_assets,
+        current_height,
+    );
 
     let fee_output = Eip12Output::fee(TX_FEE as i64, current_height);
 
@@ -362,13 +359,12 @@ fn build_t2t_lp_redeem(
     ];
     user_assets.extend(change_tokens);
 
-    let user_output = Eip12Output {
-        value: user_erg.to_string(),
-        ergo_tree: user_ergo_tree.to_string(),
-        assets: user_assets,
-        creation_height: current_height,
-        additional_registers: HashMap::new(),
-    };
+    let user_output = Eip12Output::change(
+        user_erg as i64,
+        user_ergo_tree,
+        user_assets,
+        current_height,
+    );
 
     let fee_output = Eip12Output::fee(TX_FEE as i64, current_height);
 
@@ -407,6 +403,8 @@ fn build_t2t_lp_redeem(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::state::{AmmPool, PoolType, TokenAmount};
 

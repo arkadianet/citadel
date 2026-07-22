@@ -1,0 +1,12 @@
+{
+  "value": "1000000",
+  "ergoTree": "0008cd11",
+  "assets": [
+    {
+      "tokenId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "amount": "10"
+    }
+  ],
+  "creationHeight": 1000000,
+  "additionalRegisters": {}
+}

@@ -3,8 +3,6 @@
 //! Citadel app fee: deferred (phase 2). Open/cancel funding txs look flexible;
 //! close/repay/liquidate need script review before appending an extra output.
 
-use std::collections::HashMap;
-
 use ergo_tx::eip12::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
 use ergo_tx::sigma::{encode_sigma_coll_byte, encode_sigma_int, encode_sigma_long};
 use ergo_tx::{append_change_output, select_erg_boxes, select_inputs_for_spend};
@@ -163,13 +161,12 @@ pub fn build_cancel_order(req: &CancelOrderRequest) -> Result<Eip12UnsignedTx, S
     let selected = select_erg_boxes(&req.user_inputs, fee_required)
         .map_err(|e| SigmaFiTxError::BoxSelection(e.to_string()))?;
 
-    let return_output = Eip12Output {
-        value: order_erg.to_string(),
-        ergo_tree: req.borrower_ergo_tree.clone(),
-        assets: req.order_box.assets.clone(),
-        creation_height: req.current_height,
-        additional_registers: HashMap::new(),
-    };
+    let return_output = Eip12Output::change(
+        order_erg,
+        req.borrower_ergo_tree.clone(),
+        req.order_box.assets.clone(),
+        req.current_height,
+    );
 
     let mut outputs = vec![return_output];
 
@@ -276,13 +273,12 @@ pub fn build_close_order(req: &CloseOrderRequest) -> Result<Eip12UnsignedTx, Sig
     let loan_output = if is_erg {
         Eip12Output::simple(principal as i64, &borrower_ergo_tree, req.current_height)
     } else {
-        Eip12Output {
-            value: SAFE_MIN_BOX_VALUE.to_string(),
-            ergo_tree: borrower_ergo_tree.clone(),
-            assets: vec![Eip12Asset::new(&req.loan_token_id, principal as i64)],
-            creation_height: req.current_height,
-            additional_registers: HashMap::new(),
-        }
+        Eip12Output::change(
+            SAFE_MIN_BOX_VALUE,
+            borrower_ergo_tree.clone(),
+            vec![Eip12Asset::new(&req.loan_token_id, principal as i64)],
+            req.current_height,
+        )
     };
 
     let dev_fee_output = if is_erg {
@@ -292,33 +288,31 @@ pub fn build_close_order(req: &CloseOrderRequest) -> Result<Eip12UnsignedTx, Sig
             req.current_height,
         )
     } else {
-        Eip12Output {
-            value: SAFE_MIN_BOX_VALUE.to_string(),
-            ergo_tree: constants::DEV_FEE_ERGO_TREE.to_string(),
-            assets: if dev_fee > 0 {
+        Eip12Output::change(
+            SAFE_MIN_BOX_VALUE,
+            constants::DEV_FEE_ERGO_TREE.to_string(),
+            if dev_fee > 0 {
                 vec![Eip12Asset::new(&req.loan_token_id, dev_fee as i64)]
             } else {
                 vec![]
             },
-            creation_height: req.current_height,
-            additional_registers: HashMap::new(),
-        }
+            req.current_height,
+        )
     };
 
     let ui_fee_output = if is_erg {
         Eip12Output::simple(ui_fee as i64, &req.ui_fee_ergo_tree, req.current_height)
     } else {
-        Eip12Output {
-            value: SAFE_MIN_BOX_VALUE.to_string(),
-            ergo_tree: req.ui_fee_ergo_tree.clone(),
-            assets: if ui_fee > 0 {
+        Eip12Output::change(
+            SAFE_MIN_BOX_VALUE,
+            req.ui_fee_ergo_tree.clone(),
+            if ui_fee > 0 {
                 vec![Eip12Asset::new(&req.loan_token_id, ui_fee as i64)]
             } else {
                 vec![]
             },
-            creation_height: req.current_height,
-            additional_registers: HashMap::new(),
-        }
+            req.current_height,
+        )
     };
 
     // Bond preserves order ERG; lender provides loan + fees
@@ -419,13 +413,12 @@ pub fn build_repay(req: &RepayRequest) -> Result<Eip12UnsignedTx, SigmaFiTxError
     };
 
     let bond_erg: i64 = req.bond_box.value.parse().unwrap_or(0);
-    let collateral_output = Eip12Output {
-        value: bond_erg.to_string(),
-        ergo_tree: req.borrower_ergo_tree.clone(),
-        assets: req.bond_box.assets.clone(),
-        creation_height: req.current_height,
-        additional_registers: HashMap::new(),
-    };
+    let collateral_output = Eip12Output::change(
+        bond_erg,
+        req.borrower_ergo_tree.clone(),
+        req.bond_box.assets.clone(),
+        req.current_height,
+    );
 
     let outputs_erg = if is_erg {
         repayment as i64 + MINER_FEE
@@ -562,6 +555,7 @@ fn decode_sigma_int(hex_str: &str) -> Result<i32, SigmaFiTxError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     fn mock_utxo(value: i64, tokens: Vec<(&str, i64)>) -> Eip12InputBox {
         Eip12InputBox {

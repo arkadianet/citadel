@@ -6,8 +6,6 @@
 //! Pool contract validates: same ErgoTree, same R4, same NFT/LP,
 //! updated reserves, constant product invariant.
 
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 
 use crate::calculator;
@@ -231,24 +229,22 @@ fn build_n2t_direct_swap(
 
     let output_tree = recipient_ergo_tree.unwrap_or(user_ergo_tree);
     let user_swap_output = if is_erg_to_token {
-        Eip12Output {
-            value: MIN_BOX_VALUE.to_string(),
-            ergo_tree: output_tree.to_string(),
-            assets: vec![Eip12Asset {
+        Eip12Output::change(
+            MIN_BOX_VALUE as i64,
+            output_tree,
+            vec![Eip12Asset {
                 token_id: pool.token_y.token_id.clone(),
                 amount: output_amount.to_string(),
             }],
-            creation_height: current_height,
-            additional_registers: HashMap::new(),
-        }
+            current_height,
+        )
     } else {
-        Eip12Output {
-            value: output_amount.to_string(),
-            ergo_tree: output_tree.to_string(),
-            assets: vec![],
-            creation_height: current_height,
-            additional_registers: HashMap::new(),
-        }
+        Eip12Output::change(
+            output_amount as i64,
+            output_tree,
+            vec![],
+            current_height,
+        )
     };
 
     let fee_cfg = resolved_dev_fee_config();
@@ -301,13 +297,12 @@ fn build_n2t_direct_swap(
         };
         user_tokens.extend(change_tokens);
 
-        outputs.push(Eip12Output {
-            value: user_erg.to_string(),
-            ergo_tree: user_ergo_tree.to_string(),
-            assets: user_tokens,
-            creation_height: current_height,
-            additional_registers: HashMap::new(),
-        });
+        outputs.push(Eip12Output::change(
+            user_erg as i64,
+            user_ergo_tree,
+            user_tokens,
+            current_height,
+        ));
     } else {
         if !change_tokens.is_empty() && change_erg < MIN_CHANGE_VALUE {
             return Err(AmmError::TxBuildError(format!(
@@ -337,13 +332,12 @@ fn build_n2t_direct_swap(
         outputs.push(user_swap_output);
 
         if change_erg >= MIN_CHANGE_VALUE || !change_tokens.is_empty() {
-            outputs.push(Eip12Output {
-                value: change_erg.to_string(),
-                ergo_tree: user_ergo_tree.to_string(),
-                assets: change_tokens,
-                creation_height: current_height,
-                additional_registers: HashMap::new(),
-            });
+            outputs.push(Eip12Output::change(
+                change_erg as i64,
+                user_ergo_tree,
+                change_tokens,
+                current_height,
+            ));
         }
     }
 
@@ -536,16 +530,15 @@ fn build_t2t_direct_swap(
     };
 
     let output_tree = recipient_ergo_tree.unwrap_or(user_ergo_tree);
-    let user_swap_output = Eip12Output {
-        value: MIN_BOX_VALUE.to_string(),
-        ergo_tree: output_tree.to_string(),
-        assets: vec![Eip12Asset {
+    let user_swap_output = Eip12Output::change(
+        MIN_BOX_VALUE as i64,
+        output_tree,
+        vec![Eip12Asset {
             token_id: output_token_id.clone(),
             amount: output_amount.to_string(),
         }],
-        creation_height: current_height,
-        additional_registers: HashMap::new(),
-    };
+        current_height,
+    );
 
     let fee_cfg = resolved_dev_fee_config();
     let citadel_fee = fee_cfg.budget() as u64;
@@ -574,13 +567,12 @@ fn build_t2t_direct_swap(
         }];
         user_tokens.extend(change_tokens);
 
-        outputs.push(Eip12Output {
-            value: user_erg.to_string(),
-            ergo_tree: user_ergo_tree.to_string(),
-            assets: user_tokens,
-            creation_height: current_height,
-            additional_registers: HashMap::new(),
-        });
+        outputs.push(Eip12Output::change(
+            user_erg as i64,
+            user_ergo_tree,
+            user_tokens,
+            current_height,
+        ));
     } else {
         if !change_tokens.is_empty() && change_erg < MIN_CHANGE_VALUE {
             return Err(AmmError::TxBuildError(format!(
@@ -610,13 +602,12 @@ fn build_t2t_direct_swap(
         outputs.push(user_swap_output);
 
         if change_erg >= MIN_CHANGE_VALUE || !change_tokens.is_empty() {
-            outputs.push(Eip12Output {
-                value: change_erg.to_string(),
-                ergo_tree: user_ergo_tree.to_string(),
-                assets: change_tokens,
-                creation_height: current_height,
-                additional_registers: HashMap::new(),
-            });
+            outputs.push(Eip12Output::change(
+                change_erg as i64,
+                user_ergo_tree,
+                change_tokens,
+                current_height,
+            ));
         }
     }
 
@@ -676,6 +667,8 @@ fn build_t2t_direct_swap(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use ergo_tx::{with_test_dev_fee, DevFeeConfig};
 
     fn no_citadel_fee<R>(f: impl FnOnce() -> R) -> R {

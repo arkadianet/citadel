@@ -200,13 +200,12 @@ pub fn build_recovery_tx_eip12(
                 change_erg, MIN_BOX_VALUE
             )));
         }
-        outputs.push(Eip12Output {
-            value: change_erg.to_string(),
-            ergo_tree: user_ergo_tree.to_string(),
-            assets: change_assets,
-            creation_height: current_height,
-            additional_registers: HashMap::new(),
-        });
+        outputs.push(Eip12Output::change(
+            change_erg as i64,
+            user_ergo_tree.to_string(),
+            change_assets,
+            current_height,
+        ));
     } else if change_erg > 0 {
         // Dust ERG below MIN_CHANGE_VALUE but non-zero: fold into miner fee.
         let mut fee = fee_output;
@@ -396,13 +395,12 @@ pub fn build_paideia_proxy_tx(
                 change_erg, MIN_BOX_VALUE
             )));
         }
-        outputs.push(Eip12Output {
-            value: change_erg.to_string(),
-            ergo_tree: recipient_ergo_tree.to_string(),
-            assets: change_assets,
-            creation_height: current_height,
-            additional_registers: HashMap::new(),
-        });
+        outputs.push(Eip12Output::change(
+            change_erg as i64,
+            recipient_ergo_tree.to_string(),
+            change_assets,
+            current_height,
+        ));
         Eip12Output::fee(MIN_MINER_FEE as i64, current_height)
     } else {
         // Fold sub-min dust ERG into the fee.
@@ -573,31 +571,26 @@ pub fn build_paideia_executor_tx(
     }
 
     // --- Output[1]: reward payout to the R5 recipient ---
-    let reward_output = Eip12Output {
-        value: reward_value.to_string(),
-        ergo_tree: recipient_ergo_tree,
-        assets: vec![Eip12Asset::new(cfg.reward_token, amount)],
-        creation_height: current_height,
-        additional_registers: std::collections::HashMap::new(),
-    };
+    let reward_output = Eip12Output::change(
+        reward_value as i64,
+        recipient_ergo_tree,
+        vec![Eip12Asset::new(cfg.reward_token, amount)],
+        current_height,
+    );
 
     // --- Output[2]: fixed 102f incentive box ---
-    let incentive_output = Eip12Output {
-        value: PAIDEIA_INCENTIVE_VALUE.to_string(),
-        ergo_tree: PAIDEIA_INCENTIVE_ERGO_TREE.to_string(),
-        assets: vec![],
-        creation_height: current_height,
-        additional_registers: std::collections::HashMap::new(),
-    };
+    let incentive_output = Eip12Output::simple(
+        PAIDEIA_INCENTIVE_VALUE as i64,
+        PAIDEIA_INCENTIVE_ERGO_TREE.to_string(),
+        current_height,
+    );
 
     // --- Output[3]: executor tip (script free; the keeper's own address) ---
-    let tip_output = Eip12Output {
-        value: PAIDEIA_EXECUTOR_OUT_VALUE.to_string(),
-        ergo_tree: executor_ergo_tree.to_string(),
-        assets: vec![],
-        creation_height: current_height,
-        additional_registers: std::collections::HashMap::new(),
-    };
+    let tip_output = Eip12Output::simple(
+        PAIDEIA_EXECUTOR_OUT_VALUE as i64,
+        executor_ergo_tree.to_string(),
+        current_height,
+    );
 
     // --- Output[4]: miner fee (fixed value pinned by the proxy) ---
     let fee_output = Eip12Output::fee(PAIDEIA_EXECUTOR_OUT_VALUE as i64, current_height);
@@ -661,13 +654,12 @@ pub fn build_paideia_refund_tx(
         })
         .collect();
 
-    let refund_output = Eip12Output {
-        value: refund_value.to_string(),
-        ergo_tree: recipient_ergo_tree,
-        assets: refund_assets,
-        creation_height: current_height,
-        additional_registers: std::collections::HashMap::new(),
-    };
+    let refund_output = Eip12Output::change(
+        refund_value as i64,
+        recipient_ergo_tree,
+        refund_assets,
+        current_height,
+    );
     let fee_output = Eip12Output::fee(PAIDEIA_REFUND_FEE as i64, current_height);
 
     Ok(Eip12UnsignedTx {

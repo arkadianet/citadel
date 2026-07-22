@@ -355,13 +355,7 @@ fn resolve_user_ergo_tree(address: &str) -> Result<(String, Vec<u8>), BuildError
 }
 
 fn miner_fee_output(current_height: i32) -> Eip12Output {
-    Eip12Output {
-        value: TX_FEE_NANO.to_string(),
-        ergo_tree: MINER_FEE_ERGO_TREE.to_string(),
-        assets: vec![],
-        creation_height: current_height,
-        additional_registers: HashMap::new(),
-    }
+    Eip12Output::fee(TX_FEE_NANO, current_height)
 }
 
 fn finalize_proxy_tx(

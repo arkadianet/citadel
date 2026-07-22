@@ -78,13 +78,8 @@ pub fn build_refund_tx_eip12(
         .map(|(id, &amount)| (id.clone(), amount))
         .collect();
 
-    let user_output = Eip12Output {
-        value: user_erg.to_string(),
-        ergo_tree: user_ergo_tree.to_string(),
-        assets: user_assets,
-        creation_height: current_height,
-        additional_registers: HashMap::new(),
-    };
+    let user_output =
+        Eip12Output::change(user_erg as i64, user_ergo_tree, user_assets, current_height);
 
     let fee_output = Eip12Output::fee(REFUND_TX_FEE as i64, current_height);
 

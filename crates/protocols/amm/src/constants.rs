@@ -52,7 +52,7 @@ pub mod fees {
 pub fn parse_fee_num_from_r4(
     registers: &std::collections::HashMap<String, String>,
 ) -> Result<i32, crate::AmmError> {
-    use ergo_lib::ergotree_ir::mir::constant::{Constant, Literal};
+    use ergo_lib::ergotree_ir::mir::constant::Constant;
     use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
 
     let r4_hex = match registers.get("R4") {
@@ -63,10 +63,7 @@ pub fn parse_fee_num_from_r4(
         .map_err(|e| crate::AmmError::TxBuildError(format!("Invalid R4 hex: {}", e)))?;
     let constant = Constant::sigma_parse_bytes(&r4_bytes)
         .map_err(|e| crate::AmmError::TxBuildError(format!("Failed to parse R4 constant: {}", e)))?;
-    match &constant.v {
-        Literal::Int(v) => Ok(*v),
-        _ => Ok(fees::DEFAULT_FEE_NUM),
-    }
+    Ok(ergo_tx::ergo_box_utils::extract_int(&constant).unwrap_or(fees::DEFAULT_FEE_NUM))
 }
 
 /// LP token constants

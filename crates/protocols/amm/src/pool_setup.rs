@@ -1,8 +1,6 @@
 //! Two-tx pool creation: TX0 mints LP tokens into a bootstrap box,
 //! TX1 spends it to create the on-chain pool box with NFT and R4=fee_num.
 
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 
 use crate::calculator::calculate_initial_lp_share;
@@ -186,13 +184,12 @@ pub fn build_pool_bootstrap_eip12(
     }
     let change_tokens = collect_multi_change_tokens(&selected.boxes, &spent_tokens);
 
-    let change_output = Eip12Output {
-        value: (MIN_BOX_VALUE + change_erg).to_string(),
-        ergo_tree: user_ergo_tree.to_string(),
-        assets: change_tokens,
-        creation_height: current_height,
-        additional_registers: HashMap::new(),
-    };
+    let change_output = Eip12Output::change(
+        (MIN_BOX_VALUE + change_erg) as i64,
+        user_ergo_tree,
+        change_tokens,
+        current_height,
+    );
 
     let fee_output = Eip12Output::fee(TX_FEE as i64, current_height);
 
@@ -311,16 +308,15 @@ pub fn build_pool_create_eip12(
         additional_registers: pool_registers,
     };
 
-    let user_output = Eip12Output {
-        value: user_output_erg.to_string(),
-        ergo_tree: user_ergo_tree.to_string(),
-        assets: vec![Eip12Asset {
+    let user_output = Eip12Output::change(
+        user_output_erg as i64,
+        user_ergo_tree,
+        vec![Eip12Asset {
             token_id: lp_token_id.to_string(),
             amount: user_lp_share.to_string(),
         }],
-        creation_height: current_height,
-        additional_registers: HashMap::new(),
-    };
+        current_height,
+    );
 
     let fee_output = Eip12Output::fee(TX_FEE as i64, current_height);
 
@@ -345,6 +341,8 @@ pub fn build_pool_create_eip12(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
 
     const USER_ERGO_TREE: &str =

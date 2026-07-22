@@ -1,7 +1,7 @@
 use ergo_lib::ergotree_ir::chain::ergo_box::{ErgoBox, NonMandatoryRegisterId};
 use ergo_lib::ergotree_ir::ergo_tree::ErgoTree;
-use ergo_lib::ergotree_ir::mir::constant::Literal;
 use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
+use ergo_tx::ergo_box_utils::read_register_int;
 
 use crate::constants::{
     fees, lp, pool_indices::n2t, pool_indices::t2t, pool_template_bytes, pool_templates,
@@ -50,16 +50,8 @@ pub fn parse_n2t_pool(ergo_box: &ErgoBox) -> Result<AmmPool, AmmError> {
     let box_id = hex::encode(ergo_box.box_id().as_ref());
 
     // Fee numerator from R4 — different pools have different fees, never hardcode
-    let fee_num = ergo_box
-        .additional_registers
-        .get_constant(NonMandatoryRegisterId::R4)
-        .ok()
-        .flatten()
-        .and_then(|c| match &c.v {
-            Literal::Int(v) => Some(*v),
-            _ => None,
-        })
-        .unwrap_or(fees::DEFAULT_FEE_NUM);
+    let fee_num =
+        read_register_int(ergo_box, NonMandatoryRegisterId::R4).unwrap_or(fees::DEFAULT_FEE_NUM);
 
     Ok(AmmPool {
         pool_id,
@@ -125,16 +117,8 @@ pub fn parse_t2t_pool(ergo_box: &ErgoBox) -> Result<AmmPool, AmmError> {
     let box_id = hex::encode(ergo_box.box_id().as_ref());
 
     // Fee numerator from R4 — different pools have different fees, never hardcode
-    let fee_num = ergo_box
-        .additional_registers
-        .get_constant(NonMandatoryRegisterId::R4)
-        .ok()
-        .flatten()
-        .and_then(|c| match &c.v {
-            Literal::Int(v) => Some(*v),
-            _ => None,
-        })
-        .unwrap_or(fees::DEFAULT_FEE_NUM);
+    let fee_num =
+        read_register_int(ergo_box, NonMandatoryRegisterId::R4).unwrap_or(fees::DEFAULT_FEE_NUM);
 
     Ok(AmmPool {
         pool_id,

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use ergo_tx::eip12::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
 use ergo_tx::sigma::{
     encode_sigma_coll_byte, encode_sigma_group_element, encode_sigma_int,
@@ -193,24 +191,22 @@ pub fn build_unlock_tx(req: &UnlockRequest) -> Result<Eip12UnsignedTx, MewLockTx
 
     let change_erg = selected.total_erg as i64 - MINER_FEE;
 
-    let user_output = Eip12Output {
-        value: user_erg.to_string(),
-        ergo_tree: req.user_ergo_tree.clone(),
-        assets: user_tokens,
-        creation_height: req.current_height,
-        additional_registers: HashMap::new(),
-    };
+    let user_output = Eip12Output::change(
+        user_erg,
+        req.user_ergo_tree.clone(),
+        user_tokens,
+        req.current_height,
+    );
 
     let mut outputs = vec![user_output];
 
     if has_dev_fees {
-        let dev_output = Eip12Output {
-            value: dev_erg.to_string(),
-            ergo_tree: dev_ergo_tree,
-            assets: dev_tokens,
-            creation_height: req.current_height,
-            additional_registers: HashMap::new(),
-        };
+        let dev_output = Eip12Output::change(
+            dev_erg,
+            dev_ergo_tree,
+            dev_tokens,
+            req.current_height,
+        );
         outputs.push(dev_output);
     }
 
@@ -242,6 +238,7 @@ fn extract_pubkey(ergo_tree_hex: &str) -> Result<[u8; 33], MewLockTxError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     fn mock_utxo(value: i64, tokens: Vec<(&str, i64)>) -> Eip12InputBox {
         Eip12InputBox {

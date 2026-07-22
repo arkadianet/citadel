@@ -99,6 +99,15 @@ pub fn read_register_long(ergo_box: &ErgoBox, reg: NonMandatoryRegisterId) -> Op
         })
 }
 
+pub fn read_register_int(ergo_box: &ErgoBox, reg: NonMandatoryRegisterId) -> Option<i32> {
+    ergo_box
+        .additional_registers
+        .get_constant(reg)
+        .ok()
+        .flatten()
+        .and_then(|c| extract_int(&c).ok())
+}
+
 pub fn get_register(
     ergo_box: &ErgoBox,
     reg: NonMandatoryRegisterId,
@@ -285,6 +294,17 @@ mod tests {
             v: Literal::Int(123),
         };
         assert_eq!(extract_int(&constant).unwrap(), 123);
+    }
+
+    /// Golden: AMM pool fee_num 997 is sigma Int (hex `04ca0f`).
+    #[test]
+    fn extract_int_fee_num_997_matches_sigma_hex() {
+        use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
+        let bytes = hex::decode("04ca0f").unwrap();
+        let constant = Constant::sigma_parse_bytes(&bytes).unwrap();
+        assert_eq!(extract_int(&constant).unwrap(), 997);
+        // API surface used by AMM pool R4 reads
+        let _: fn(&ErgoBox, NonMandatoryRegisterId) -> Option<i32> = read_register_int;
     }
 
     #[test]
