@@ -22,9 +22,21 @@ import {
   MAX_RESTRUCTURE_OUTPUTS,
 } from '../constants'
 import { formatErg, formatTokenAmount, truncateAddress } from '../utils/format'
-import { isNftLikeToken } from '../utils/eip4'
 import { TxSuccess } from './TxSuccess'
 import { Tabs, EmptyState } from './ui'
+import {
+  UtxoBoxList,
+  UtxoConsolidatePanel,
+  UtxoSplitPanel,
+  DUST_NANO,
+  LARGE_NANO,
+  ergNano,
+  formatFiat,
+  boxHasNft,
+  boxHasFungible,
+  matchesFilter,
+} from './utxo'
+import type { UtxoBox, SplitType, BoardFilter, SortKey } from './utxo'
 import './UtxoManagementTab.css'
 
 interface UtxoManagementTabProps {
@@ -44,11 +56,6 @@ interface UtxoManagementTabProps {
 type SubTab = 'consolidate' | 'split' | 'restructure'
 type Step = 'select' | 'confirm' | 'building' | 'signing' | 'success' | 'error'
 type SignMethod = 'choose' | 'mobile' | 'nautilus'
-type SplitType = 'erg' | 'token'
-type BoardFilter = 'all' | 'dust' | 'erg' | 'tokens' | 'nfts' | 'large'
-type SortKey = 'value-desc' | 'value-asc' | 'height-desc' | 'height-asc'
-type PillKind = 'dust' | 'large' | 'token' | 'nft'
-
 interface RestructureTokenAssign {
   tokenId: string
   /** Display units (respects decimals) */
@@ -110,101 +117,6 @@ function redistributeErg(slots: RestructureSlot[], pinnedId: string, spendableNa
   return slots.map((s, i) =>
     i === absorbIdx ? { ...s, erg: nanoToErgInput(Math.max(0, remainder)) } : s,
   )
-}
-
-interface UtxoBox {
-  boxId: string
-  value: string
-  ergoTree: string
-  assets: Array<{ tokenId: string; amount: string }>
-  creationHeight: number
-  transactionId: string
-  index: number
-  additionalRegisters: Record<string, string>
-  extension: Record<string, string>
-}
-
-/** Mockup: Dust < 1 ERG */
-const DUST_NANO = 1_000_000_000
-/** Mockup: Large > 10 ERG */
-const LARGE_NANO = 10_000_000_000
-
-function ergNano(box: UtxoBox): number {
-  return parseInt(box.value || '0', 10) || 0
-}
-
-function truncBoxId(id: string): string {
-  if (id.length <= 12) return id
-  return `${id.slice(0, 4)}…${id.slice(-4)}`
-}
-
-function formatFiat(nano: number, ergUsd: number | undefined): string | null {
-  if (!ergUsd || ergUsd <= 0) return null
-  const usd = (nano / 1e9) * ergUsd
-  return `$${usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function boxHasNft(
-  box: UtxoBox,
-  tokens: Array<{ token_id: string; amount: number; name: string | null; decimals: number }>,
-): boolean {
-  return box.assets.some(a => {
-    const amt = parseInt(a.amount, 10) || 0
-    const wt = tokens.find(t => t.token_id === a.tokenId)
-    if (wt) {
-      return isNftLikeToken({ amount: amt, decimals: wt.decimals })
-    }
-    return amt === 1
-  })
-}
-
-function boxHasFungible(
-  box: UtxoBox,
-  tokens: Array<{ token_id: string; amount: number; name: string | null; decimals: number }>,
-): boolean {
-  return box.assets.some(a => {
-    const amt = parseInt(a.amount, 10) || 0
-    const wt = tokens.find(t => t.token_id === a.tokenId)
-    if (wt) return !isNftLikeToken({ amount: amt, decimals: wt.decimals })
-    return amt !== 1
-  })
-}
-
-function boxPills(
-  box: UtxoBox,
-  tokens: Array<{ token_id: string; amount: number; name: string | null; decimals: number }>,
-): PillKind[] {
-  const pills: PillKind[] = []
-  const nano = ergNano(box)
-  if (boxHasNft(box, tokens)) pills.push('nft')
-  else if (box.assets.length > 0) pills.push('token')
-  if (nano < DUST_NANO) pills.push('dust')
-  if (nano > LARGE_NANO) pills.push('large')
-  return pills
-}
-
-function matchesFilter(
-  box: UtxoBox,
-  filter: BoardFilter,
-  tokens: Array<{ token_id: string; amount: number; name: string | null; decimals: number }>,
-): boolean {
-  const nano = ergNano(box)
-  switch (filter) {
-    case 'all':
-      return true
-    case 'dust':
-      return nano < DUST_NANO
-    case 'erg':
-      return box.assets.length === 0
-    case 'tokens':
-      return boxHasFungible(box, tokens)
-    case 'nfts':
-      return boxHasNft(box, tokens)
-    case 'large':
-      return nano > LARGE_NANO
-    default:
-      return true
-  }
 }
 
 export function UtxoManagementTab({
@@ -1562,53 +1474,6 @@ export function UtxoManagementTab({
     { id: 'nfts', label: 'NFTs', count: filterCounts.nfts },
   ]
 
-  const renderUtxoCard = (u: UtxoBox, i: number) => {
-    const nano = ergNano(u)
-    const selected = selectedBoxIds.has(u.boxId)
-    const pills = boxPills(u, tokens)
-    const fiat = formatFiat(nano, ergUsdPrice)
-    return (
-      <button
-        key={u.boxId}
-        type="button"
-        role="option"
-        aria-selected={selected}
-        className={`utxo-card${selected ? ' selected' : ''}`}
-        style={{ animationDelay: `${Math.min(i, 24) * 16}ms` }}
-        onClick={() =>
-          subTab === 'split' ? selectSplitSource(u.boxId) : toggleUtxo(u.boxId)
-        }
-      >
-        <div className="utxo-card-top">
-          <span className={`utxo-card-check${selected ? ' on' : ''}`} aria-hidden>
-            {selected && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-          </span>
-        </div>
-        <span className="utxo-card-amount mono">
-          {formatErg(nano, 2, nano < DUST_NANO ? 4 : 4)} ERG
-        </span>
-        {fiat && <span className="utxo-card-fiat">{fiat}</span>}
-        <code className="utxo-card-id mono">{truncBoxId(u.boxId)}</code>
-        <span className="utxo-card-height">
-          Block {u.creationHeight.toLocaleString()}
-        </span>
-        {pills.length > 0 && (
-          <div className="utxo-card-pills">
-            {pills.map(p => (
-              <span key={p} className={`utxo-pill utxo-pill--${p}`}>
-                {p === 'dust' ? 'Dust' : p === 'large' ? 'Large' : p === 'token' ? 'Token' : 'NFT'}
-              </span>
-            ))}
-          </div>
-        )}
-      </button>
-    )
-  }
-
   const tokenBreakdown = [...selectedTokenMap.entries()]
     .map(([tokenId, amount]) => {
       const wt = tokens.find(t => t.token_id === tokenId)
@@ -1853,121 +1718,41 @@ export function UtxoManagementTab({
             </div>
           </div>
 
-          <div
-            className="utxo-board-canvas"
-            role="listbox"
-            aria-multiselectable={subTab !== 'split'}
-            aria-label={
+          <UtxoBoxList
+            boxes={filteredUtxos}
+            totalCount={utxos.length}
+            loading={loadingUtxos}
+            selectedBoxIds={selectedBoxIds}
+            tokens={tokens}
+            ergUsdPrice={ergUsdPrice}
+            multiSelect={subTab !== 'split'}
+            ariaLabel={
               subTab === 'split'
                 ? 'Select a box to split'
                 : subTab === 'restructure'
                   ? 'Select UTXOs to restructure'
                   : 'UTXO boxes'
             }
-          >
-            {loadingUtxos ? (
-              <div className="utxo-board-empty">
-                <div className="spinner-small" />
-                <span>Loading UTXOs…</span>
-              </div>
-            ) : filteredUtxos.length === 0 ? (
-              <div className="utxo-board-empty">
-                <span>{utxos.length === 0 ? 'No UTXOs found' : 'No boxes match this filter'}</span>
-              </div>
-            ) : (
-              <div className="utxo-card-grid">
-                {filteredUtxos.map((u, i) => renderUtxoCard(u, i))}
-              </div>
-            )}
-          </div>
+            onSelect={(boxId) =>
+              subTab === 'split' ? selectSplitSource(boxId) : toggleUtxo(boxId)
+            }
+          />
         </div>
 
         <aside className="utxo-console-side">
           {subTab === 'consolidate' ? (
-            <>
-              <section className="utxo-side-section">
-                <h3 className="utxo-side-title">Consolidation Preview</h3>
-                <div className="utxo-donut-wrap">
-                  <div className="utxo-donut" style={donutStyle}>
-                    <div className="utxo-donut-hole">
-                      <span className="utxo-donut-value mono">
-                        {selectedBoxes.length > 0 ? formatErg(selectedErg, 2, 4) : '0'}
-                      </span>
-                      <span className="utxo-donut-unit">ERG</span>
-                    </div>
-                  </div>
-                  <ul className="utxo-donut-legend">
-                    <li><i className="utxo-swatch erg" /> ERG ({ergShare})</li>
-                    <li><i className="utxo-swatch token" /> Tokens ({tokenShare})</li>
-                    <li><i className="utxo-swatch nft" /> NFTs ({nftShare})</li>
-                  </ul>
-                </div>
-                <div className="utxo-info-box utxo-why-box">
-                  <p>
-                    Why consolidate? Fewer boxes means simpler coin selection and lower chance of
-                    needing many inputs on the next spend.
-                  </p>
-                </div>
-              </section>
-
-              <section className="utxo-side-section">
-                <h3 className="utxo-side-title">Token Breakdown (Selected)</h3>
-                {tokenBreakdown.length === 0 ? (
-                  <p className="utxo-side-empty">No tokens in selection</p>
-                ) : (
-                  <ul className="utxo-token-list">
-                    {tokenBreakdown.map(t => (
-                      <li key={t.tokenId}>
-                        <span className="utxo-token-avatar" aria-hidden>
-                          {t.name.slice(0, 1).toUpperCase()}
-                        </span>
-                        <div className="utxo-token-meta">
-                          <span className="utxo-token-name">{t.name}</span>
-                          <span className="utxo-token-id mono">{truncBoxId(t.tokenId)}</span>
-                        </div>
-                        <span className="utxo-token-amt mono">
-                          {formatTokenAmount(t.amount, t.decimals)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-
-              <section className="utxo-side-section">
-                <h3 className="utxo-side-title">Consolidation Settings</h3>
-                <div className="utxo-settings">
-                  <div className="utxo-setting-row">
-                    <span>Result</span>
-                    <span className="mono">1 UTXO</span>
-                  </div>
-                  <div className="utxo-setting-row">
-                    <span>Network Fee</span>
-                    <span className="mono">{formatErg(TX_FEE_NANO)} ERG (fixed)</span>
-                  </div>
-                  <div className="utxo-setting-row">
-                    <span>Change Address</span>
-                    <span className="mono utxo-setting-addr" title={walletAddress}>
-                      {truncateAddress(walletAddress, 6)}
-                    </span>
-                  </div>
-                </div>
-              </section>
-
-              {error && <div className="message error">{error}</div>}
-
-              <button
-                type="button"
-                className="utxo-submit-btn"
-                onClick={() => setStep('confirm')}
-                disabled={selectedBoxIds.size < 2}
-              >
-                {selectedBoxIds.size < 2
-                  ? 'Select ≥2 boxes'
-                  : 'Preview Consolidation →'}
-              </button>
-              <p className="utxo-step-hint">Step 1 of 3</p>
-            </>
+            <UtxoConsolidatePanel
+              selectedCount={selectedBoxes.length}
+              selectedErg={selectedErg}
+              ergShare={ergShare}
+              tokenShare={tokenShare}
+              nftShare={nftShare}
+              donutStyle={donutStyle}
+              tokenBreakdown={tokenBreakdown}
+              walletAddress={walletAddress!}
+              error={error}
+              onPreview={() => setStep('confirm')}
+            />
           ) : subTab === 'restructure' ? (
             selectedBoxes.length === 0 ? (
               <div className="utxo-split-empty">
@@ -2361,209 +2146,36 @@ export function UtxoManagementTab({
                 <p className="utxo-step-hint">Step 1 of 3</p>
               </>
             )
-          ) : !selectedSplitBox ? (
-            <div className="utxo-split-empty">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-                <rect x="3" y="3" width="7" height="7" />
-                <rect x="14" y="3" width="7" height="7" />
-                <rect x="3" y="14" width="7" height="7" />
-                <rect x="14" y="14" width="7" height="7" />
-              </svg>
-              <p className="utxo-split-empty-title">Select a box to split</p>
-              <p className="utxo-split-empty-hint">Click one UTXO card on the board</p>
-            </div>
           ) : (
-            <>
-              <div className="utxo-focus-card utxo-split-source-card">
-                <code className="mono utxo-focus-id">
-                  {selectedSplitBox.boxId.slice(0, 10)}…{selectedSplitBox.boxId.slice(-8)}
-                </code>
-                <span className="mono">{formatErg(ergNano(selectedSplitBox))} ERG</span>
-                {selectedSplitBox.assets.length > 0 && (
-                  <span className="utxo-focus-tokens">
-                    {selectedSplitBox.assets.length} token type
-                    {selectedSplitBox.assets.length !== 1 ? 's' : ''}
-                  </span>
-                )}
-              </div>
-
-              <div className="utxo-split-type-toggle">
-                <button
-                  type="button"
-                  className={`utxo-split-type-btn ${splitType === 'erg' ? 'active' : ''}`}
-                  onClick={() => { setSplitType('erg'); setSplitAmount(''); setSplitCount('') }}
-                >
-                  Split ERG
-                </button>
-                <button
-                  type="button"
-                  className={`utxo-split-type-btn ${splitType === 'token' ? 'active' : ''}`}
-                  onClick={() => {
-                    setSplitType('token')
-                    setSplitAmount('')
-                    setSplitCount('')
-                    if (!splitTokenId && splitSourceTokens[0]) {
-                      setSplitTokenId(splitSourceTokens[0].token_id)
-                    }
-                  }}
-                  disabled={splitSourceTokens.length === 0}
-                >
-                  Split Token
-                </button>
-              </div>
-
-              <div className="utxo-split-form">
-                {splitType === 'token' && (
-                  <div className="utxo-split-field">
-                    <label>Token</label>
-                    <select
-                      value={splitTokenId}
-                      onChange={e => setSplitTokenId(e.target.value)}
-                      className="utxo-split-select"
-                    >
-                      <option value="">Select token...</option>
-                      {splitSourceTokens.map(t => (
-                        <option key={t.token_id} value={t.token_id}>
-                          {getTokenName(t.token_id, t.name)} ({formatTokenAmount(t.amount, t.decimals)})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <div className="utxo-split-field">
-                  <label>{splitType === 'erg' ? 'ERG per box' : 'Tokens per box'}</label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={splitAmount}
-                    onChange={e => setSplitAmount(e.target.value)}
-                    placeholder={splitType === 'erg' ? '1.0' : '100'}
-                    className="utxo-split-input"
-                  />
-                </div>
-
-                <div className="utxo-split-field">
-                  <label>Number of boxes (1–30)</label>
-                  <div className="utxo-split-alloc">
-                    <input
-                      type="range"
-                      min={1}
-                      max={30}
-                      value={Math.min(30, Math.max(1, splitCountNum || 1))}
-                      onChange={e => setSplitCount(e.target.value)}
-                      className="utxo-split-range"
-                      aria-label="Split box count"
-                    />
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={splitCount}
-                      onChange={e => setSplitCount(e.target.value.replace(/\D/g, ''))}
-                      placeholder="5"
-                      className="utxo-split-input utxo-split-count"
-                    />
-                  </div>
-                </div>
-
-                {splitType === 'token' && (
-                  <div className="utxo-split-field">
-                    <label>ERG per box</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={splitErgPerBox}
-                      onChange={e => setSplitErgPerBox(e.target.value)}
-                      placeholder="0.001"
-                      className="utxo-split-input"
-                    />
-                  </div>
-                )}
-
-                {splitCountNum > 0 && splitAmount && (
-                  <div className="utxo-confirm-summary">
-                    <div className="utxo-confirm-row">
-                      <span>Total</span>
-                      <span>{splitTotalDisplay || '—'}</span>
-                    </div>
-                    {splitType === 'token' && (
-                      <div className="utxo-confirm-row">
-                        <span>ERG locked</span>
-                        <span>{formatErg(splitErgPerBoxNano * splitCountNum)} ERG</span>
-                      </div>
-                    )}
-                    <div className="utxo-confirm-row">
-                      <span>Miner Fee</span>
-                      <span>{formatErg(TX_FEE_NANO)} ERG</span>
-                    </div>
-                    <div className="utxo-confirm-row">
-                      <span>Citadel fee</span>
-                      <span>{formatErg(DEV_FEE_NANO)} ERG</span>
-                    </div>
-                    <p className="utxo-muted">Includes {formatErg(DEV_FEE_NANO)} ERG Citadel fee</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="utxo-split-preview utxo-split-preview--compact">
-                <div className="utxo-split-flow">
-                  <div className="utxo-split-stage">
-                    <div className="utxo-split-preview-label">Before</div>
-                    <div className="utxo-ghost-tile utxo-ghost-source kind-large">
-                      <span className="utxo-ghost-caption">source</span>
-                      <span className="mono utxo-ghost-value">
-                        {formatErg(ergNano(selectedSplitBox), 0, 2)}
-                      </span>
-                      <span className="utxo-ghost-sub">
-                        {splitCountNum > 0 ? `${splitCountNum}× →` : 'set count'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="utxo-split-arrow" aria-hidden>→</div>
-
-                  <div className="utxo-split-stage utxo-split-stage-after">
-                    <div className="utxo-split-preview-label">After · {splitCountNum || 0} boxes</div>
-                    {splitCountNum > 0 && splitIsValid ? (
-                      <div className="utxo-split-ghosts">
-                        {Array.from({ length: Math.min(splitCountNum, 30) }, (_, i) => (
-                          <div
-                            key={i}
-                            className={`utxo-ghost-tile${splitType === 'token' ? ' token' : ''}`}
-                            style={{ animationDelay: `${i * 30}ms` }}
-                          >
-                            <span className="mono">
-                              {splitType === 'erg' ? formatErg(splitAmountNano, 0, 2) : splitAmount}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="utxo-split-preview-hint">
-                        {splitCountNum > 0
-                          ? 'Adjust amount to fit this box'
-                          : 'Set amount & count to preview'}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {error && <div className="message error">{error}</div>}
-
-              <button
-                type="button"
-                className="utxo-submit-btn"
-                onClick={() => setStep('confirm')}
-                disabled={!splitIsValid}
-              >
-                {!selectedSplitBox
-                  ? 'Select a box to split'
-                  : !splitIsValid
-                    ? 'Set valid split options'
-                    : 'Review Split'}
-              </button>
-            </>
+            <UtxoSplitPanel
+              selectedSplitBox={selectedSplitBox}
+              splitType={splitType}
+              splitAmount={splitAmount}
+              splitCount={splitCount}
+              splitCountNum={splitCountNum}
+              splitTokenId={splitTokenId}
+              splitErgPerBox={splitErgPerBox}
+              splitErgPerBoxNano={splitErgPerBoxNano}
+              splitAmountNano={splitAmountNano}
+              splitSourceTokens={splitSourceTokens}
+              splitTotalDisplay={splitTotalDisplay}
+              splitIsValid={splitIsValid}
+              error={error}
+              getTokenName={getTokenName}
+              onSplitTypeChange={(type) => {
+                setSplitType(type)
+                setSplitAmount('')
+                setSplitCount('')
+                if (type === 'token' && !splitTokenId && splitSourceTokens[0]) {
+                  setSplitTokenId(splitSourceTokens[0].token_id)
+                }
+              }}
+              onSplitAmountChange={setSplitAmount}
+              onSplitCountChange={setSplitCount}
+              onSplitTokenIdChange={setSplitTokenId}
+              onSplitErgPerBoxChange={setSplitErgPerBox}
+              onPreview={() => setStep('confirm')}
+            />
           )}
         </aside>
       </div>
