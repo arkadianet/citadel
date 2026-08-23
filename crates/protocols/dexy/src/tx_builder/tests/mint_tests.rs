@@ -129,3 +129,72 @@ fn test_tx_summary() {
     assert_eq!(summary.action, "mint_dexy_gold");
     assert_eq!(summary.token_name, "DexyGold");
 }
+
+#[test]
+fn mint_sends_exactly_the_requested_amount_to_the_recipient() {
+    let ctx = create_mint_context(1_000_000, 100_000);
+    let state = create_test_state(1_000_000, true);
+
+    let request = MintDexyRequest {
+        variant: DexyVariant::Gold,
+        amount: 1_000,
+        user_address: "user_addr".to_string(),
+        user_ergo_tree: "user_ergo_tree".to_string(),
+        user_inputs: vec![create_test_input(100_000_000_000, vec![])],
+        current_height: 100_000,
+        recipient_ergo_tree: Some("recipient_ergo_tree".to_string()),
+        recipient_held_tokens: 0,
+    };
+
+    let build = no_citadel_fee(|| build_mint_dexy_tx(&request, &ctx, &state))
+        .expect("mint should build");
+
+    // outputs: [free_mint, bank, buyback, recipient, change?, fee]
+    let recipient = &build.unsigned_tx.outputs[3];
+    assert_eq!(recipient.ergo_tree, "recipient_ergo_tree");
+    assert_eq!(recipient.assets[0].amount, "1000");
+}
+
+#[test]
+fn mint_tops_up_held_tokens_into_the_recipient_output() {
+    let ctx = create_mint_context(1_000_000, 100_000);
+    let state = create_test_state(1_000_000, true);
+    let token_id = state.dexy_token_id.clone();
+
+    // Wallet holds 266; deliver 1000 by minting only the 734 shortfall.
+    let request = MintDexyRequest {
+        variant: DexyVariant::Gold,
+        amount: 734,
+        user_address: "user_addr".to_string(),
+        user_ergo_tree: "user_ergo_tree".to_string(),
+        user_inputs: vec![create_test_input(
+            100_000_000_000,
+            vec![(token_id.as_str(), 266)],
+        )],
+        current_height: 100_000,
+        recipient_ergo_tree: Some("recipient_ergo_tree".to_string()),
+        recipient_held_tokens: 266,
+    };
+
+    let build = no_citadel_fee(|| build_mint_dexy_tx(&request, &ctx, &state))
+        .expect("top-up mint should build");
+
+    let recipient = &build.unsigned_tx.outputs[3];
+    assert_eq!(recipient.ergo_tree, "recipient_ergo_tree");
+    assert_eq!(
+        recipient.assets[0].amount, "1000",
+        "recipient must receive minted 734 plus held 266"
+    );
+
+    // The held tokens moved to the recipient, so none come back as change.
+    let change_dexy: i64 = build
+        .unsigned_tx
+        .outputs
+        .iter()
+        .skip(4)
+        .flat_map(|o| o.assets.iter())
+        .filter(|a| a.token_id == token_id)
+        .map(|a| a.amount.parse::<i64>().unwrap())
+        .sum();
+    assert_eq!(change_dexy, 0, "held tokens must not also return as change");
+}

@@ -30,6 +30,11 @@ pub struct SwapDexyRequest {
     pub user_inputs: Vec<Eip12InputBox>,
     pub current_height: i32,
     pub recipient_ergo_tree: Option<String>,
+    /// Tokens already held by the user to deliver alongside the swapped
+    /// amount, so a partial balance tops up instead of being ignored. `0`
+    /// swaps only. Applies to `ErgToDexy`; ignored for `DexyToErg`, which
+    /// sells tokens rather than delivering them.
+    pub recipient_held_tokens: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,6 +70,18 @@ pub fn build_swap_dexy_tx(
             message: "Input amount must be positive".to_string(),
         });
     }
+
+    if request.recipient_held_tokens < 0 {
+        return Err(TxError::BuildFailed {
+            message: "recipient_held_tokens must not be negative".to_string(),
+        });
+    }
+
+    // Only an ERG-funded swap delivers tokens to a recipient.
+    let held = match request.direction {
+        SwapDirection::ErgToDexy => request.recipient_held_tokens,
+        SwapDirection::DexyToErg => 0,
+    };
 
     let (output_amount, new_lp_erg, new_lp_dexy) = match request.direction {
         SwapDirection::ErgToDexy => {
@@ -134,7 +151,15 @@ pub fn build_swap_dexy_tx(
                 + constants::TX_FEE_NANO
                 + citadel_fee
                 + constants::MIN_BOX_VALUE_NANO;
-            select_inputs_for_spend(&request.user_inputs, needed as u64, None)
+            select_inputs_for_spend(
+                &request.user_inputs,
+                needed as u64,
+                if held > 0 {
+                    Some((state.dexy_token_id.as_str(), held as u64))
+                } else {
+                    None
+                },
+            )
         }
         SwapDirection::DexyToErg => {
             let min_erg = constants::TX_FEE_NANO + citadel_fee + constants::MIN_BOX_VALUE_NANO;
@@ -168,18 +193,28 @@ pub fn build_swap_dexy_tx(
             outputs.push(Eip12Output::change(
                 user_output_erg,
                 output_ergo_tree,
-                vec![Eip12Asset::new(&state.dexy_token_id, output_amount)],
+                vec![Eip12Asset::new(
+                    &state.dexy_token_id,
+                    output_amount + held,
+                )],
                 request.current_height,
             ));
 
             let erg_used =
                 (request.input_amount + constants::TX_FEE_NANO + citadel_fee + user_output_erg)
                     as u64;
+            // An empty `spent_tokens` returns every input token as change, so
+            // the held amount must be declared spent or it would be duplicated.
+            let spent: Vec<(&str, u64)> = if held > 0 {
+                vec![(state.dexy_token_id.as_str(), held as u64)]
+            } else {
+                vec![]
+            };
             append_change_output(
                 &mut outputs,
                 &selected,
                 erg_used,
-                &[],
+                &spent,
                 &request.user_ergo_tree,
                 request.current_height,
                 constants::MIN_BOX_VALUE_NANO as u64,

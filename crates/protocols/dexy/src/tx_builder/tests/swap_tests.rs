@@ -110,6 +110,7 @@ fn create_erg_to_dexy_request(
         user_inputs: vec![create_test_input(user_erg, vec![])],
         current_height: 100000,
         recipient_ergo_tree: None,
+        recipient_held_tokens: 0,
     }
 }
 
@@ -132,6 +133,7 @@ fn create_dexy_to_erg_request(
         )],
         current_height: 100000,
         recipient_ergo_tree: None,
+        recipient_held_tokens: 0,
     }
 }
 
@@ -469,4 +471,41 @@ fn test_erg_to_dexy_change_output_when_needed() {
             constants::TX_FEE_NANO.to_string()
         );
             });
+}
+
+#[test]
+fn erg_to_dexy_swap_tops_up_held_tokens() {
+    let ctx = create_test_swap_context(1_000_000_000_000, 500_000);
+    let state = create_swap_state();
+
+    let mut request = create_erg_to_dexy_request(1_000_000_000, 1, 100_000_000_000);
+    request.recipient_ergo_tree = Some("recipient_ergo_tree".to_string());
+    request.recipient_held_tokens = 266;
+    request.user_inputs = vec![create_test_input(
+        100_000_000_000,
+        vec![(DEXY_TOKEN_ID, 266)],
+    )];
+
+    let build = no_citadel_fee(|| build_swap_dexy_tx(&request, &ctx, &state))
+        .expect("top-up swap should build");
+
+    // outputs: [lp, swap_nft, recipient, change?, fee]
+    let recipient = &build.unsigned_tx.outputs[2];
+    assert_eq!(recipient.ergo_tree, "recipient_ergo_tree");
+    let delivered: i64 = recipient.assets[0].amount.parse().unwrap();
+    assert!(
+        delivered > 266,
+        "recipient must get swapped output plus the held 266, got {delivered}"
+    );
+
+    let change_dexy: i64 = build
+        .unsigned_tx
+        .outputs
+        .iter()
+        .skip(3)
+        .flat_map(|o| o.assets.iter())
+        .filter(|a| a.token_id == DEXY_TOKEN_ID)
+        .map(|a| a.amount.parse::<i64>().unwrap())
+        .sum();
+    assert_eq!(change_dexy, 0, "held tokens must not also return as change");
 }

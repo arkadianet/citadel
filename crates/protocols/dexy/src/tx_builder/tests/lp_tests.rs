@@ -20,32 +20,6 @@ const ORACLE_NFT_ID: &str =
 
 const INITIAL_LP: i64 = 100_000_000_000; // Gold initial LP
 
-fn create_dummy_ergo_box() -> ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox {
-    use ergo_lib::ergotree_ir::chain::ergo_box::{
-        box_value::BoxValue, ErgoBox, NonMandatoryRegisters,
-    };
-    use ergo_lib::ergotree_ir::chain::tx_id::TxId;
-    use ergo_lib::ergotree_ir::ergo_tree::ErgoTree;
-    use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
-
-    let ergo_tree_bytes = base16::decode(
-        "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-    )
-    .unwrap();
-    let ergo_tree = ErgoTree::sigma_parse_bytes(&ergo_tree_bytes).unwrap();
-    let tx_id = TxId::zero();
-
-    ErgoBox::new(
-        BoxValue::new(1_000_000).unwrap(),
-        ergo_tree,
-        None,
-        NonMandatoryRegisters::empty(),
-        100000,
-        tx_id,
-        0,
-    )
-    .unwrap()
-}
 
 fn create_deposit_context(
     lp_erg: i64,
