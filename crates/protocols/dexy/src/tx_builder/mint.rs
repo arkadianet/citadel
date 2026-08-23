@@ -27,6 +27,12 @@ pub struct MintDexyRequest {
     pub user_inputs: Vec<Eip12InputBox>,
     pub current_height: i32,
     pub recipient_ergo_tree: Option<String>,
+    /// Tokens already held by the user to deliver alongside the minted amount,
+    /// so a partial balance tops up instead of being ignored. `0` mints only.
+    ///
+    /// These are moved from the change output into the recipient output, so the
+    /// transaction still conserves tokens.
+    pub recipient_held_tokens: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +99,12 @@ pub fn build_mint_dexy_tx(
         .as_deref()
         .unwrap_or(&request.user_ergo_tree);
 
+    if request.recipient_held_tokens < 0 {
+        return Err(TxError::BuildFailed {
+            message: "recipient_held_tokens must not be negative".to_string(),
+        });
+    }
+
     validate_free_mint_preflight(ctx, request.amount, request.current_height, request.variant)?;
 
     // CRITICAL: calculate_mint_amounts matches contract's integer division order exactly
@@ -109,12 +121,22 @@ pub fn build_mint_dexy_tx(
         + citadel_fee
         + constants::MIN_BOX_VALUE_NANO;
 
-    let selected =
-        select_inputs_for_spend(&request.user_inputs, total_cost as u64, None).map_err(|e| {
-            TxError::BuildFailed {
-                message: e.to_string(),
-            }
-        })?;
+    // Held tokens must actually be among the inputs, or the selector may pick
+    // ERG-only boxes and they never enter the transaction.
+    let held = request.recipient_held_tokens;
+    let token_requirement = if held > 0 {
+        Some((state.dexy_token_id.as_str(), held as u64))
+    } else {
+        None
+    };
+    let selected = select_inputs_for_spend(
+        &request.user_inputs,
+        total_cost as u64,
+        token_requirement,
+    )
+    .map_err(|e| TxError::BuildFailed {
+        message: e.to_string(),
+    })?;
 
     if request.amount > state.dexy_in_bank {
         return Err(TxError::BuildFailed {
@@ -178,17 +200,27 @@ pub fn build_mint_dexy_tx(
         Eip12Output::change(
             constants::MIN_BOX_VALUE_NANO,
             output_ergo_tree,
-            vec![Eip12Asset::new(&state.dexy_token_id, request.amount)],
+            vec![Eip12Asset::new(
+                &state.dexy_token_id,
+                request.amount + held,
+            )],
             request.current_height,
         ),
     ];
 
     let erg_used = total_cost as u64;
+    // An empty `spent_tokens` returns every input token as change, so the held
+    // amount must be declared spent or it would be duplicated.
+    let spent: Vec<(&str, u64)> = if held > 0 {
+        vec![(state.dexy_token_id.as_str(), held as u64)]
+    } else {
+        vec![]
+    };
     append_change_output(
         &mut outputs,
         &selected,
         erg_used,
-        &[],
+        &spent,
         &request.user_ergo_tree,
         request.current_height,
         constants::MIN_BOX_VALUE_NANO as u64,
