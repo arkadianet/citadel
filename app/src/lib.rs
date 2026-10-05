@@ -159,6 +159,7 @@ pub fn run() {
             commands::preview_recovery,
             commands::build_recovery_tx,
             commands::paideia_proxy_box_id,
+            commands::scan_pending_paideia_recoveries,
             commands::check_paideia_proxy,
             commands::submit_paideia_proxy_tx,
             // Node Discovery

@@ -1,3 +1,4 @@
+import { notifyWalletTransactionSubmitted } from '../utils/walletRefresh'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { QRCodeSVG } from 'qrcode.react'
@@ -136,6 +137,7 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
       try {
         const status = await getTxStatus(requestId)
         if (status.status === 'submitted' && status.tx_id) {
+          notifyWalletTransactionSubmitted()
           setTxId(status.tx_id)
           setStep('success')
         } else if (status.status === 'failed' || status.status === 'expired') {
@@ -584,11 +586,6 @@ export function BurnTab({ isConnected, walletAddress, walletBalance, explorerUrl
                   <span>Miner Fee</span>
                   <span>~0.0011 ERG</span>
                 </div>
-                <div className="burn-confirm-row">
-                  <span>Citadel fee</span>
-                  <span>0.011 ERG</span>
-                </div>
-                <p className="burn-muted">Includes 0.011 ERG Citadel fee</p>
               </div>
 
               <div className="burn-danger-box" style={{ marginTop: 'var(--space-md)' }}>

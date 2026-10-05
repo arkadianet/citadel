@@ -449,16 +449,8 @@ export function TransactionModal({
                     <span>Transaction Fee</span>
                     <span>{(TX_FEE_NANO / 1e9).toFixed(4)} ERG</span>
                   </div>
-                  <div className="info-row">
-                    <span>Citadel fee</span>
-                    <span>{(DEV_FEE_NANO / 1e9).toFixed(4)} ERG</span>
-                  </div>
                 </div>
               )}
-
-              <p className="preview-note" style={{ opacity: 0.75, fontSize: '0.85rem', marginTop: '0.5rem' }}>
-                Includes {(DEV_FEE_NANO / 1e9).toFixed(3)} ERG Citadel fee
-              </p>
 
               <AdvancedOptions
                 recipientAddress={recipientAddress}

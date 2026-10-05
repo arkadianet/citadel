@@ -1,25 +1,8 @@
-//! Citadel application developer fee (0.011 ERG).
-//!
-//! Appended by allowlisted builders as an ERG-only P2PK output immediately
-//! before the miner-fee output. Funded from user wallet inputs only — never
-//! skimmed from protocol/script boxes.
-//!
-//! ## Config
-//! - Default: enabled with [`DEFAULT_DEV_FEE_ADDRESS`].
-//! - `CITADEL_DEV_FEE_ADDRESS` — override recipient (mainnet P2PK).
-//! - `CITADEL_DEV_FEE_ENABLED=false` — disable fee entirely.
-//!
-//! ## Skipped builders (do not call [`append_dev_fee_output`])
-//! - Stake recovery / Paideia paths that pin `OUTPUTS.size`
-//! - AMM LP deposit/redeem / pool-setup / refund (not swap funding)
-//! - HodlCoin / MewLock / SigmaFi / lending (phase 3; protocol fees or layout pins)
-//! - Prefer skip when unsure rather than risk script failure
+//! Citadel application fee helpers. Disabled in this local build.
+//! Miner fees and fees required by protocol contracts are separate.
 
 use crate::eip12::Eip12Output;
 use citadel_core::constants::DEV_FEE_NANO;
-
-#[cfg(not(test))]
-use std::sync::OnceLock;
 
 /// Hardcoded mainnet P2PK for Citadel app fee (user-requested default).
 pub const DEFAULT_DEV_FEE_ADDRESS: &str =
@@ -93,27 +76,13 @@ pub fn append_dev_fee_output(
     Ok(())
 }
 
-/// Resolve fee config (env override + hardcoded default). Cached after first call.
-///
-/// [`with_test_dev_fee`] can override for the current thread (used by unit tests
-/// in this crate and dependent protocol crates).
+/// This local build never charges the Citadel application fee.
+/// Explicit test overrides still exercise fee-enabled builder compatibility.
 pub fn resolved_config() -> DevFeeConfig {
-    if let Some(cfg) = TEST_OVERRIDE.with(|cell| cell.borrow().clone()) {
-        return cfg;
-    }
-    #[cfg(test)]
-    {
-        // No override → disabled in ergo-tx's own unit tests
-        return DevFeeConfig::disabled();
-    }
-    #[cfg(not(test))]
-    {
-        CONFIG.get_or_init(load_from_env_or_default).clone()
-    }
+    TEST_OVERRIDE
+        .with(|cell| cell.borrow().clone())
+        .unwrap_or_else(DevFeeConfig::disabled)
 }
-
-#[cfg(not(test))]
-static CONFIG: OnceLock<DevFeeConfig> = OnceLock::new();
 
 thread_local! {
     static TEST_OVERRIDE: std::cell::RefCell<Option<DevFeeConfig>> =
@@ -130,83 +99,10 @@ pub fn with_test_dev_fee<R>(cfg: DevFeeConfig, f: impl FnOnce() -> R) -> R {
     })
 }
 
-fn load_from_env_or_default() -> DevFeeConfig {
-    if env_flag_false("CITADEL_DEV_FEE_ENABLED") {
-        return DevFeeConfig::disabled();
-    }
-
-    let address = std::env::var("CITADEL_DEV_FEE_ADDRESS")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty());
-
-    match address {
-        None => DevFeeConfig::enabled_default(),
-        Some(addr) if addr == DEFAULT_DEV_FEE_ADDRESS => DevFeeConfig::enabled_default(),
-        Some(addr) => match address_to_tree(&addr) {
-            Ok(tree) => DevFeeConfig {
-                enabled: true,
-                recipient_ergo_tree: tree,
-            },
-            Err(e) => {
-                // Fail closed on bad override: keep default rather than panic in builders.
-                // Callers that need strict validation can use [`try_load_from_env`].
-                tracing_warn_invalid(&addr, &e);
-                DevFeeConfig::enabled_default()
-            }
-        },
-    }
-}
-
-/// Strict load for startup / diagnostics — invalid override address is an error.
+/// Retained for callers performing startup diagnostics. Environment variables
+/// cannot enable a developer fee in this local build.
 pub fn try_load_from_env() -> Result<DevFeeConfig, DevFeeError> {
-    if env_flag_false("CITADEL_DEV_FEE_ENABLED") {
-        return Ok(DevFeeConfig::disabled());
-    }
-
-    let address = std::env::var("CITADEL_DEV_FEE_ADDRESS")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| DEFAULT_DEV_FEE_ADDRESS.to_string());
-
-    if address == DEFAULT_DEV_FEE_ADDRESS {
-        return Ok(DevFeeConfig::enabled_default());
-    }
-
-    let tree = address_to_tree(&address)?;
-    Ok(DevFeeConfig {
-        enabled: true,
-        recipient_ergo_tree: tree,
-    })
-}
-
-fn env_flag_false(key: &str) -> bool {
-    matches!(
-        std::env::var(key).ok().as_deref().map(str::trim),
-        Some("0" | "false" | "False" | "FALSE" | "no" | "off")
-    )
-}
-
-fn address_to_tree(address: &str) -> Result<String, DevFeeError> {
-    #[cfg(feature = "ergo-lib")]
-    {
-        crate::address_to_ergo_tree(address).map_err(|e| DevFeeError::InvalidAddress(e.to_string()))
-    }
-    #[cfg(not(feature = "ergo-lib"))]
-    {
-        let _ = address;
-        Err(DevFeeError::InvalidAddress(
-            "ergo-lib feature required to resolve CITADEL_DEV_FEE_ADDRESS override".to_string(),
-        ))
-    }
-}
-
-fn tracing_warn_invalid(addr: &str, err: &DevFeeError) {
-    // Avoid hard dependency on tracing in ergo-tx — eprintln is enough for misconfig.
-    eprintln!(
-        "citadel: invalid CITADEL_DEV_FEE_ADDRESS '{addr}' ({err}); using default fee address"
-    );
+    Ok(DevFeeConfig::disabled())
 }
 
 #[cfg(test)]

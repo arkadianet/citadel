@@ -1,3 +1,4 @@
+import { notifyWalletTransactionSubmitted } from '../utils/walletRefresh'
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { QRCodeSVG } from 'qrcode.react'
@@ -67,6 +68,7 @@ export function SwapRefundModal({
       try {
         const status = await getTxStatus(requestId)
         if (status.status === 'submitted' && status.tx_id) {
+          notifyWalletTransactionSubmitted()
           setTxId(status.tx_id)
           setStep('success')
         } else if (status.status === 'failed' || status.status === 'expired') {

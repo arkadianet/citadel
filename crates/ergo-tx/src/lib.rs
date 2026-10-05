@@ -46,7 +46,8 @@ pub use tx_helpers::{
 // Re-export nanoERG constant used by fee helpers
 pub use citadel_core::constants::DEV_FEE_NANO;
 pub use utxo_management::{
-    build_consolidate_tx, build_restructure_tx, build_split_tx, ConsolidateBuildResult,
-    ConsolidateSummary, RestructureBuildResult, RestructureOutputSpec, RestructureSummary,
-    SplitBuildResult, SplitMode, SplitSummary, UtxoManagementError,
+    build_consolidate_tx, build_restructure_tx, build_restructure_tx_with_owned_trees,
+    build_split_tx, ConsolidateBuildResult, ConsolidateSummary, RestructureBuildResult,
+    RestructureOutputSpec, RestructureSummary, SplitBuildResult, SplitMode, SplitSummary,
+    UtxoManagementError,
 };

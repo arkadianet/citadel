@@ -1,8 +1,8 @@
 /** Standard miner fee (0.0011 ERG) */
 export const TX_FEE_NANO = 1_100_000
 
-/** Citadel app developer fee (0.011 ERG) — separate from miner fee */
-export const DEV_FEE_NANO = 11_000_000
+/** Citadel app fee is disabled in this local build. */
+export const DEV_FEE_NANO = 0
 
 /**
  * Default Citadel fee / tip recipient (mainnet P2PK).

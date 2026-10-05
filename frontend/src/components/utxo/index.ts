@@ -1,6 +1,7 @@
 export { UtxoBoxList } from './UtxoBoxList'
 export { UtxoConsolidatePanel } from './UtxoConsolidatePanel'
 export { UtxoSplitPanel } from './UtxoSplitPanel'
+export { UtxoTokenIsolationPanel } from './UtxoTokenIsolationPanel'
 export type { UtxoBox, WalletToken, SplitType, BoardFilter, SortKey, PillKind, TokenBreakdownItem } from './types'
 export {
   DUST_NANO,

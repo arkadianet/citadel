@@ -4,6 +4,7 @@ use ergo_lib::ergotree_ir::chain::ergo_box::{ErgoBox, NonMandatoryRegisterId};
 use ergo_tx::ergo_box_utils::{extract_long_coll, get_register_coll_byte_hex};
 
 use crate::constants::{StakeProtocolConfig, PROTOCOLS, STAKE_BOX_MAX_PAGES, STAKE_BOX_PAGE_SIZE};
+use crate::pending::PendingBoxes;
 use crate::state::{RecoverableStake, RecoveryError, RecoveryScan, StakeStateSnapshot};
 
 /// Fetch the singleton StakeStateBox for `cfg` and parse its R4. Paginates the
@@ -14,10 +15,26 @@ pub async fn fetch_stake_state(
     node: &ergo_node_client::NodeClient,
     cfg: &StakeProtocolConfig,
 ) -> Result<(ErgoBox, StakeStateSnapshot), RecoveryError> {
+    let pending = PendingBoxes::load(node).await?;
+    fetch_stake_state_with_pending(node, cfg, &pending).await
+}
+
+async fn fetch_stake_state_with_pending(
+    node: &ergo_node_client::NodeClient,
+    cfg: &StakeProtocolConfig,
+    pending: &PendingBoxes,
+) -> Result<(ErgoBox, StakeStateSnapshot), RecoveryError> {
+    // Prefer the terminal state in the pool, even while the index still exposes
+    // the confirmed predecessor. Never select an intermediate spent output.
+    for b in pending.outputs_for(cfg.stake_state_ergo_tree) {
+        if has_state_nft(b, cfg) {
+            return Ok((b.clone(), parse_stake_state(b, cfg)?));
+        }
+    }
     for page in 0..STAKE_BOX_MAX_PAGES {
         let boxes = node
-            .unspent_boxes_by_address(
-                &cfg.stake_state_address.to_string(),
+            .confirmed_unspent_boxes_by_address(
+                cfg.stake_state_address,
                 page * STAKE_BOX_PAGE_SIZE,
                 STAKE_BOX_PAGE_SIZE,
             )
@@ -25,13 +42,10 @@ pub async fn fetch_stake_state(
             .map_err(|e| RecoveryError::NodeError(e.to_string()))?;
 
         let page_len = boxes.len() as u64;
-        if let Some(ergo_box) = boxes.into_iter().find(|b| {
-            b.tokens
-                .as_ref()
-                .and_then(|t| t.get(0))
-                .map(|first| hex::encode(first.token_id.as_ref()) == cfg.stake_state_nft)
-                .unwrap_or(false)
-        }) {
+        if let Some(ergo_box) = boxes
+            .into_iter()
+            .find(|b| pending.is_unspent(b) && has_state_nft(b, cfg))
+        {
             let snapshot = parse_stake_state(&ergo_box, cfg)?;
             return Ok((ergo_box, snapshot));
         }
@@ -41,6 +55,16 @@ pub async fn fetch_stake_state(
     }
 
     Err(RecoveryError::StateBoxNotFound(cfg.name.to_string()))
+}
+
+fn has_state_nft(b: &ErgoBox, cfg: &StakeProtocolConfig) -> bool {
+    b.tokens
+        .as_ref()
+        .and_then(|t| t.get(0))
+        .is_some_and(|first| {
+            hex::encode(first.token_id.as_ref()) == cfg.stake_state_nft
+                && u64::from(first.amount) == 1
+        })
 }
 
 fn parse_stake_state(
@@ -91,10 +115,25 @@ pub async fn fetch_stake_box_by_key(
     cfg: &StakeProtocolConfig,
     stake_key_id: &str,
 ) -> Result<ErgoBox, RecoveryError> {
+    let pending = PendingBoxes::load(node).await?;
+    fetch_stake_box_with_pending(node, cfg, stake_key_id, &pending).await
+}
+
+async fn fetch_stake_box_with_pending(
+    node: &ergo_node_client::NodeClient,
+    cfg: &StakeProtocolConfig,
+    stake_key_id: &str,
+    pending: &PendingBoxes,
+) -> Result<ErgoBox, RecoveryError> {
+    for b in pending.outputs_for(cfg.stake_box_ergo_tree) {
+        if r5_matches(b, stake_key_id) && parse_stake_box(b, cfg).is_ok() {
+            return Ok(b.clone());
+        }
+    }
     for page in 0..STAKE_BOX_MAX_PAGES {
         let boxes = node
-            .unspent_boxes_by_address(
-                &cfg.stake_box_address.to_string(),
+            .confirmed_unspent_boxes_by_address(
+                cfg.stake_box_address,
                 page * STAKE_BOX_PAGE_SIZE,
                 STAKE_BOX_PAGE_SIZE,
             )
@@ -103,7 +142,10 @@ pub async fn fetch_stake_box_by_key(
 
         let page_len = boxes.len() as u64;
         for ergo_box in boxes {
-            if r5_matches(&ergo_box, stake_key_id) {
+            if pending.is_unspent(&ergo_box)
+                && r5_matches(&ergo_box, stake_key_id)
+                && parse_stake_box(&ergo_box, cfg).is_ok()
+            {
                 return Ok(ergo_box);
             }
         }
@@ -128,8 +170,9 @@ pub async fn find_stake_box_by_key(
     node: &ergo_node_client::NodeClient,
     stake_key_id: &str,
 ) -> Result<(&'static StakeProtocolConfig, ErgoBox), RecoveryError> {
+    let pending = PendingBoxes::load(node).await?;
     for cfg in PROTOCOLS {
-        match fetch_stake_box_by_key(node, cfg, stake_key_id).await {
+        match fetch_stake_box_with_pending(node, cfg, stake_key_id, &pending).await {
             Ok(ergo_box) => {
                 if parse_stake_box(&ergo_box, cfg).is_ok() {
                     return Ok((cfg, ergo_box));
@@ -155,6 +198,7 @@ pub async fn discover_recoverable_stakes(
     node: &ergo_node_client::NodeClient,
     candidate_token_ids: &[String],
 ) -> Result<RecoveryScan, RecoveryError> {
+    let pending = PendingBoxes::load(node).await?;
     let wanted: HashSet<&str> = candidate_token_ids.iter().map(|s| s.as_str()).collect();
     let candidates_checked = wanted.len() as u64;
 
@@ -167,7 +211,7 @@ pub async fn discover_recoverable_stakes(
     for cfg in PROTOCOLS {
         // A protocol whose state box can't be found is treated as inactive: record
         // nothing and move on rather than failing the whole scan.
-        let state_snapshot = match fetch_stake_state(node, cfg).await {
+        let state_snapshot = match fetch_stake_state_with_pending(node, cfg, &pending).await {
             Ok((_box, snap)) => snap,
             Err(RecoveryError::StateBoxNotFound(_)) => continue,
             Err(e) => return Err(e),
@@ -178,11 +222,19 @@ pub async fn discover_recoverable_stakes(
             continue;
         }
 
+        for b in pending.outputs_for(cfg.stake_box_ergo_tree) {
+            if let Ok(stake) = parse_stake_box(b, cfg) {
+                if wanted.contains(stake.stake_key_id.as_str()) {
+                    found.insert(stake.stake_key_id.clone(), stake);
+                }
+            }
+        }
+
         let mut protocol_hit_limit = true;
         'outer: for page in 0..STAKE_BOX_MAX_PAGES {
             let boxes = node
-                .unspent_boxes_by_address(
-                    &cfg.stake_box_address.to_string(),
+                .confirmed_unspent_boxes_by_address(
+                    cfg.stake_box_address,
                     page * STAKE_BOX_PAGE_SIZE,
                     STAKE_BOX_PAGE_SIZE,
                 )
@@ -193,7 +245,7 @@ pub async fn discover_recoverable_stakes(
             pages_fetched += 1;
             boxes_scanned += page_len;
 
-            for ergo_box in boxes {
+            for ergo_box in boxes.into_iter().filter(|b| pending.is_unspent(b)) {
                 match parse_stake_box(&ergo_box, cfg) {
                     Ok(stake) if wanted.contains(stake.stake_key_id.as_str()) => {
                         found.insert(stake.stake_key_id.clone(), stake);

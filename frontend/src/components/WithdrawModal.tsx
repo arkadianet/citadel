@@ -1,3 +1,4 @@
+import { notifyWalletTransactionSubmitted } from '../utils/walletRefresh'
 /**
  * WithdrawModal Component
  *
@@ -176,6 +177,7 @@ export function WithdrawModal({
         )
 
         if (status.status === 'submitted' && status.tx_id) {
+          notifyWalletTransactionSubmitted()
           setTxId(status.tx_id)
           setStep('success')
         } else if (status.status === 'failed' || status.status === 'expired') {

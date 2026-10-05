@@ -47,14 +47,21 @@ pub async fn build_split_tx(
 
 #[tauri::command]
 pub async fn build_restructure_tx(
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
     selected_utxos: Vec<serde_json::Value>,
     outputs: Vec<RestructureOutputInput>,
     user_ergo_tree: String,
     current_height: i32,
 ) -> Result<RestructureBuildResponse, String> {
     let inputs = super::parse_eip12_utxos(selected_utxos)?;
-    utxo_svc::build_restructure_tx(inputs, outputs, &user_ergo_tree, current_height)
+    utxo_svc::build_restructure_tx_for_wallet(
+        &state,
+        inputs,
+        outputs,
+        &user_ergo_tree,
+        current_height,
+    )
+    .await
 }
 
 #[tauri::command]
