@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "Permissionless recovery from v1 Paideia-template staking (Ergopad, EGIO) for holders of abandoned stake keys"
+description = "Stake key recovery for legacy Ergopad, EGIO, Paideia and NETA staking"
 
 [dependencies]
 citadel-core = { workspace = true }
@@ -16,3 +16,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+ergopay-core = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true }

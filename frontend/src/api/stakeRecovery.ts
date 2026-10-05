@@ -72,7 +72,29 @@ export interface PaideiaProxyCheck {
   refund: DryRunResult
 }
 
-/** Resolve the proxy box (output[0]) created by a confirmed step-1 tx. */
+export interface PendingPaideiaRecovery {
+  proxyBoxId: string
+  creationTxId: string
+  stakeKeyId: string
+  recipientAddress: string
+  rewardAmountDisplay: string
+  confirmed: boolean
+  creationHeight: number
+}
+
+export interface PendingPaideiaScan {
+  recoveries: PendingPaideiaRecovery[]
+  boxesScanned: number
+  pagesFetched: number
+  hitPageLimit: boolean
+}
+
+/** Find unfinished step-one recoveries owned by the connected wallet. */
+export async function scanPendingPaideiaRecoveries(): Promise<PendingPaideiaScan> {
+  return await invoke<PendingPaideiaScan>('scan_pending_paideia_recoveries')
+}
+
+/** Resolve the proxy box (output[0]) created by a confirmed or pending step-one tx. */
 export async function paideiaProxyBoxId(txId: string): Promise<string> {
   return await invoke<string>('paideia_proxy_box_id', { txId })
 }

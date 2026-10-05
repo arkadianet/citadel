@@ -8,7 +8,7 @@ description = "ErgoPay transaction reduction and core types"
 
 [dependencies]
 ergo-lib = { workspace = true }
-ergo-chain-types = { git = "https://github.com/ergoplatform/sigma-rust", branch = "develop" }
+ergo-chain-types = { git = "https://github.com/ergoplatform/sigma-rust", rev = "2a35264158033b07fa10f9528f4c9038e265e5b4" }
 ergo-node-client = { workspace = true }
 ergo-tx = { workspace = true, features = ["ergo-lib"] }
 hex = { workspace = true }

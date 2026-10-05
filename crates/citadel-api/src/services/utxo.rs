@@ -4,6 +4,7 @@ use citadel_core::constants::{MIN_BOX_VALUE_NANO, TX_FEE_NANO};
 use serde::{Deserialize, Serialize};
 
 use super::error::{IntoServiceError, ServiceResult};
+use crate::AppState;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -164,6 +165,47 @@ pub fn build_restructure_tx(
     user_ergo_tree: &str,
     current_height: i32,
 ) -> ServiceResult<RestructureBuildResponse> {
+    build_restructure_tx_with_owned_trees(
+        selected_utxos,
+        outputs,
+        user_ergo_tree,
+        &[user_ergo_tree],
+        current_height,
+    )
+}
+
+/// Resolve allowed input and output addresses from the connected wallet state.
+pub async fn build_restructure_tx_for_wallet(
+    state: &AppState,
+    selected_utxos: Vec<ergo_tx::Eip12InputBox>,
+    outputs: Vec<RestructureOutputInput>,
+    user_ergo_tree: &str,
+    current_height: i32,
+) -> ServiceResult<RestructureBuildResponse> {
+    let wallet = state.wallet().await.ok_or("Wallet not connected")?;
+    let owned_trees: Result<Vec<String>, String> = wallet
+        .addresses
+        .iter()
+        .map(|address| ergo_tx::address_to_ergo_tree(address).into_service())
+        .collect();
+    let owned_trees = owned_trees?;
+    let owned_tree_refs: Vec<&str> = owned_trees.iter().map(String::as_str).collect();
+    build_restructure_tx_with_owned_trees(
+        selected_utxos,
+        outputs,
+        user_ergo_tree,
+        &owned_tree_refs,
+        current_height,
+    )
+}
+
+fn build_restructure_tx_with_owned_trees(
+    selected_utxos: Vec<ergo_tx::Eip12InputBox>,
+    outputs: Vec<RestructureOutputInput>,
+    user_ergo_tree: &str,
+    owned_ergo_trees: &[&str],
+    current_height: i32,
+) -> ServiceResult<RestructureBuildResponse> {
     let specs: Result<Vec<ergo_tx::RestructureOutputSpec>, String> = outputs
         .into_iter()
         .map(|o| {
@@ -186,9 +228,14 @@ pub fn build_restructure_tx(
         .collect();
     let specs = specs?;
 
-    let result =
-        ergo_tx::build_restructure_tx(&selected_utxos, &specs, user_ergo_tree, current_height)
-            .into_service()?;
+    let result = ergo_tx::build_restructure_tx_with_owned_trees(
+        &selected_utxos,
+        &specs,
+        user_ergo_tree,
+        owned_ergo_trees,
+        current_height,
+    )
+    .into_service()?;
 
     let unsigned_tx_json = serde_json::to_value(&result.unsigned_tx)
         .map_err(|e| format!("Failed to serialize tx: {}", e))?;
@@ -204,4 +251,109 @@ pub fn build_restructure_tx(
         miner_fee: result.summary.miner_fee,
         citadel_fee_nano: result.summary.citadel_fee_nano,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    const PRIMARY_TREE: &str =
+        "0008cd0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+    const FUNDING_TREE: &str =
+        "0008cd0379be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+    const KEY: &str = "12fb8192304383f32a5eb880b3e32536036e9ef9150137555ebdde25d03943d0";
+
+    fn input(id: &str, tree: &str, value: i64, key: bool) -> ergo_tx::Eip12InputBox {
+        ergo_tx::Eip12InputBox {
+            box_id: id.to_string(),
+            transaction_id: "tx".to_string(),
+            index: 0,
+            value: value.to_string(),
+            ergo_tree: tree.to_string(),
+            assets: if key {
+                vec![ergo_tx::Eip12Asset::new(KEY, 1)]
+            } else {
+                vec![]
+            },
+            creation_height: 1000,
+            additional_registers: HashMap::new(),
+            extension: HashMap::new(),
+        }
+    }
+
+    fn output() -> Vec<RestructureOutputInput> {
+        vec![RestructureOutputInput {
+            value: MIN_BOX_VALUE_NANO,
+            tokens: vec![RestructureTokenInput {
+                token_id: KEY.to_string(),
+                amount: "1".to_string(),
+            }],
+        }]
+    }
+
+    #[tokio::test]
+    async fn restructure_ownership_comes_from_connected_wallet() {
+        let state = AppState::new();
+        let source = input("source", PRIMARY_TREE, 39_960, true);
+        let funding = input("funding", FUNDING_TREE, 10_000_000, false);
+        let error = build_restructure_tx_for_wallet(
+            &state,
+            vec![source.clone(), funding.clone()],
+            output(),
+            PRIMARY_TREE,
+            50000,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error, "Wallet not connected");
+
+        let primary_address = ergo_tx::address::ergo_tree_to_address(PRIMARY_TREE).unwrap();
+        let funding_address = ergo_tx::address::ergo_tree_to_address(FUNDING_TREE).unwrap();
+        state.set_wallet(primary_address.clone()).await.unwrap();
+        let error = build_restructure_tx_for_wallet(
+            &state,
+            vec![source.clone(), funding.clone()],
+            output(),
+            PRIMARY_TREE,
+            50000,
+        )
+        .await
+        .unwrap_err();
+        assert!(error.contains("does not belong to the wallet"));
+        let error = build_restructure_tx_for_wallet(
+            &state,
+            vec![source.clone()],
+            output(),
+            FUNDING_TREE,
+            50000,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error, "Output address does not belong to the wallet");
+
+        state
+            .set_wallet_addresses(primary_address, vec![funding_address])
+            .await
+            .unwrap();
+        let result = build_restructure_tx_for_wallet(
+            &state,
+            vec![source, funding],
+            output(),
+            PRIMARY_TREE,
+            50000,
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.input_count, 2);
+        assert_eq!(result.output_count, 2);
+        assert!(result.has_change);
+        assert_eq!(result.total_erg_in, 10_039_960);
+        let transaction: ergo_tx::Eip12UnsignedTx =
+            serde_json::from_value(result.unsigned_tx).unwrap();
+        assert_eq!(transaction.inputs[1].ergo_tree, FUNDING_TREE);
+        assert_eq!(transaction.outputs[0].ergo_tree, PRIMARY_TREE);
+        assert_eq!(transaction.outputs[0].assets[0].token_id, KEY);
+    }
 }

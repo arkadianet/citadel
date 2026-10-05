@@ -1,9 +1,9 @@
 //! Stake Recovery (v1 Paideia-template staking)
 //!
 //! Permissionless recovery from legacy v1 staking contracts built on the Paideia
-//! staking tooling (Ergopad, EGIO, and Paideia's own v1 staking). Anyone holding an
+//! staking tooling (Ergopad, EGIO, NETA, and Paideia's own v1 staking). Anyone holding an
 //! abandoned `Stake Key` NFT can redeem the underlying reward tokens, without any
-//! action from the (now-defunct) operators — via one of two [`RecoveryMechanism`]
+//! action from the (now-defunct) operators — via one of three [`RecoveryMechanism`]
 //! variants:
 //!
 //! - **Direct** (Ergopad, EGIO): the StakeBox contract only verifies that some
@@ -12,6 +12,9 @@
 //!   back to the signer. Both protocols share the same StakeBox / StakeStateBox
 //!   script *code* (verified byte-identical); only the embedded token/NFT
 //!   constants differ.
+//! - **NetaDirect** (NETA): a different contract family, recovered in one
+//!   transaction with the key first in input 2 and the stake at the current
+//!   checkpoint. The key is returned to its owner.
 //! - **PaideiaProxy** (Paideia): a structurally different contract family
 //!   (`101f` / `104e`) redeemed via a single-use unstake proxy box (`101b`)
 //!   instead of a single direct spend. The stake key is burned on a successful
@@ -22,11 +25,13 @@
 
 pub mod constants;
 pub mod fetch;
+pub mod paideia;
+mod pending;
 pub mod state;
 pub mod tx_builder;
 
 pub use constants::{
-    protocol_by_name, RecoveryMechanism, StakeProtocolConfig, EGIO, ERGOPAD, PAIDEIA,
+    protocol_by_name, RecoveryMechanism, StakeProtocolConfig, EGIO, ERGOPAD, NETA, PAIDEIA,
     PAIDEIA_INCENTIVE_ERGO_TREE, PAIDEIA_PROXY_ADDRESS, PAIDEIA_PROXY_ERGO_TREE,
     PAIDEIA_PROXY_VALUE, PROTOCOLS,
 };
@@ -34,6 +39,7 @@ pub use fetch::{
     discover_recoverable_stakes, fetch_stake_box_by_key, fetch_stake_state, find_stake_box_by_key,
     parse_stake_box,
 };
+pub use paideia::discover_pending_paideia_proxies;
 pub use state::{RecoverableStake, RecoveryError, RecoveryScan, StakeStateSnapshot};
 pub use tx_builder::{
     build_paideia_executor_tx, build_paideia_proxy_tx, build_paideia_refund_tx,

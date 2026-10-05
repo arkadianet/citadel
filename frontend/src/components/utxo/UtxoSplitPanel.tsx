@@ -1,4 +1,4 @@
-import { DEV_FEE_NANO, TX_FEE_NANO } from '../../constants'
+import { TX_FEE_NANO } from '../../constants'
 import { formatErg, formatTokenAmount } from '../../utils/format'
 import { ergNano } from './helpers'
 import type { SplitType, UtxoBox, WalletToken } from './types'
@@ -180,11 +180,6 @@ export function UtxoSplitPanel({
               <span>Miner Fee</span>
               <span>{formatErg(TX_FEE_NANO)} ERG</span>
             </div>
-            <div className="utxo-confirm-row">
-              <span>Citadel fee</span>
-              <span>{formatErg(DEV_FEE_NANO)} ERG</span>
-            </div>
-            <p className="utxo-muted">Includes {formatErg(DEV_FEE_NANO)} ERG Citadel fee</p>
           </div>
         )}
       </div>

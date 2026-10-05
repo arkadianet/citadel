@@ -14,8 +14,7 @@ use crate::constants::{
 };
 use crate::state::{RecoverableStake, RecoveryError, StakeStateSnapshot};
 
-// Citadel app fee: permanently skip Paideia executor/refund (OUTPUTS.size pins).
-// Generic recovery funding may be revisited in phase 3 with script review.
+// Recovery transactions have no Citadel application fee.
 
 /// Total ERG the proxy's unstake branch spends on fixed outputs beyond the (preserved)
 /// StakeStateBox value: incentive (0.1) + executor tip (0.002) + miner fee (0.002).
@@ -26,6 +25,8 @@ const PAIDEIA_EXECUTOR_FIXED_ERG: u64 =
 /// `0e1f269f2fe8e75d1c75d6550b4bff13ec43cdde7cb5afc94690e5cc1139e032`. The same
 /// tx shape applies to every protocol on the shared template (EGIO verified
 /// byte-identical StakeBox/StakeStateBox code bodies).
+/// NETA's distinct scripts also support this layout, with the checkpoint and
+/// first-token restrictions checked below and verified by mainnet fixture tests.
 ///
 /// Inputs:
 ///  - \[0\] StakeStateBox
@@ -51,10 +52,10 @@ pub fn build_recovery_tx_eip12(
     let cfg = protocol_by_name(&stake.protocol).ok_or_else(|| {
         RecoveryError::TxBuildError(format!("Unknown staking protocol '{}'", stake.protocol))
     })?;
-    // Safety guard: this builder implements the Ergopad/EGIO *direct* unstake shape
+    // Safety guard: this builder implements the Ergopad/EGIO/NETA direct unstake shape
     // (key returned via change). Applying it to a proxy-mechanism pool (Paideia) would
     // produce an invalid tx. Route those to `build_paideia_proxy_tx` instead.
-    if cfg.mechanism != RecoveryMechanism::Direct {
+    if cfg.mechanism == RecoveryMechanism::PaideiaProxy {
         return Err(RecoveryError::TxBuildError(format!(
             "{} uses the {:?} recovery mechanism, not the direct builder — use build_paideia_proxy_tx",
             cfg.name, cfg.mechanism
@@ -62,6 +63,22 @@ pub fn build_recovery_tx_eip12(
     }
     validate_state_box(cfg, state_box)?;
     validate_stake_box(cfg, stake_box)?;
+
+    if cfg.mechanism == RecoveryMechanism::NetaDirect {
+        if state_box.ergo_tree != cfg.stake_state_ergo_tree
+            || stake_box.ergo_tree != cfg.stake_box_ergo_tree
+        {
+            return Err(RecoveryError::TxBuildError(
+                "Unexpected NETA contract".into(),
+            ));
+        }
+        if stake.checkpoint != state.checkpoint {
+            return Err(RecoveryError::TxBuildError(format!(
+                "NETA stake checkpoint {} != state checkpoint {} — compound the stake before recovery",
+                stake.checkpoint, state.checkpoint
+            )));
+        }
+    }
 
     let state_nft = &state_box.assets[0];
     let state_stake_tok = &state_box.assets[1];
@@ -130,6 +147,19 @@ pub fn build_recovery_tx_eip12(
             ))
         })?;
     let key_box = user_utxos[key_idx].clone();
+    // NETA's state contract checks INPUTS(2).tokens(0), unlike Ergopad's
+    // any-input token search. Input asset order is part of the box ID and cannot
+    // be changed here. A combined wallet box must be split first if necessary.
+    if cfg.mechanism == RecoveryMechanism::NetaDirect
+        && !key_box
+            .assets
+            .first()
+            .is_some_and(|a| a.token_id == stake.stake_key_id && a.amount == "1")
+    {
+        return Err(RecoveryError::TxBuildError(
+            "NETA recovery requires the stake key to be the first token in its wallet box. Use UTXO Management to split the key into its own box, then retry.".into(),
+        ));
+    }
     let key_erg: u64 = key_box
         .value
         .parse()

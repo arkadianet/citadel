@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::dev_fee::{append_dev_fee_output, resolved_config};
 use crate::eip12::{Eip12Asset, Eip12InputBox, Eip12Output, Eip12UnsignedTx};
@@ -9,7 +9,8 @@ use citadel_core::constants::{MIN_BOX_VALUE_NANO as MIN_BOX_VALUE, TX_FEE_NANO a
 // block cost/size may still limit practical size before that hard ceiling.
 const MAX_SPLIT_OUTPUTS: usize = 30;
 const MAX_RESTRUCTURE_OUTPUTS: usize = 120;
-const MAX_TOKENS_PER_BOX: usize = 255;
+// The pinned ergo-lib also bounds boxes to 122 tokens and 4096 serialized bytes.
+const MAX_TOKENS_PER_BOX: usize = 122;
 
 #[derive(Debug, thiserror::Error)]
 pub enum UtxoManagementError {
@@ -52,6 +53,27 @@ pub enum UtxoManagementError {
 
     #[error("Input box {box_id} does not belong to the wallet (ErgoTree mismatch)")]
     InputNotOwned { box_id: String },
+
+    #[error("Output address does not belong to the wallet")]
+    OutputNotOwned,
+
+    #[error("Input box {box_id} was selected more than once")]
+    DuplicateInput { box_id: String },
+
+    #[error("Input box {box_id} has an invalid ERG value: {value}")]
+    InvalidInputValue { box_id: String, value: String },
+
+    #[error("Token {token_id} has an invalid amount: {amount}")]
+    InvalidTokenAmount { token_id: String, amount: String },
+
+    #[error("Transaction amounts exceed the supported range")]
+    AmountOverflow,
+
+    #[error("Output box cannot be built: {0}")]
+    InvalidOutput(String),
+
+    #[error("Output box size {size} bytes exceeds the maximum of {max} bytes; assign fewer tokens to this output")]
+    OutputTooLarge { size: usize, max: usize },
 
     #[error("Token {token_id} over-allocated: assigned {assigned}, available {available}")]
     TokenOverAllocated {
@@ -171,7 +193,9 @@ pub fn build_consolidate_tx(
 
 #[derive(Debug, Clone)]
 pub enum SplitMode {
-    Erg { amount_per_box: i64 },
+    Erg {
+        amount_per_box: i64,
+    },
     Token {
         token_id: String,
         amount_per_box: u64,
@@ -438,9 +462,9 @@ pub fn build_split_tx(
 /// One user-defined output for a restructure transaction.
 #[derive(Debug, Clone)]
 pub struct RestructureOutputSpec {
-    /// nanoERG for this output (must be ≥ MIN_BOX_VALUE)
+    /// nanoERG for this output (must cover MIN_BOX_VALUE and serialized box size).
     pub value: i64,
-    /// Tokens assigned to this output
+    /// Tokens assigned to this output, preserving the first occurrence's order.
     pub tokens: Vec<(String, u64)>,
 }
 
@@ -462,11 +486,98 @@ pub struct RestructureBuildResult {
     pub summary: RestructureSummary,
 }
 
+fn add_token_amount(
+    totals: &mut HashMap<String, u64>,
+    token_id: &str,
+    amount: u64,
+) -> Result<(), UtxoManagementError> {
+    if amount == 0 || amount > i64::MAX as u64 {
+        return Err(UtxoManagementError::InvalidTokenAmount {
+            token_id: token_id.to_string(),
+            amount: amount.to_string(),
+        });
+    }
+    let total = totals.entry(token_id.to_string()).or_insert(0);
+    *total = total
+        .checked_add(amount)
+        .filter(|total| *total <= i64::MAX as u64)
+        .ok_or(UtxoManagementError::AmountOverflow)?;
+    Ok(())
+}
+
+/// Merge repeated entries without changing the user's first-token ordering.
+fn merge_restructure_tokens(
+    tokens: &[(String, u64)],
+) -> Result<Vec<Eip12Asset>, UtxoManagementError> {
+    let mut totals = HashMap::new();
+    let mut order = Vec::new();
+    for (token_id, amount) in tokens {
+        if !totals.contains_key(token_id) {
+            order.push(token_id.clone());
+        }
+        if *amount == 0 {
+            return Err(UtxoManagementError::ZeroSplitAmount);
+        }
+        add_token_amount(&mut totals, token_id, *amount)?;
+    }
+    if order.len() > MAX_TOKENS_PER_BOX {
+        return Err(UtxoManagementError::TooManyTokenTypes {
+            count: order.len(),
+            max: MAX_TOKENS_PER_BOX,
+        });
+    }
+    Ok(order
+        .into_iter()
+        .map(|token_id| {
+            let amount = totals[&token_id];
+            Eip12Asset::new(token_id, amount as i64)
+        })
+        .collect())
+}
+
+#[cfg(feature = "ergo-lib")]
+fn minimum_restructure_output_value(
+    output: &Eip12Output,
+    index: usize,
+) -> Result<i64, UtxoManagementError> {
+    use ergo_lib::ergotree_ir::chain::ergo_box::{box_value::BoxValue, ErgoBox, ErgoBoxCandidate};
+    use ergo_lib::ergotree_ir::chain::tx_id::TxId;
+    use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
+
+    let json = serde_json::to_value(output)
+        .map_err(|error| UtxoManagementError::InvalidOutput(error.to_string()))?;
+    let candidate: ErgoBoxCandidate = serde_json::from_value(json)
+        .map_err(|error| UtxoManagementError::InvalidOutput(error.to_string()))?;
+    let box_value = ErgoBox::from_box_candidate(&candidate, TxId::zero(), index as u16)
+        .map_err(|error| UtxoManagementError::InvalidOutput(error.to_string()))?;
+    let size = box_value
+        .sigma_serialize_bytes()
+        .map_err(|error| UtxoManagementError::InvalidOutput(error.to_string()))?
+        .len();
+    if size > ErgoBox::MAX_BOX_SIZE {
+        return Err(UtxoManagementError::OutputTooLarge {
+            size,
+            max: ErgoBox::MAX_BOX_SIZE,
+        });
+    }
+    Ok(MIN_BOX_VALUE.max(size as i64 * BoxValue::MIN_VALUE_PER_BOX_BYTE as i64))
+}
+
+#[cfg(not(feature = "ergo-lib"))]
+fn minimum_restructure_output_value(
+    _output: &Eip12Output,
+    _index: usize,
+) -> Result<i64, UtxoManagementError> {
+    Ok(MIN_BOX_VALUE)
+}
+
 /// Build a free-form restructure tx from selected inputs and user-defined outputs.
 ///
 /// - All inputs must match `user_ergo_tree` (ownership check).
 /// - User outputs receive the specified ERG + tokens (capped at
 ///   `MAX_RESTRUCTURE_OUTPUTS` — an app UX limit, not an Ergo protocol ceiling).
+/// - With `ergo-lib` (enabled by the desktop app), output values and sizes are
+///   checked against the serialized box's storage minimum and size limit.
 /// - Unassigned ERG (after fee) and any unassigned tokens form an automatic change
 ///   output when needed. If tokens remain unassigned but change ERG would be 0,
 ///   returns an error (need room for a change box).
@@ -475,6 +586,27 @@ pub fn build_restructure_tx(
     user_inputs: &[Eip12InputBox],
     outputs: &[RestructureOutputSpec],
     user_ergo_tree: &str,
+    current_height: i32,
+) -> Result<RestructureBuildResult, UtxoManagementError> {
+    build_restructure_tx_with_owned_trees(
+        user_inputs,
+        outputs,
+        user_ergo_tree,
+        &[user_ergo_tree],
+        current_height,
+    )
+}
+
+/// Build a restructure transaction across verified addresses of one wallet.
+///
+/// The caller must obtain `owned_ergo_trees` from its connected wallet state,
+/// rather than from user-controlled transaction arguments. The destination and
+/// every input must belong to that set; all new outputs use `user_ergo_tree`.
+pub fn build_restructure_tx_with_owned_trees(
+    user_inputs: &[Eip12InputBox],
+    outputs: &[RestructureOutputSpec],
+    user_ergo_tree: &str,
+    owned_ergo_trees: &[&str],
     current_height: i32,
 ) -> Result<RestructureBuildResult, UtxoManagementError> {
     if user_inputs.is_empty() {
@@ -489,33 +621,51 @@ pub fn build_restructure_tx(
             max: MAX_RESTRUCTURE_OUTPUTS,
         });
     }
+    if !owned_ergo_trees.contains(&user_ergo_tree) {
+        return Err(UtxoManagementError::OutputNotOwned);
+    }
 
+    let mut seen_inputs = HashSet::new();
+    let mut total_erg = 0_i64;
+    let mut available_tokens = HashMap::new();
     for input in user_inputs {
-        if input.ergo_tree != user_ergo_tree {
+        if !owned_ergo_trees.contains(&input.ergo_tree.as_str()) {
             return Err(UtxoManagementError::InputNotOwned {
                 box_id: input.box_id.clone(),
             });
         }
-    }
-
-    let total_erg: i64 = user_inputs
-        .iter()
-        .map(|b| b.value.parse::<i64>().unwrap_or(0))
-        .sum();
-
-    let mut available_tokens: HashMap<String, u64> = HashMap::new();
-    for input in user_inputs {
+        if !seen_inputs.insert(&input.box_id) {
+            return Err(UtxoManagementError::DuplicateInput {
+                box_id: input.box_id.clone(),
+            });
+        }
+        let value = input
+            .value
+            .parse::<i64>()
+            .ok()
+            .filter(|value| *value > 0)
+            .ok_or_else(|| UtxoManagementError::InvalidInputValue {
+                box_id: input.box_id.clone(),
+                value: input.value.clone(),
+            })?;
+        total_erg = total_erg
+            .checked_add(value)
+            .ok_or(UtxoManagementError::AmountOverflow)?;
         for asset in &input.assets {
-            let amount = asset.amount.parse::<u64>().unwrap_or(0);
-            *available_tokens
-                .entry(asset.token_id.clone())
-                .or_insert(0) += amount;
+            let amount = asset.amount.parse::<u64>().map_err(|_| {
+                UtxoManagementError::InvalidTokenAmount {
+                    token_id: asset.token_id.clone(),
+                    amount: asset.amount.clone(),
+                }
+            })?;
+            add_token_amount(&mut available_tokens, &asset.token_id, amount)?;
         }
     }
 
     let mut assigned_tokens: HashMap<String, u64> = HashMap::new();
     let mut allocated_erg: i64 = 0;
 
+    let mut merged_outputs = Vec::with_capacity(outputs.len());
     for out in outputs {
         if out.value < MIN_BOX_VALUE {
             return Err(UtxoManagementError::BelowMinBoxValue {
@@ -523,38 +673,19 @@ pub fn build_restructure_tx(
                 min: MIN_BOX_VALUE,
             });
         }
-        if out.tokens.len() > MAX_TOKENS_PER_BOX {
-            return Err(UtxoManagementError::TooManyTokenTypes {
-                count: out.tokens.len(),
-                max: MAX_TOKENS_PER_BOX,
-            });
+        let out_tokens = merge_restructure_tokens(&out.tokens)?;
+        for (token_id, amount) in &out.tokens {
+            add_token_amount(&mut assigned_tokens, token_id, *amount)?;
         }
+        merged_outputs.push(out_tokens);
 
-        // Merge duplicate token ids within one output
-        let mut out_tokens: HashMap<String, u64> = HashMap::new();
-        for (tid, amt) in &out.tokens {
-            if *amt == 0 {
-                return Err(UtxoManagementError::ZeroSplitAmount);
-            }
-            *out_tokens.entry(tid.clone()).or_insert(0) += *amt;
-        }
-        if out_tokens.len() > MAX_TOKENS_PER_BOX {
-            return Err(UtxoManagementError::TooManyTokenTypes {
-                count: out_tokens.len(),
-                max: MAX_TOKENS_PER_BOX,
-            });
-        }
-
-        for (tid, amt) in out_tokens {
-            *assigned_tokens.entry(tid).or_insert(0) += amt;
-        }
-
-        allocated_erg = allocated_erg.checked_add(out.value).ok_or(
-            UtxoManagementError::InsufficientErg {
-                have: total_erg,
-                need: i64::MAX,
-            },
-        )?;
+        allocated_erg =
+            allocated_erg
+                .checked_add(out.value)
+                .ok_or(UtxoManagementError::InsufficientErg {
+                    have: total_erg,
+                    need: i64::MAX,
+                })?;
     }
 
     for (tid, assigned) in &assigned_tokens {
@@ -620,16 +751,7 @@ pub fn build_restructure_tx(
 
     let mut tx_outputs = Vec::with_capacity(outputs.len() + 3);
 
-    for out in outputs {
-        let mut merged: HashMap<String, u64> = HashMap::new();
-        for (tid, amt) in &out.tokens {
-            *merged.entry(tid.clone()).or_insert(0) += *amt;
-        }
-        let assets: Vec<Eip12Asset> = merged
-            .into_iter()
-            .map(|(id, amt)| Eip12Asset::new(id, amt as i64))
-            .collect();
-
+    for (out, assets) in outputs.iter().zip(merged_outputs) {
         tx_outputs.push(Eip12Output {
             value: out.value.to_string(),
             ergo_tree: user_ergo_tree.to_string(),
@@ -641,10 +763,11 @@ pub fn build_restructure_tx(
 
     let has_change = need_change;
     if has_change {
-        let change_assets: Vec<Eip12Asset> = remaining_tokens
+        let mut change_assets: Vec<Eip12Asset> = remaining_tokens
             .into_iter()
             .map(|(id, amt)| Eip12Asset::new(id, amt as i64))
             .collect();
+        change_assets.sort_by(|left, right| left.token_id.cmp(&right.token_id));
         tx_outputs.push(Eip12Output {
             value: change_erg.to_string(),
             ergo_tree: user_ergo_tree.to_string(),
@@ -652,6 +775,22 @@ pub fn build_restructure_tx(
             creation_height: current_height,
             additional_registers: HashMap::new(),
         });
+    }
+
+    for (index, output) in tx_outputs.iter().enumerate() {
+        let min = minimum_restructure_output_value(output, index)?;
+        let value = if index < outputs.len() {
+            outputs[index].value
+        } else {
+            change_erg
+        };
+        if value < min {
+            return Err(if index < outputs.len() {
+                UtxoManagementError::BelowMinBoxValue { value, min }
+            } else {
+                UtxoManagementError::ChangeBelowMin { change: value, min }
+            });
+        }
     }
 
     append_dev_fee_output(&mut tx_outputs, &fee_cfg, current_height)
@@ -1144,6 +1283,69 @@ mod tests {
     }
 
     #[test]
+    fn test_restructure_accepts_inputs_from_verified_wallet_addresses() {
+        const SECOND_TREE: &str =
+            "0008cd0379be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        let mut funding = mock_input("funding", 10_000_000, vec![]);
+        funding.ergo_tree = SECOND_TREE.to_string();
+        let inputs = vec![mock_input("source", 39_960, vec![(TOKEN_A, 1)]), funding];
+        let outputs = vec![RestructureOutputSpec {
+            value: MIN_BOX_VALUE,
+            tokens: vec![(TOKEN_A.to_string(), 1)],
+        }];
+        assert!(matches!(
+            build_restructure_tx(&inputs, &outputs, USER_TREE, 50000),
+            Err(UtxoManagementError::InputNotOwned { .. })
+        ));
+        let result = build_restructure_tx_with_owned_trees(
+            &inputs,
+            &outputs,
+            USER_TREE,
+            &[USER_TREE, SECOND_TREE],
+            50000,
+        )
+        .unwrap();
+        assert_eq!(result.summary.input_count, 2);
+        assert_eq!(result.unsigned_tx.inputs[1].ergo_tree, SECOND_TREE);
+        assert_eq!(result.unsigned_tx.outputs[0].ergo_tree, USER_TREE);
+        assert_eq!(result.unsigned_tx.outputs[1].ergo_tree, USER_TREE);
+        assert_eq!(result.unsigned_tx.outputs[0].assets[0].amount, "1");
+        assert_eq!(result.summary.total_erg_in, 10_039_960);
+    }
+
+    #[test]
+    fn test_restructure_rejects_foreign_input_or_output_with_wallet_addresses() {
+        const FOREIGN_TREE: &str =
+            "0008cd0379be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        let mut input = mock_input("source", 10_000_000, vec![]);
+        let outputs = vec![RestructureOutputSpec {
+            value: MIN_BOX_VALUE,
+            tokens: vec![],
+        }];
+        assert!(matches!(
+            build_restructure_tx_with_owned_trees(
+                &[input.clone()],
+                &outputs,
+                FOREIGN_TREE,
+                &[USER_TREE],
+                50000
+            ),
+            Err(UtxoManagementError::OutputNotOwned)
+        ));
+        input.ergo_tree = FOREIGN_TREE.to_string();
+        assert!(matches!(
+            build_restructure_tx_with_owned_trees(
+                &[input],
+                &outputs,
+                USER_TREE,
+                &[USER_TREE],
+                50000
+            ),
+            Err(UtxoManagementError::InputNotOwned { .. })
+        ));
+    }
+
+    #[test]
     fn test_restructure_token_over_alloc() {
         let inputs = vec![mock_input("box1", 5_000_000_000, vec![(TOKEN_A, 10)])];
         let outs = vec![RestructureOutputSpec {
@@ -1159,7 +1361,11 @@ mod tests {
 
     #[test]
     fn test_restructure_unassigned_tokens_need_change_erg() {
-        let inputs = vec![mock_input("box1", TX_FEE + MIN_BOX_VALUE, vec![(TOKEN_A, 10)])];
+        let inputs = vec![mock_input(
+            "box1",
+            TX_FEE + MIN_BOX_VALUE,
+            vec![(TOKEN_A, 10)],
+        )];
         let outs = vec![RestructureOutputSpec {
             value: MIN_BOX_VALUE,
             tokens: vec![],
@@ -1204,6 +1410,212 @@ mod tests {
         // change has no leftover tokens
         let change = &result.unsigned_tx.outputs[2];
         assert!(change.assets.is_empty());
+    }
+
+    #[test]
+    fn test_restructure_isolates_nft_keys_with_extra_erg_funding() {
+        const KEY_A: &str = "12fb8192304383f32a5eb880b3e32536036e9ef9150137555ebdde25d03943d0";
+        const KEY_B: &str = "cccc000000000000000000000000000000000000000000000000000000000000";
+        const OTHER_NFT: &str = "dddd000000000000000000000000000000000000000000000000000000000000";
+        let mut mixed = mock_input(
+            "mixed",
+            39_960,
+            vec![(TOKEN_A, 1_234), (KEY_A, 1), (OTHER_NFT, 1), (KEY_B, 1)],
+        );
+        mixed
+            .additional_registers
+            .insert("R4".to_string(), "0e00".to_string());
+        let inputs = vec![
+            mixed,
+            mock_input("funding", 10_000_000, vec![(TOKEN_B, 999)]),
+        ];
+        let outs = vec![
+            RestructureOutputSpec {
+                value: MIN_BOX_VALUE,
+                tokens: vec![(KEY_A.to_string(), 1)],
+            },
+            RestructureOutputSpec {
+                value: MIN_BOX_VALUE,
+                tokens: vec![(KEY_B.to_string(), 1)],
+            },
+        ];
+        assert!(matches!(
+            build_restructure_tx(&inputs[..1], &outs, USER_TREE, 50000),
+            Err(UtxoManagementError::InsufficientErg { .. })
+        ));
+
+        let result = build_restructure_tx(&inputs, &outs, USER_TREE, 50000).unwrap();
+        assert_eq!(result.summary.input_count, 2);
+        assert_eq!(result.summary.output_count, 3);
+        assert_eq!(result.summary.citadel_fee_nano, 0);
+        assert_eq!(
+            result.unsigned_tx.inputs[0].additional_registers["R4"],
+            "0e00"
+        );
+        for (output, key) in result.unsigned_tx.outputs.iter().zip([KEY_A, KEY_B]) {
+            assert_eq!(output.ergo_tree, USER_TREE);
+            assert_eq!(output.value, MIN_BOX_VALUE.to_string());
+            assert_eq!(output.assets.len(), 1);
+            assert_eq!(output.assets[0].token_id, key);
+            assert_eq!(output.assets[0].amount, "1");
+        }
+        let change = &result.unsigned_tx.outputs[2];
+        assert_eq!(change.assets.len(), 3);
+        let remaining: HashMap<_, _> = change
+            .assets
+            .iter()
+            .map(|asset| (asset.token_id.as_str(), asset.amount.as_str()))
+            .collect();
+        assert_eq!(remaining[OTHER_NFT], "1");
+        assert_eq!(remaining[TOKEN_A], "1234");
+        assert_eq!(remaining[TOKEN_B], "999");
+        let erg_out: i64 = result
+            .unsigned_tx
+            .outputs
+            .iter()
+            .map(|output| output.value.parse::<i64>().unwrap())
+            .sum();
+        assert_eq!(erg_out, 10_039_960);
+        let mut input_tokens = HashMap::new();
+        let mut output_tokens = HashMap::new();
+        for asset in inputs.iter().flat_map(|input| &input.assets) {
+            *input_tokens.entry(asset.token_id.clone()).or_insert(0_u64) +=
+                asset.amount.parse::<u64>().unwrap();
+        }
+        for asset in result
+            .unsigned_tx
+            .outputs
+            .iter()
+            .flat_map(|output| &output.assets)
+        {
+            *output_tokens.entry(asset.token_id.clone()).or_insert(0_u64) +=
+                asset.amount.parse::<u64>().unwrap();
+        }
+        assert_eq!(input_tokens, output_tokens);
+    }
+
+    #[test]
+    fn test_restructure_preserves_requested_first_token_when_merging_duplicates() {
+        let inputs = vec![mock_input(
+            "box1",
+            10_000_000,
+            vec![(TOKEN_A, 10), (TOKEN_B, 10)],
+        )];
+        let outs = vec![RestructureOutputSpec {
+            value: MIN_BOX_VALUE,
+            tokens: vec![
+                (TOKEN_B.to_string(), 1),
+                (TOKEN_A.to_string(), 2),
+                (TOKEN_B.to_string(), 3),
+            ],
+        }];
+        let result = build_restructure_tx(&inputs, &outs, USER_TREE, 50000).unwrap();
+        let assigned = &result.unsigned_tx.outputs[0].assets;
+        assert_eq!(assigned[0].token_id, TOKEN_B);
+        assert_eq!(assigned[0].amount, "4");
+        assert_eq!(assigned[1].token_id, TOKEN_A);
+        assert_eq!(assigned[1].amount, "2");
+    }
+
+    #[test]
+    fn test_restructure_rejects_duplicate_and_invalid_inputs() {
+        let input = mock_input("box1", 10_000_000, vec![(TOKEN_A, 1)]);
+        let outs = vec![RestructureOutputSpec {
+            value: MIN_BOX_VALUE,
+            tokens: vec![],
+        }];
+        assert!(matches!(
+            build_restructure_tx(&[input.clone(), input.clone()], &outs, USER_TREE, 50000),
+            Err(UtxoManagementError::DuplicateInput { .. })
+        ));
+        let mut invalid = input.clone();
+        invalid.value = "invalid".to_string();
+        assert!(matches!(
+            build_restructure_tx(&[invalid], &outs, USER_TREE, 50000),
+            Err(UtxoManagementError::InvalidInputValue { .. })
+        ));
+        let mut invalid = input;
+        invalid.assets[0].amount = u64::MAX.to_string();
+        assert!(matches!(
+            build_restructure_tx(&[invalid], &outs, USER_TREE, 50000),
+            Err(UtxoManagementError::InvalidTokenAmount { .. })
+        ));
+    }
+
+    #[test]
+    fn test_restructure_rejects_amount_overflow() {
+        let inputs = vec![
+            mock_input("box1", i64::MAX, vec![]),
+            mock_input("box2", MIN_BOX_VALUE, vec![]),
+        ];
+        let outs = vec![RestructureOutputSpec {
+            value: MIN_BOX_VALUE,
+            tokens: vec![],
+        }];
+        assert!(matches!(
+            build_restructure_tx(&inputs, &outs, USER_TREE, 50000),
+            Err(UtxoManagementError::AmountOverflow)
+        ));
+        let inputs = vec![mock_input("box1", 10_000_000, vec![(TOKEN_A, i64::MAX)])];
+        let outs = vec![RestructureOutputSpec {
+            value: MIN_BOX_VALUE,
+            tokens: vec![
+                (TOKEN_A.to_string(), i64::MAX as u64),
+                (TOKEN_A.to_string(), 1),
+            ],
+        }];
+        assert!(matches!(
+            build_restructure_tx(&inputs, &outs, USER_TREE, 50000),
+            Err(UtxoManagementError::AmountOverflow)
+        ));
+    }
+
+    #[cfg(feature = "ergo-lib")]
+    #[test]
+    fn test_restructure_token_heavy_change_requires_size_based_minimum() {
+        let mut input = mock_input("box1", TX_FEE + 2 * MIN_BOX_VALUE, vec![]);
+        input.assets = (0..100)
+            .map(|index| Eip12Asset::new(format!("{index:064x}"), 1))
+            .collect();
+        let outs = vec![RestructureOutputSpec {
+            value: MIN_BOX_VALUE,
+            tokens: vec![],
+        }];
+        let error = build_restructure_tx(&[input.clone()], &outs, USER_TREE, 50000).unwrap_err();
+        let min = match error {
+            UtxoManagementError::ChangeBelowMin {
+                change: MIN_BOX_VALUE,
+                min,
+            } => min,
+            error => panic!("Expected size-based minimum, got {error:?}"),
+        };
+        assert!(min > MIN_BOX_VALUE);
+        input.value = (TX_FEE + MIN_BOX_VALUE + min).to_string();
+        let result = build_restructure_tx(&[input], &outs, USER_TREE, 50000).unwrap();
+        assert_eq!(result.summary.change_erg, min);
+        assert_eq!(result.unsigned_tx.outputs[1].assets.len(), 100);
+    }
+
+    #[cfg(feature = "ergo-lib")]
+    #[test]
+    fn test_restructure_rejects_oversized_token_change() {
+        let inputs = (0..2)
+            .map(|box_index| {
+                let mut input = mock_input(&format!("box{box_index}"), 10_000_000, vec![]);
+                input.assets = (box_index * 50..(box_index + 1) * 50)
+                    .map(|index| Eip12Asset::new(format!("{index:064x}"), i64::MAX))
+                    .collect();
+                input
+            })
+            .collect::<Vec<_>>();
+        let outs = vec![RestructureOutputSpec {
+            value: MIN_BOX_VALUE,
+            tokens: vec![],
+        }];
+        assert!(matches!(
+            build_restructure_tx(&inputs, &outs, USER_TREE, 50000),
+            Err(UtxoManagementError::OutputTooLarge { max: 4096, .. })
+        ));
     }
 
     #[test]

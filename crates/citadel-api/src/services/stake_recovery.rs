@@ -5,9 +5,9 @@ use ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox;
 use serde::Serialize;
 use stake_recovery::{
     build_paideia_executor_tx, build_paideia_proxy_tx, build_paideia_refund_tx,
-    build_recovery_tx_eip12, discover_recoverable_stakes, fetch_stake_box_by_key,
-    fetch_stake_state, find_stake_box_by_key, parse_stake_box, RecoverableStake, RecoveryMechanism,
-    RecoveryScan, PAIDEIA, PAIDEIA_PROXY_ERGO_TREE,
+    build_recovery_tx_eip12, discover_pending_paideia_proxies, discover_recoverable_stakes,
+    fetch_stake_box_by_key, fetch_stake_state, find_stake_box_by_key, parse_stake_box,
+    RecoverableStake, RecoveryMechanism, RecoveryScan, PAIDEIA, PAIDEIA_PROXY_ERGO_TREE,
 };
 
 use super::error::{IntoServiceError, ServiceResult};
@@ -57,14 +57,14 @@ pub async fn build_recovery_tx(
     let stake = parse_stake_box(&stake_ergo_box, cfg).into_service()?;
 
     // Dispatch on the pool's recovery mechanism. Paideia is redeemed via a proxy box
-    // (step 1 of 2) rather than the Ergopad/EGIO direct unstake; the two tx shapes are
+    // (step 1 of 2) rather than the Ergopad/EGIO/NETA direct unstake; the two tx shapes are
     // not interchangeable.
     match cfg.mechanism {
-        RecoveryMechanism::Direct => {
+        RecoveryMechanism::Direct | RecoveryMechanism::NetaDirect => {
             let (state_ergo_box, state_snapshot) =
                 fetch_stake_state(&client, cfg).await.into_service()?;
-            let state_box = ergo_box_to_eip12(&client, &state_ergo_box).await?;
-            let stake_box = ergo_box_to_eip12(&client, &stake_ergo_box).await?;
+            let state_box = ergo_box_to_eip12(&state_ergo_box);
+            let stake_box = ergo_box_to_eip12(&stake_ergo_box);
             let user_ergo_tree = recipient_ergo_tree_for_key(&user_utxos, &stake.stake_key_id)?;
 
             build_recovery_tx_eip12(
@@ -111,18 +111,14 @@ fn recipient_ergo_tree_for_key(
         .ok_or_else(|| format!("Stake key {} not found in provided utxos", stake_key_id))
 }
 
-async fn ergo_box_to_eip12(
-    client: &ergo_node_client::NodeClient,
-    ergo_box: &ErgoBox,
-) -> ServiceResult<ergo_tx::Eip12InputBox> {
-    let box_id = hex::encode(ergo_box.box_id().as_ref());
-    let (tx_id, index) = client
-        .get_box_creation_info(&box_id)
-        .await
-        .map_err(|e| format!("Failed to fetch box context for {}: {}", box_id, e))?;
-    Ok(ergo_tx::Eip12InputBox::from_ergo_box(
-        ergo_box, tx_id, index,
-    ))
+// ErgoBox already contains its creation transaction and output index, including
+// boxes created in the mempool. A confirmed-only index lookup breaks 0-conf use.
+fn ergo_box_to_eip12(ergo_box: &ErgoBox) -> ergo_tx::Eip12InputBox {
+    ergo_tx::Eip12InputBox::from_ergo_box(
+        ergo_box,
+        ergo_box.transaction_id.to_string(),
+        ergo_box.index,
+    )
 }
 
 /// Outcome of a `POST /transactions/check` dry-run for one leg of the Paideia flow.
@@ -145,6 +141,81 @@ pub struct PaideiaProxyCheck {
     pub executor: DryRunResult,
     /// The refund path — returns the key + ERG to the recipient if the unstake can't run.
     pub refund: DryRunResult,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingPaideiaRecovery {
+    pub proxy_box_id: String,
+    pub creation_tx_id: String,
+    pub stake_key_id: String,
+    pub recipient_address: String,
+    pub reward_amount_display: String,
+    pub confirmed: bool,
+    pub creation_height: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingPaideiaScan {
+    pub recoveries: Vec<PendingPaideiaRecovery>,
+    pub boxes_scanned: u64,
+    pub pages_fetched: u64,
+    pub hit_page_limit: bool,
+}
+
+/// Find all outstanding step-one proxies belonging to the connected wallet,
+/// including proxies created in old transactions or in the node's mempool.
+pub async fn scan_pending_paideia_recoveries(
+    state: &AppState,
+) -> ServiceResult<PendingPaideiaScan> {
+    let wallet = state
+        .wallet()
+        .await
+        .ok_or_else(|| "Connect a wallet to find unfinished Paideia recoveries".to_string())?;
+    let recipients: Vec<(String, String)> = wallet
+        .addresses
+        .iter()
+        .map(|address| {
+            ergo_node_client::address_to_ergo_tree(address)
+                .map(|tree| (tree, address.clone()))
+                .ok_or_else(|| format!("Cannot read wallet address {address}"))
+        })
+        .collect::<ServiceResult<_>>()?;
+    let trees: Vec<String> = recipients.iter().map(|(tree, _)| tree.clone()).collect();
+    let client = state.require_node_client().await?;
+    let scan = discover_pending_paideia_proxies(&client, &trees)
+        .await
+        .into_service()?;
+    let recoveries = scan
+        .candidates
+        .into_iter()
+        .map(|candidate| {
+            let b = candidate.proxy_box;
+            let amount = candidate.reward_amount_raw;
+            Ok(PendingPaideiaRecovery {
+                proxy_box_id: b.box_id().to_string(),
+                creation_tx_id: b.transaction_id.to_string(),
+                stake_key_id: candidate.stake_key_id,
+                recipient_address: recipients
+                    .iter()
+                    .find(|(tree, _)| tree == &candidate.recipient_ergo_tree)
+                    .map(|(_, address)| address.clone())
+                    .ok_or_else(|| {
+                        "Proxy recipient does not belong to the connected wallet".to_string()
+                    })?,
+                reward_amount_display: format!("{}.{:04}", amount / 10_000, amount % 10_000),
+                confirmed: candidate.confirmed,
+                creation_height: b.creation_height,
+            })
+        })
+        .collect::<ServiceResult<Vec<_>>>()?;
+    Ok(PendingPaideiaScan {
+        recoveries,
+        boxes_scanned: scan.boxes_scanned,
+        pages_fetched: scan.pages_fetched,
+        hit_page_limit: scan.hit_page_limit,
+    })
 }
 
 /// Convert a built (empty-proof) EIP-12 tx into the node's `ErgoTransaction` JSON for
@@ -192,13 +263,13 @@ fn eip12_tx_to_node_json(tx: &ergo_tx::Eip12UnsignedTx) -> ServiceResult<serde_j
     }))
 }
 
-/// Given the ID of a confirmed Paideia unstake proxy box (created by step 1), rebuild
+/// Given a live Paideia unstake proxy box (created by step 1), rebuild
 /// both permissionless spend paths and assemble them: the executor (reward payout) tx
 /// and the refund tx. Returns the two node-format txs plus the resolved metadata.
 async fn assemble_paideia_proxy_txs(
     client: &ergo_node_client::NodeClient,
     proxy_box_id: &str,
-) -> ServiceResult<(serde_json::Value, serde_json::Value, String)> {
+) -> ServiceResult<(ServiceResult<serde_json::Value>, serde_json::Value, String)> {
     let proxy_box = client
         .get_eip12_box_by_id(proxy_box_id)
         .await
@@ -224,6 +295,19 @@ async fn assemble_paideia_proxy_txs(
     let refund_tx = build_paideia_refund_tx(&proxy_box, current_height).into_service()?;
     let refund_json = eip12_tx_to_node_json(&refund_tx)?;
 
+    // A missing or changed stake can invalidate payout while the key refund is
+    // still available. Keep its assembly result independent of the refund.
+    let executor_json =
+        assemble_paideia_executor_tx(client, &proxy_box, &stake_key_id, current_height).await;
+    Ok((executor_json, refund_json, proxy_box.box_id.clone()))
+}
+
+async fn assemble_paideia_executor_tx(
+    client: &ergo_node_client::NodeClient,
+    proxy_box: &ergo_tx::Eip12InputBox,
+    stake_key_id: &str,
+    current_height: i32,
+) -> ServiceResult<serde_json::Value> {
     // Executor needs the live StakeStateBox and the matching StakeBox. Query the
     // Paideia StakeBox directly rather than the generic multi-protocol
     // `find_stake_box_by_key` — this key came out of a real Paideia proxy box, so
@@ -233,12 +317,12 @@ async fn assemble_paideia_proxy_txs(
     // wrong protocol's `parse_stake_box`.
     let (state_ergo_box, state_snapshot) =
         fetch_stake_state(client, &PAIDEIA).await.into_service()?;
-    let stake_ergo_box = fetch_stake_box_by_key(client, &PAIDEIA, &stake_key_id)
+    let stake_ergo_box = fetch_stake_box_by_key(client, &PAIDEIA, stake_key_id)
         .await
         .into_service()?;
     let stake = parse_stake_box(&stake_ergo_box, &PAIDEIA).into_service()?;
-    let state_box = ergo_box_to_eip12(client, &state_ergo_box).await?;
-    let stake_box = ergo_box_to_eip12(client, &stake_ergo_box).await?;
+    let state_box = ergo_box_to_eip12(&state_ergo_box);
+    let stake_box = ergo_box_to_eip12(&stake_ergo_box);
 
     // Pay the executor tip (OUTPUTS[3], script-free) to the proxy's own R5 recipient so
     // the key-holder collects it when they self-execute the payout.
@@ -247,14 +331,12 @@ async fn assemble_paideia_proxy_txs(
         &state_snapshot,
         &stake_box,
         &stake,
-        &proxy_box,
-        &recipient_tree_from_proxy(&proxy_box)?,
+        proxy_box,
+        &recipient_tree_from_proxy(proxy_box)?,
         current_height,
     )
     .into_service()?;
-    let executor_json = eip12_tx_to_node_json(&executor_tx)?;
-
-    Ok((executor_json, refund_json, proxy_box.box_id.clone()))
+    eip12_tx_to_node_json(&executor_tx)
 }
 
 /// Read the payout recipient's ErgoTree (hex) from a proxy box's R5 register.
@@ -277,15 +359,23 @@ fn recipient_tree_from_proxy(proxy_box: &ergo_tx::Eip12InputBox) -> ServiceResul
     }
 }
 
-/// Resolve the unstake proxy box (OUTPUT[0]) created by a confirmed step-1 tx. Returns
-/// the proxy box id, or an error while the tx is still unconfirmed / not the proxy shape.
-/// The proxy must be confirmed (in the UTXO set) before its spend paths can be checked.
+/// Resolve the unstake proxy box (OUTPUT[0]) created by step one. Unconfirmed
+/// transactions are available as soon as they reach the connected node's mempool.
 pub async fn paideia_proxy_box_id(state: &AppState, tx_id: &str) -> ServiceResult<String> {
     let client = state.require_node_client().await?;
-    let tx = client
-        .get_transaction_by_id(tx_id)
-        .await
-        .map_err(|e| format!("Step-1 tx {} not confirmed yet: {}", tx_id, e))?;
+    let tx = match client.get_unconfirmed_transaction_by_id(tx_id).await {
+        Ok(tx)
+            if tx
+                .get("outputs")
+                .and_then(|outputs| outputs.as_array())
+                .is_some() =>
+        {
+            tx
+        }
+        _ => client.get_transaction_by_id(tx_id).await.map_err(|e| {
+            format!("Step-one transaction {tx_id} is not available on the connected node yet: {e}")
+        })?,
+    };
     let out0 = tx
         .get("outputs")
         .and_then(|o| o.as_array())
@@ -301,9 +391,9 @@ pub async fn paideia_proxy_box_id(state: &AppState, tx_id: &str) -> ServiceResul
         .ok_or_else(|| "Proxy output missing boxId".to_string())
 }
 
-/// Dry-run BOTH permissionless spend paths of a confirmed Paideia proxy box through the
+/// Dry-run BOTH permissionless spend paths of a live Paideia proxy box through the
 /// node's `/transactions/check` without broadcasting. This is the execution-time safety
-/// gate: after step 1 confirms, the UI shows whether the reward payout and the refund
+/// gate: once step one is in the node's mempool, the UI shows whether the payout and refund
 /// both validate against the *exact* proxy box step 1 created, before the user commits to
 /// either. Neither tx needs a signature.
 pub async fn check_paideia_proxy(
@@ -314,7 +404,14 @@ pub async fn check_paideia_proxy(
     let (executor_json, refund_json, box_id) =
         assemble_paideia_proxy_txs(&client, proxy_box_id).await?;
 
-    let executor = match client.check_transaction(&executor_json).await {
+    let executor_check = match executor_json {
+        Ok(tx) => client
+            .check_transaction(&tx)
+            .await
+            .map_err(|e| e.to_string()),
+        Err(error) => Err(error),
+    };
+    let executor = match executor_check {
         Ok(tx_id) => DryRunResult {
             valid: true,
             message: tx_id,
@@ -357,7 +454,7 @@ pub async fn submit_paideia_proxy_tx(
         assemble_paideia_proxy_txs(&client, proxy_box_id).await?;
 
     let tx_json = match which {
-        "executor" => executor_json,
+        "executor" => executor_json?,
         "refund" => refund_json,
         other => return Err(format!("Unknown proxy path '{}'", other)),
     };

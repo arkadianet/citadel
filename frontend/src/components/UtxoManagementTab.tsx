@@ -17,17 +17,18 @@ import { getCachedTokenInfo } from '../api/tokenCache'
 import {
   TX_FEE_NANO,
   MIN_BOX_VALUE_NANO,
-  DEV_FEE_NANO,
   WALLET_TX_FEES_NANO,
   MAX_RESTRUCTURE_OUTPUTS,
 } from '../constants'
 import { formatErg, formatTokenAmount, truncateAddress } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
+import { notifyWalletTransactionSubmitted } from '../utils/walletRefresh'
 import { Tabs, EmptyState } from './ui'
 import {
   UtxoBoxList,
   UtxoConsolidatePanel,
   UtxoSplitPanel,
+  UtxoTokenIsolationPanel,
   DUST_NANO,
   LARGE_NANO,
   ergNano,
@@ -37,6 +38,8 @@ import {
   matchesFilter,
 } from './utxo'
 import type { UtxoBox, SplitType, BoardFilter, SortKey } from './utxo'
+import { collectIsolationTokens, displayRawAmount, findIsolationFunding, planTokenIsolation } from './utxo/tokenIsolation'
+import type { IsolationAllocation } from './utxo/tokenIsolation'
 import './UtxoManagementTab.css'
 
 interface UtxoManagementTabProps {
@@ -53,7 +56,7 @@ interface UtxoManagementTabProps {
   embedded?: boolean
 }
 
-type SubTab = 'consolidate' | 'split' | 'restructure'
+type SubTab = 'consolidate' | 'split' | 'restructure' | 'separate'
 type Step = 'select' | 'confirm' | 'building' | 'signing' | 'success' | 'error'
 type SignMethod = 'choose' | 'mobile' | 'nautilus'
 interface RestructureTokenAssign {
@@ -152,6 +155,7 @@ export function UtxoManagementTab({
   const [splitTokenId, setSplitTokenId] = useState('')
   const [splitErgPerBox, setSplitErgPerBox] = useState('0.001')
   const [splitSummary, setSplitSummary] = useState<SplitBuildResponse | null>(null)
+  const [isolationAllocations, setIsolationAllocations] = useState<IsolationAllocation[]>([])
 
   const [restructureSlots, setRestructureSlots] = useState<RestructureSlot[]>(() => [
     newRestructureSlot(),
@@ -168,8 +172,24 @@ export function UtxoManagementTab({
 
   const [resolvedNames, setResolvedNames] = useState<Map<string, string>>(new Map())
 
-  const tokens = walletBalance?.tokens ?? []
+  const tokens = useMemo(() => walletBalance?.tokens ?? [], [walletBalance?.tokens])
   const rootClass = embedded ? 'utxo-tab utxo-tab--embedded' : 'utxo-tab'
+
+  const isolationInputs = useMemo(() => utxos.filter(u => selectedBoxIds.has(u.boxId)), [utxos, selectedBoxIds])
+  const isolationTotalNano = isolationInputs.reduce((sum, box) => sum + ergNano(box), 0)
+  const isolationTokens = useMemo(() => collectIsolationTokens(isolationInputs, tokens), [isolationInputs, tokens])
+  const isolationPlan = useMemo(() => planTokenIsolation(
+    isolationTokens, isolationAllocations, isolationTotalNano,
+    WALLET_TX_FEES_NANO, MIN_BOX_VALUE_NANO, MAX_RESTRUCTURE_OUTPUTS,
+  ), [isolationTokens, isolationAllocations, isolationTotalNano])
+  const isolationFunding = findIsolationFunding(utxos, selectedBoxIds, isolationPlan.fundingNeededNano, isolationPlan.exactFundingNano)
+
+  useEffect(() => {
+    setIsolationAllocations(prev => {
+      const remaining = prev.filter(a => isolationTokens.some(t => t.tokenId === a.tokenId))
+      return remaining.length === prev.length ? prev : remaining
+    })
+  }, [isolationTokens])
 
   useEffect(() => {
     const unknown = tokens.filter(t => !t.name)
@@ -204,8 +224,11 @@ export function UtxoManagementTab({
     try {
       const raw = await invoke<UtxoBox[]>('get_user_utxos')
       setUtxos(raw)
+      setError(null)
     } catch (e) {
-      console.error('Failed to fetch UTXOs:', e)
+      setUtxos([])
+      setSelectedBoxIds(new Set())
+      setError(`Could not load current wallet boxes: ${String(e)}`)
     } finally {
       setLoadingUtxos(false)
     }
@@ -232,6 +255,7 @@ export function UtxoManagementTab({
         if (status.status === 'submitted' && status.tx_id) {
           setTxId(status.tx_id)
           setStep('success')
+          notifyWalletTransactionSubmitted()
         } else if (status.status === 'failed' || status.status === 'expired') {
           setError(status.error || 'Transaction failed')
           setStep('error')
@@ -882,7 +906,8 @@ export function UtxoManagementTab({
 
       const nodeStatus = await invoke<{ chain_height: number }>('get_node_status')
 
-      const outputs = restructureSlots.map(slot => {
+      if (subTab === 'separate' && isolationPlan.error) throw new Error(isolationPlan.error)
+      const outputs = subTab === 'separate' ? isolationPlan.outputs : restructureSlots.map(slot => {
         const parsed = parseFloat(slot.erg.replace(/,/g, ''))
         const value = Math.floor(parsed * 1e9)
         const slotTokens = slot.tokens.map(t => {
@@ -904,7 +929,9 @@ export function UtxoManagementTab({
       )
       setRestructureSummary(result)
 
-      const message = `Restructure ${selectedBoxes.length} → ${result.outputCount} boxes`
+      const message = subTab === 'separate'
+        ? `Separate ${outputs.length} token types into individual UTXOs`
+        : `Restructure ${selectedBoxes.length} → ${result.outputCount} boxes`
       const signResult = await startUtxoMgmtSign(result.unsignedTx, message)
 
       setRequestId(signResult.request_id)
@@ -939,6 +966,7 @@ export function UtxoManagementTab({
     setSignMethod('choose')
     setConsolidateSummary(null)
     setSplitSummary(null)
+    setIsolationAllocations([])
     setRestructureSummary(null)
     setSelectedBoxIds(new Set())
     setSplitAmount('')
@@ -968,7 +996,7 @@ export function UtxoManagementTab({
         </div>
         <div>
           <h1 className="utxo-title">UTXO Management</h1>
-          <p className="utxo-subtitle">Consolidate, split, or restructure boxes for better UTXO hygiene</p>
+          <p className="utxo-subtitle">Consolidate, split, and separate tokens into individual boxes</p>
         </div>
       </div>
     </header>
@@ -1168,7 +1196,7 @@ export function UtxoManagementTab({
 
   if (step === 'success') {
     const action =
-      subTab === 'consolidate' ? 'Consolidated' : subTab === 'split' ? 'Split' : 'Restructured'
+      subTab === 'consolidate' ? 'Consolidated' : subTab === 'split' ? 'Split' : subTab === 'separate' ? 'Separated' : 'Restructured'
     return (
       <div className={rootClass}>
         <div className="utxo-centered-card">
@@ -1254,11 +1282,6 @@ export function UtxoManagementTab({
                     <span>Miner Fee</span>
                     <span>{formatErg(TX_FEE_NANO)} ERG</span>
                   </div>
-                  <div className="utxo-confirm-row">
-                    <span>Citadel fee</span>
-                    <span>{formatErg(DEV_FEE_NANO)} ERG</span>
-                  </div>
-                  <p className="utxo-muted">Includes {formatErg(DEV_FEE_NANO)} ERG Citadel fee</p>
                   <div className="utxo-confirm-row utxo-highlight-row">
                     <span>Result</span>
                     <span>1 output box</span>
@@ -1285,6 +1308,42 @@ export function UtxoManagementTab({
           </div>
         </div>
       )
+    }
+
+    if (subTab === 'separate') {
+      return <div className={rootClass}>
+        <div className="utxo-header"><h2>Review separate outputs</h2></div>
+        <div className="utxo-centered-card utxo-isolation-review"><div className="card"><div className="card-content">
+          <p className="utxo-isolation-hint">All outputs return to your wallet. Each selected token type is the only token in its box.</p>
+          <div className="utxo-confirm-summary">
+            <div className="utxo-confirm-row"><span>Inputs</span><span>{isolationInputs.length} boxes · {formatErg(isolationTotalNano)} ERG</span></div>
+            <div className="utxo-confirm-row"><span>Miner fee</span><span>{formatErg(TX_FEE_NANO)} ERG</span></div>
+          </div>
+          <ol className="utxo-isolation-output-list">
+            {isolationPlan.outputs.map((output, index) => {
+              const token = isolationTokens.find(t => t.tokenId === output.tokens[0].tokenId)!
+              return <li key={token.tokenId} className="utxo-isolation-token">
+                <strong>Box {index + 1} · {getTokenName(token.tokenId, token.name)}</strong>
+                <code className="utxo-isolation-id mono">{token.tokenId}</code>
+                <span className="mono">{displayRawAmount(output.tokens[0].amount, token.decimals)} tokens · {formatErg(output.value)} ERG</span>
+              </li>
+            })}
+          </ol>
+          {(isolationPlan.changeNano > 0 || isolationPlan.remainingTokens.length > 0) && <div className="utxo-isolation-change">
+            <strong>Change · {formatErg(Math.max(0, isolationPlan.changeNano))} ERG</strong>
+            {isolationPlan.remainingTokens.map(token => <div key={token.tokenId}>
+              <span>{getTokenName(token.tokenId, token.name)} · {displayRawAmount(token.rawAmount, token.decimals)}</span>
+              <code className="utxo-isolation-id mono">{token.tokenId}</code>
+            </div>)}
+          </div>}
+          {isolationPlan.error && <p className="message error">{isolationPlan.error}</p>}
+          <div className="button-group" style={{ marginTop: 'var(--space-md)' }}>
+            <button className="btn btn-secondary" onClick={() => setStep('select')}>Back</button>
+            <button className="btn btn-primary" onClick={handleRestructure}
+              disabled={loading || !!isolationPlan.error}>{loading ? 'Building...' : 'Build & sign'}</button>
+          </div>
+        </div></div></div>
+      </div>
     }
 
     if (subTab === 'restructure') {
@@ -1325,11 +1384,6 @@ export function UtxoManagementTab({
                     <span>Miner Fee</span>
                     <span>{formatErg(TX_FEE_NANO)} ERG</span>
                   </div>
-                  <div className="utxo-confirm-row">
-                    <span>Citadel fee</span>
-                    <span>{formatErg(DEV_FEE_NANO)} ERG</span>
-                  </div>
-                  <p className="utxo-muted">Includes {formatErg(DEV_FEE_NANO)} ERG Citadel fee</p>
                 </div>
 
                 <div className="utxo-info-box" style={{ marginTop: 'var(--space-md)' }}>
@@ -1409,11 +1463,6 @@ export function UtxoManagementTab({
                   <span>Miner Fee</span>
                   <span>{formatErg(TX_FEE_NANO)} ERG</span>
                 </div>
-                <div className="utxo-confirm-row">
-                  <span>Citadel fee</span>
-                  <span>{formatErg(DEV_FEE_NANO)} ERG</span>
-                </div>
-                <p className="utxo-muted">Includes {formatErg(DEV_FEE_NANO)} ERG Citadel fee</p>
               </div>
 
               <div className="button-group" style={{ marginTop: 'var(--space-md)' }}>
@@ -1487,10 +1536,12 @@ export function UtxoManagementTab({
     <div className={rootClass}>
       {pageHeader}
 
+      {error && step === 'select' && utxos.length === 0 && <div className="message error">{error}</div>}
       <Tabs
         tabs={[
           { id: 'consolidate', label: 'Consolidate' },
           { id: 'split', label: 'Split' },
+          { id: 'separate', label: 'Separate tokens' },
           { id: 'restructure', label: 'Restructure' },
         ]}
         activeId={subTab}
@@ -1507,6 +1558,8 @@ export function UtxoManagementTab({
                   ? 'Consolidate UTXOs'
                   : subTab === 'split'
                     ? 'Split UTXO'
+                    : subTab === 'separate'
+                      ? 'Separate tokens & NFTs'
                     : 'Restructure UTXOs'}
               </h2>
               <p className="utxo-page-sub">
@@ -1514,6 +1567,8 @@ export function UtxoManagementTab({
                   ? 'Merge selected boxes into one UTXO to simplify future spends'
                   : subTab === 'split'
                     ? 'Select one box, then choose how to split it'
+                    : subTab === 'separate'
+                      ? 'Select mixed boxes, choose tokens to isolate, and add an ERG input if needed'
                     : 'Select inputs, define output boxes, and assign tokens'}
               </p>
             </div>
@@ -1753,6 +1808,18 @@ export function UtxoManagementTab({
               error={error}
               onPreview={() => setStep('confirm')}
             />
+          ) : subTab === 'separate' ? (
+            <>
+              <UtxoTokenIsolationPanel
+                tokens={isolationTokens} allocations={isolationAllocations} plan={isolationPlan}
+                inputCount={isolationInputs.length} totalNano={isolationTotalNano}
+                canAddFunding={isolationFunding.length > 0} getTokenName={getTokenName}
+                onChange={setIsolationAllocations}
+                onAddFunding={() => setSelectedBoxIds(prev => new Set([...prev, ...isolationFunding]))}
+                onPreview={() => setStep('confirm')}
+              />
+              {error && <div className="message error">{error}</div>}
+            </>
           ) : subTab === 'restructure' ? (
             selectedBoxes.length === 0 ? (
               <div className="utxo-split-empty">
@@ -2089,10 +2156,6 @@ export function UtxoManagementTab({
                     <div className="utxo-setting-row">
                       <span>Miner fee</span>
                       <span className="mono">{formatErg(TX_FEE_NANO)} ERG</span>
-                    </div>
-                    <div className="utxo-setting-row">
-                      <span>Citadel fee</span>
-                      <span className="mono">{formatErg(DEV_FEE_NANO)} ERG</span>
                     </div>
                     <div className="utxo-setting-row">
                       <span>Spendable</span>

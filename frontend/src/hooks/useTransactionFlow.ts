@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import type { TxStatusResponse } from '../api/types'
 import { watchTx } from '../api/notifications'
+import { notifyWalletTransactionSubmitted } from '../utils/walletRefresh'
 
 export type SignMethod = 'choose' | 'nautilus' | 'mobile'
 
@@ -65,6 +66,8 @@ export function useTransactionFlow({ pollStatus, isOpen, onSuccess, onError, wat
         if (!active) return
 
         if (status.status === 'submitted' && status.tx_id) {
+          active = false
+          clearInterval(interval)
           setTxId(status.tx_id)
           setIsSigning(false)
           const wp = watchParamsRef.current
@@ -73,6 +76,7 @@ export function useTransactionFlow({ pollStatus, isOpen, onSuccess, onError, wat
               .catch((e) => console.error('Failed to watch tx:', e))
           }
           onSuccessRef.current?.(status.tx_id)
+          notifyWalletTransactionSubmitted()
         } else if (status.status === 'failed' || status.status === 'expired') {
           setIsSigning(false)
           onErrorRef.current?.(status.error || 'Transaction failed')

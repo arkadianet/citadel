@@ -39,7 +39,15 @@ pub async fn preview_recovery(
     stake_svc::preview_recovery(&state, &stake_key_id).await
 }
 
-/// Resolve the unstake proxy box (OUTPUT[0]) created by a confirmed step-1 tx.
+/// Find unfinished Paideia proxies belonging to the connected wallet.
+#[tauri::command]
+pub async fn scan_pending_paideia_recoveries(
+    state: State<'_, AppState>,
+) -> Result<stake_svc::PendingPaideiaScan, String> {
+    stake_svc::scan_pending_paideia_recoveries(&state).await
+}
+
+/// Resolve the unstake proxy box (OUTPUT[0]) created by a step-one tx.
 #[tauri::command]
 pub async fn paideia_proxy_box_id(
     state: State<'_, AppState>,
@@ -48,7 +56,7 @@ pub async fn paideia_proxy_box_id(
     stake_svc::paideia_proxy_box_id(&state, &tx_id).await
 }
 
-/// Dry-run both permissionless spend paths of a confirmed Paideia proxy box without
+/// Dry-run both permissionless spend paths of a live Paideia proxy box without
 /// broadcasting.
 #[tauri::command]
 pub async fn check_paideia_proxy(

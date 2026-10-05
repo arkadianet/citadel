@@ -1,4 +1,5 @@
 pub mod capabilities;
+mod mempool;
 
 use std::sync::Arc;
 
@@ -6,6 +7,7 @@ use citadel_core::{BlockHeight, NodeConfig, NodeError};
 use ergo_lib::ergotree_ir::chain::address::{AddressEncoder, NetworkPrefix};
 use ergo_lib::ergotree_ir::serialization::SigmaSerializable;
 use ergo_node_interface::NodeInterface;
+use mempool::{BoxFilter, PendingBoxes};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
@@ -138,10 +140,33 @@ impl NodeClient {
             .await
     }
 
-    /// Unspent boxes at an address (extraIndex). Sends a JSON-quoted address body
+    /// Effective boxes at an address, including terminal unconfirmed outputs.
+    /// Offsets and limits refer to the filtered effective set, so spending a
+    /// confirmed box in the mempool cannot shorten a non-final result page.
+    pub async fn unspent_boxes_by_address(
+        &self,
+        address: &str,
+        offset: u64,
+        limit: u64,
+    ) -> Result<Vec<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox>> {
+        let tree = address_to_ergo_tree(address).ok_or_else(|| NodeError::ApiError {
+            message: "Cannot determine the address's ErgoTree to check pending spends".into(),
+        })?;
+        self.effective_unspent_page(
+            "/blockchain/box/unspent/byAddress",
+            Some(address),
+            BoxFilter::ErgoTree(tree),
+            offset,
+            limit,
+        )
+        .await
+    }
+
+    /// Confirmed boxes for callers that already apply their own mempool snapshot.
+    /// Sends a JSON-quoted address body
     /// so strict nodes (ergo-rust-node / Axum) accept the request — bare `9f…`
     /// bodies are accepted by Scala but rejected as `integer 9` elsewhere.
-    pub async fn unspent_boxes_by_address(
+    pub async fn confirmed_unspent_boxes_by_address(
         &self,
         address: &str,
         offset: u64,
@@ -151,31 +176,9 @@ impl NodeClient {
             "/blockchain/box/unspent/byAddress?offset={}&limit={}",
             offset, limit
         );
-        let response =
-            timed_request(self.inner.send_post_req(&endpoint, json_quoted(address))).await?;
-        let text = response.text().await.map_err(|e| NodeError::ApiError {
-            message: format!("Failed to read unspent response: {}", e),
-        })?;
-        if text.is_empty() {
-            return Ok(Vec::new());
-        }
-        let value: serde_json::Value =
-            serde_json::from_str(&text).map_err(|e| NodeError::ApiError {
-                message: format!("Failed to parse unspent response: {}", e),
-            })?;
-        let items = json_array_items(value);
-        let mut boxes = Vec::with_capacity(items.len());
-        for item in items {
-            // Skip indexer false-positives that still carry spentTransactionId.
-            if !item["spentTransactionId"].is_null() {
-                continue;
-            }
-            match serde_json::from_value::<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox>(item) {
-                Ok(b) => boxes.push(b),
-                Err(e) => tracing::debug!("Skipping unparseable unspent box: {}", e),
-            }
-        }
-        Ok(boxes)
+        self.confirmed_unspent_page(&endpoint, Some(address))
+            .await
+            .map(|(boxes, _)| boxes)
     }
 
     /// Unspent boxes matching an ErgoTree hex (extraIndex). JSON-quotes the body
@@ -186,23 +189,38 @@ impl NodeClient {
         offset: u64,
         limit: u64,
     ) -> Result<Vec<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox>> {
-        let endpoint = format!(
-            "/blockchain/box/unspent/byErgoTree?offset={}&limit={}",
-            offset, limit
-        );
-        let response =
-            timed_request(self.inner.send_post_req(&endpoint, json_quoted(ergo_tree))).await?;
+        self.effective_unspent_page(
+            "/blockchain/box/unspent/byErgoTree",
+            Some(ergo_tree),
+            BoxFilter::ErgoTree(ergo_tree.to_string()),
+            offset,
+            limit,
+        )
+        .await
+    }
+
+    async fn confirmed_unspent_page(
+        &self,
+        endpoint: &str,
+        body: Option<&str>,
+    ) -> Result<(Vec<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox>, usize)> {
+        let response = match body {
+            Some(body) => {
+                timed_request(self.inner.send_post_req(endpoint, json_quoted(body))).await?
+            }
+            None => timed_request(self.inner.send_get_req(endpoint)).await?,
+        };
         let status = response.status();
         let text = response.text().await.map_err(|e| NodeError::ApiError {
-            message: format!("Failed to read byErgoTree response: {}", e),
+            message: format!("Failed to read unspent box response: {}", e),
         })?;
         if status.as_u16() == 404 || text.is_empty() {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), 0));
         }
         if !status.is_success() {
             return Err(NodeError::ApiError {
                 message: format!(
-                    "byErgoTree failed ({}): {}",
+                    "Unspent box query failed ({}): {}",
                     status.as_u16(),
                     text.chars().take(200).collect::<String>()
                 ),
@@ -210,9 +228,15 @@ impl NodeClient {
         }
         let value: serde_json::Value =
             serde_json::from_str(&text).map_err(|e| NodeError::ApiError {
-                message: format!("Failed to parse byErgoTree response: {}", e),
+                message: format!("Failed to parse unspent box response: {}", e),
             })?;
+        if !value.is_array() && !value["items"].is_array() {
+            return Err(NodeError::ApiError {
+                message: "Unspent box query returned an invalid response".into(),
+            });
+        }
         let items = json_array_items(value);
+        let page_len = items.len();
         let mut boxes = Vec::with_capacity(items.len());
         for item in items {
             if !item["spentTransactionId"].is_null() {
@@ -220,10 +244,70 @@ impl NodeClient {
             }
             match serde_json::from_value::<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox>(item) {
                 Ok(b) => boxes.push(b),
-                Err(e) => tracing::debug!("Skipping unparseable byErgoTree box: {}", e),
+                Err(e) => tracing::debug!("Skipping unparseable unspent box: {}", e),
             }
         }
-        Ok(boxes)
+        Ok((boxes, page_len))
+    }
+
+    async fn effective_unspent_page(
+        &self,
+        query: &str,
+        body: Option<&str>,
+        filter: BoxFilter,
+        offset: u64,
+        limit: u64,
+    ) -> Result<Vec<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox>> {
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+        let wanted = offset
+            .checked_add(limit)
+            .ok_or_else(|| NodeError::ApiError {
+                message: "Unspent box pagination range is too large".into(),
+            })?;
+        let transactions =
+            self.get_mempool_transactions()
+                .await
+                .map_err(|error| NodeError::ApiError {
+                    message: format!("Cannot check pending protocol transactions: {error}"),
+                })?;
+        let pending = PendingBoxes::from_transactions(&transactions, &filter)?;
+        let mut effective = pending.outputs;
+        let mut seen: std::collections::HashSet<String> = effective
+            .iter()
+            .map(|box_value| box_value.box_id().to_string())
+            .collect();
+        const PAGE_SIZE: u64 = 500;
+        for page in 0..MAX_UTXO_PAGES {
+            if effective.len() as u64 >= wanted {
+                break;
+            }
+            let endpoint = format!(
+                "{query}?offset={}&limit={PAGE_SIZE}",
+                page as u64 * PAGE_SIZE
+            );
+            let (confirmed, raw_len) = self.confirmed_unspent_page(&endpoint, body).await?;
+            for box_value in confirmed {
+                let id = box_value.box_id().to_string();
+                if !pending.spent_ids.contains(&id) && seen.insert(id) {
+                    effective.push(box_value);
+                }
+            }
+            if raw_len < PAGE_SIZE as usize {
+                break;
+            }
+            if page + 1 == MAX_UTXO_PAGES && (effective.len() as u64) < wanted {
+                return Err(NodeError::ApiError {
+                    message: "Unspent box pagination limit reached; narrow the box query".into(),
+                });
+            }
+        }
+        Ok(effective
+            .into_iter()
+            .skip(offset as usize)
+            .take(limit as usize)
+            .collect())
     }
 
     /// Internal: paginated fetch of all unspent boxes at an address, capped by `max_pages`.
@@ -237,7 +321,7 @@ impl NodeClient {
         for page in 0..max_pages {
             let offset = (page as u64) * PAGE_SIZE;
             let boxes = self
-                .unspent_boxes_by_address(address, offset, PAGE_SIZE)
+                .confirmed_unspent_boxes_by_address(address, offset, PAGE_SIZE)
                 .await?;
             let len = boxes.len();
             all.extend(boxes);
@@ -392,7 +476,7 @@ impl NodeClient {
     }
 
     pub async fn get_mempool_transactions(&self) -> Result<Vec<serde_json::Value>> {
-        timed_request(self.inner.mempool_transactions()).await
+        self.fetch_mempool_pages(None).await
     }
 
     /// Raw blockchain box (includes spentTransactionId, unlike UTXO-set lookups).
@@ -466,27 +550,58 @@ impl NodeClient {
         &self,
         ergo_tree_hex: &str,
     ) -> Result<Vec<serde_json::Value>> {
-        let endpoint = "/transactions/unconfirmed/byErgoTree?offset=0&limit=100";
-        let response =
-            timed_request(self.inner.send_post_req(endpoint, json_quoted(ergo_tree_hex))).await?;
+        self.fetch_mempool_pages(Some(ergo_tree_hex)).await
+    }
 
-        let text = response.text().await.map_err(|e| NodeError::ApiError {
-            message: format!("Failed to read mempool response: {}", e),
-        })?;
-
-        if text.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let value: serde_json::Value =
-            serde_json::from_str(&text).map_err(|e| NodeError::ApiError {
-                message: format!("Failed to parse mempool response: {}", e),
+    /// A partial or failed mempool read must not masquerade as an empty pool:
+    /// recovery needs every spend to find the unspent end of a transaction chain.
+    async fn fetch_mempool_pages(
+        &self,
+        ergo_tree_hex: Option<&str>,
+    ) -> Result<Vec<serde_json::Value>> {
+        const PAGE_SIZE: usize = 100;
+        const MAX_PAGES: usize = 100;
+        let mut transactions = Vec::new();
+        for page in 0..MAX_PAGES {
+            let endpoint = format!(
+                "/transactions/unconfirmed{}?offset={}&limit={}",
+                if ergo_tree_hex.is_some() {
+                    "/byErgoTree"
+                } else {
+                    ""
+                },
+                page * PAGE_SIZE,
+                PAGE_SIZE,
+            );
+            let response = match ergo_tree_hex {
+                Some(tree) => {
+                    timed_request(self.inner.send_post_req(&endpoint, json_quoted(tree))).await?
+                }
+                None => timed_request(self.inner.send_get_req(&endpoint)).await?,
+            };
+            let status = response.status();
+            let text = response.text().await.map_err(|e| NodeError::ApiError {
+                message: format!("Failed to read mempool response: {e}"),
             })?;
-
-        match value {
-            serde_json::Value::Array(arr) => Ok(arr),
-            _ => Ok(Vec::new()),
+            if !status.is_success() {
+                return Err(NodeError::ApiError {
+                    message: format!("Mempool query failed ({status}): {text}"),
+                });
+            }
+            let batch: Vec<serde_json::Value> =
+                serde_json::from_str(&text).map_err(|e| NodeError::ApiError {
+                    message: format!("Invalid mempool response: {e}"),
+                })?;
+            let complete = batch.len() < PAGE_SIZE;
+            transactions.extend(batch);
+            if complete {
+                return Ok(transactions);
+            }
         }
+        Err(NodeError::ApiError {
+            message: "Mempool pagination limit reached; retry when fewer transactions are pending"
+                .into(),
+        })
     }
 
     /// Works regardless of extraIndex availability.
@@ -517,17 +632,22 @@ impl NodeClient {
     ) -> Result<Vec<ergo_lib::ergotree_ir::chain::ergo_box::ErgoBox>> {
         match capabilities.capability_tier {
             CapabilityTier::Full | CapabilityTier::IndexLagging => {
-                let ergo_token_id: ergo_lib::ergotree_ir::chain::token::TokenId =
-                    token_id.as_str().parse().map_err(|e| NodeError::ApiError {
+                token_id
+                    .as_str()
+                    .parse::<ergo_lib::ergotree_ir::chain::token::TokenId>()
+                    .map_err(|e| NodeError::ApiError {
                         message: format!("Invalid token ID format: {}", e),
                     })?;
 
-                let boxes = timed_request(self.inner.unspent_boxes_by_token_id(
-                    &ergo_token_id,
-                    0,
-                    limit,
-                ))
-                .await?;
+                let boxes = self
+                    .effective_unspent_page(
+                        &format!("/blockchain/box/unspent/byTokenId/{}", token_id.as_str()),
+                        None,
+                        BoxFilter::TokenId(token_id.as_str().to_string()),
+                        0,
+                        limit,
+                    )
+                    .await?;
 
                 if capabilities.capability_tier == CapabilityTier::IndexLagging {
                     tracing::warn!(
@@ -564,29 +684,10 @@ impl NodeClient {
 
     /// Returns (transactionId, output index) for EIP-12 input construction.
     pub async fn get_box_creation_info(&self, box_id: &str) -> Result<(String, u16)> {
-        let endpoint = format!("/blockchain/box/byId/{}", box_id);
-        let response = timed_request(self.inner.send_get_req(&endpoint)).await?;
-
-        let json: serde_json::Value = response.json().await.map_err(|e| NodeError::ApiError {
-            message: format!("Failed to parse box response: {}", e),
-        })?;
-
-        let tx_id = json["transactionId"]
-            .as_str()
-            .ok_or_else(|| NodeError::ApiError {
-                message: format!("Missing transactionId in box {} response", box_id),
-            })?
-            .to_string();
-
-        let index = json["index"].as_u64().ok_or_else(|| NodeError::ApiError {
-            message: format!("Missing index in box {} response", box_id),
-        })? as u16;
-
-        Ok((tx_id, index))
-    }
-
-    async fn get_box_context(&self, box_id: &str) -> Result<(String, u16)> {
-        self.get_box_creation_info(box_id).await
+        let box_value = self
+            .get_box_by_id(&citadel_core::BoxId::new(box_id))
+            .await?;
+        Ok((box_value.transaction_id.to_string(), box_value.index))
     }
 
     /// Mempool-aware UTXOs: confirmed minus mempool-spent, plus unconfirmed outputs.
@@ -594,36 +695,38 @@ impl NodeClient {
     pub async fn get_effective_utxos(&self, address: &str) -> Result<Vec<ergo_tx::Eip12InputBox>> {
         let confirmed = self.get_address_utxos(address).await?;
 
-        let user_ergo_tree = match address_to_ergo_tree(address) {
-            Some(tree) => tree,
-            None => {
-                tracing::warn!(
-                    "Could not derive ergoTree from address, using confirmed UTXOs only"
-                );
-                return Ok(confirmed);
-            }
-        };
+        let user_ergo_tree = address_to_ergo_tree(address).ok_or_else(|| NodeError::ApiError {
+            message: "Cannot determine the wallet's ErgoTree to check pending spends".into(),
+        })?;
 
-        let mempool_txs = match self.get_unconfirmed_by_ergo_tree(&user_ergo_tree).await {
-            Ok(txs) => txs,
-            Err(e) => {
-                tracing::warn!("Mempool query failed, using confirmed UTXOs only: {}", e);
-                return Ok(confirmed);
-            }
-        };
+        let mempool_txs = self
+            .get_unconfirmed_by_ergo_tree(&user_ergo_tree)
+            .await
+            .map_err(|error| NodeError::ApiError {
+                message: format!(
+                    "Cannot check pending wallet transactions: {error}. Retry when the node's mempool is available."
+                ),
+            })?;
 
         if mempool_txs.is_empty() {
             return Ok(confirmed);
         }
 
         let mut spent_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let malformed = |detail: &str| NodeError::ApiError {
+            message: format!(
+                "Cannot check pending wallet transactions: malformed mempool transaction ({detail})"
+            ),
+        };
         for tx in &mempool_txs {
-            if let Some(inputs) = tx["inputs"].as_array() {
-                for input in inputs {
-                    if let Some(box_id) = input["boxId"].as_str() {
-                        spent_ids.insert(box_id.to_string());
-                    }
-                }
+            let inputs = tx["inputs"]
+                .as_array()
+                .ok_or_else(|| malformed("missing inputs"))?;
+            for input in inputs {
+                let box_id = input["boxId"]
+                    .as_str()
+                    .ok_or_else(|| malformed("missing input boxId"))?;
+                spent_ids.insert(box_id.to_string());
             }
         }
 
@@ -633,39 +736,36 @@ impl NodeClient {
             .collect();
 
         for tx in &mempool_txs {
-            let tx_id = match tx["id"].as_str() {
-                Some(id) => id,
-                None => continue,
-            };
+            let tx_id = tx["id"].as_str().ok_or_else(|| malformed("missing id"))?;
 
-            if let Some(outputs) = tx["outputs"].as_array() {
-                for (idx, output) in outputs.iter().enumerate() {
-                    let ergo_tree = match output["ergoTree"].as_str() {
-                        Some(et) => et,
-                        None => continue,
-                    };
+            let outputs = tx["outputs"]
+                .as_array()
+                .ok_or_else(|| malformed("missing outputs"))?;
+            for (idx, output) in outputs.iter().enumerate() {
+                let ergo_tree = output["ergoTree"]
+                    .as_str()
+                    .ok_or_else(|| malformed("missing output ergoTree"))?;
 
-                    if ergo_tree != user_ergo_tree {
-                        continue;
-                    }
-
-                    let box_id = match output["boxId"].as_str() {
-                        Some(id) => id.to_string(),
-                        None => continue,
-                    };
-
-                    if spent_ids.contains(&box_id) {
-                        continue;
-                    }
-
-                    if effective.iter().any(|u| u.box_id == box_id) {
-                        continue;
-                    }
-
-                    if let Some(eip12) = json_output_to_eip12(output, tx_id, idx as u16) {
-                        effective.push(eip12);
-                    }
+                if ergo_tree != user_ergo_tree {
+                    continue;
                 }
+
+                let box_id = output["boxId"]
+                    .as_str()
+                    .ok_or_else(|| malformed("missing output boxId"))?
+                    .to_string();
+
+                if spent_ids.contains(&box_id) {
+                    continue;
+                }
+
+                if effective.iter().any(|u| u.box_id == box_id) {
+                    continue;
+                }
+
+                let eip12 = json_output_to_eip12(output, tx_id, idx as u16)
+                    .ok_or_else(|| malformed("invalid wallet output"))?;
+                effective.push(eip12);
             }
         }
 
@@ -725,9 +825,10 @@ impl NodeClient {
 
     pub async fn get_eip12_box_by_id(&self, box_id: &str) -> Result<ergo_tx::Eip12InputBox> {
         let ergo_box = timed_request(self.inner.box_from_id_with_pool(box_id)).await?;
-        let (tx_id, index) = self.get_box_context(box_id).await?;
         Ok(ergo_tx::Eip12InputBox::from_ergo_box(
-            &ergo_box, tx_id, index,
+            &ergo_box,
+            ergo_box.transaction_id.to_string(),
+            ergo_box.index,
         ))
     }
 

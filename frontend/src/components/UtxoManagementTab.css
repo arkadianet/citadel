@@ -1594,3 +1594,91 @@
   background: var(--ds-danger-bg);
   border: 1px solid color-mix(in srgb, var(--ds-danger) 28%, transparent);
 }
+
+.utxo-isolation-hint {
+  color: var(--utxo-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  margin: 0.5rem 0;
+}
+
+.utxo-isolation-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin: 0.6rem 0;
+}
+
+.utxo-isolation-tokens, .utxo-isolation-output-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.utxo-isolation-token {
+  min-width: 0;
+  padding: 0.65rem;
+  border: 1px solid var(--utxo-border);
+  border-radius: var(--utxo-radius-sm);
+  background: var(--utxo-surface-soft);
+  font-size: 0.8rem;
+}
+
+.utxo-isolation-token.selected {
+  border-color: var(--emerald-500);
+}
+
+.utxo-isolation-select {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.utxo-isolation-select input {
+  accent-color: var(--emerald-500);
+  margin-top: 0.15rem;
+}
+
+.utxo-isolation-select > span { min-width: 0; }
+.utxo-isolation-select strong { overflow-wrap: anywhere; }
+
+.utxo-isolation-available {
+  display: block;
+  color: var(--utxo-muted);
+  font-size: 0.7rem;
+  margin-top: 0.2rem;
+  overflow-wrap: anywhere;
+}
+
+.utxo-isolation-id {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--utxo-muted);
+  overflow-wrap: anywhere;
+  margin: 0.4rem 0;
+  user-select: text;
+}
+
+.utxo-isolation-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: end;
+  margin-top: 0.7rem;
+}
+
+.utxo-isolation-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: var(--utxo-muted);
+  font-size: 0.7rem;
+}
+
+.utxo-isolation-fields label:last-child { grid-column: 1 / -1; }
+.utxo-isolation-fields input { width: 100%; min-width: 0; box-sizing: border-box; }
+.utxo-isolation-review { max-width: 600px; overflow-y: auto; min-height: 0; }
+.utxo-isolation-output-list { list-style: none; padding: 0; margin: 0.75rem 0; }
+.utxo-isolation-change { font-size: 0.8rem; padding: 0.75rem 0; }
+.utxo-isolation-change > div { margin-top: 0.5rem; }

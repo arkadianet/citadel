@@ -1,3 +1,4 @@
+import { notifyWalletTransactionSubmitted } from '../utils/walletRefresh'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { QRCodeSVG } from 'qrcode.react'
@@ -298,6 +299,7 @@ export function WalletTab({
       try {
         const status = await getTxStatus(requestId)
         if (status.status === 'submitted' && status.tx_id) {
+          notifyWalletTransactionSubmitted()
           setTxId(status.tx_id)
           setSendStep('success')
           onBalanceRefresh?.()

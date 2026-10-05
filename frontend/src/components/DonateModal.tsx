@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { QRCodeSVG } from 'qrcode.react'
 import { buildDonationTx, getTxStatus, startSign } from '../api/donate'
-import { DEFAULT_DEV_FEE_ADDRESS, DEV_FEE_NANO, MIN_BOX_VALUE_NANO, WALLET_TX_FEES_NANO } from '../constants'
+import { DEFAULT_DEV_FEE_ADDRESS, MIN_BOX_VALUE_NANO, WALLET_TX_FEES_NANO } from '../constants'
 import { useTransactionFlow } from '../hooks/useTransactionFlow'
 import { formatErg, truncateAddress } from '../utils/format'
 import { TxSuccess } from './TxSuccess'
@@ -188,8 +188,7 @@ export function DonateModal({
         {step === 'form' && (
           <>
             <p className="donate-lead">
-              Optional thank-you tip for Citadel development. Separate from the automatic{' '}
-              {formatErg(DEV_FEE_NANO)} ERG fee on transactions.
+              Optional thank-you tip for Citadel development. This local build has no automatic Citadel fee.
             </p>
 
             {needsWallet ? (
@@ -247,7 +246,7 @@ export function DonateModal({
                     </span>
                   </div>
                   <div className="donate-meta-row muted">
-                    <span>Miner + Citadel fee on this tx</span>
+                    <span>Miner fee on this tx</span>
                     <span className="mono">{formatErg(WALLET_TX_FEES_NANO)} ERG</span>
                   </div>
                   <div className="donate-meta-row muted">

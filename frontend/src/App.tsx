@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { WALLET_TX_SUBMITTED } from './utils/walletRefresh'
 import { invoke } from '@tauri-apps/api/core'
 import { discoverNodes, type NodeProbeResult } from './api/nodes'
 import { WalletConnect } from './components/WalletConnect'
@@ -227,6 +228,12 @@ function App() {
       setWalletBalance(null)
     }
   }, [walletAddress, nodeStatus?.connected, nodeStatus?.capability_tier, fetchWalletBalance])
+
+  useEffect(() => {
+    const refresh = () => { fetchWalletBalance(); fetchSigmaUsdState() }
+    window.addEventListener(WALLET_TX_SUBMITTED, refresh)
+    return () => window.removeEventListener(WALLET_TX_SUBMITTED, refresh)
+  }, [fetchWalletBalance, fetchSigmaUsdState])
 
   const handleConnect = async (overrideUrl?: string) => {
     const connectUrl = overrideUrl ?? nodeUrl

@@ -18,7 +18,30 @@ A local-first desktop app for interacting with DeFi protocols on the Ergo blockc
 
 - **Explorer** -- Browse addresses, transactions, and boxes on your node
 - **Token Burn** -- Destroy unwanted tokens
-- **UTXO Management** -- Consolidate and split boxes
+- **UTXO Management** -- Consolidate, split, separate selected tokens/NFTs, or arrange custom output boxes
+- **Stake Recovery** -- Recover Ergopad, EGIO, Paideia and NETA stakes using stake key NFTs
+
+This local build disables the Citadel application developer fee. Miner fees and
+fees required by protocol contracts still apply.
+
+NETA redemptions can be chained without waiting for a block confirmation. The
+previous claim must be visible in the connected node's mempool; recovery then
+uses its replacement state box and excludes stakes already spent by pending claims.
+
+In **Wallet → UTXOs → Separate tokens**, select mixed source boxes and tick the
+tokens or stake keys to isolate. Each selected type gets its own output with
+editable token amount and ERG. Unselected assets return as change. Add a funding
+input when the source lacks ERG; inputs can come from any connected wallet address.
+
+Stake Recovery automatically finds unfinished Paideia requests belonging to your
+wallet from live proxy boxes, including older and unconfirmed transactions. It
+checks every 15 seconds and offers payout/refund validation before submission.
+Manual transaction-ID resume remains available as a fallback.
+
+Wallet inputs and shared protocol box discovery include terminal mempool outputs
+and exclude pending spends. Paideia can resolve and spend its unconfirmed proxy;
+no app-imposed confirmation wait is required. The connected node must see the
+parent transaction, and each protocol's contract conditions still apply.
 
 ## Requirements
 
